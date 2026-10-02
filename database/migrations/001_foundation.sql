@@ -1,0 +1,101 @@
+CREATE TABLE plans (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(80) NOT NULL,
+    slug VARCHAR(80) NOT NULL UNIQUE,
+    max_users INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = unlimited',
+    max_items INT UNSIGNED NOT NULL DEFAULT 0,
+    max_warehouses INT UNSIGNED NOT NULL DEFAULT 0,
+    price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    trial_days INT UNSIGNED NOT NULL DEFAULT 0,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE tenants (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    slug VARCHAR(150) NOT NULL UNIQUE,
+    plan_id INT UNSIGNED NOT NULL,
+    status ENUM('trial','active','suspended') NOT NULL DEFAULT 'active',
+    trial_ends_at DATE NULL,
+    subscription_ends_at DATE NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES plans(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE super_admins (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    last_login_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE roles (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT UNSIGNED NOT NULL,
+    name VARCHAR(80) NOT NULL,
+    is_owner TINYINT(1) NOT NULL DEFAULT 0,
+    is_system TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_role (tenant_id, name),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE role_permissions (
+    role_id INT UNSIGNED NOT NULL,
+    permission VARCHAR(64) NOT NULL,
+    PRIMARY KEY (role_id, permission),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT UNSIGNED NOT NULL,
+    role_id INT UNSIGNED NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    last_login_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_users_tenant (tenant_id),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE password_resets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(190) NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_reset_hash (token_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE login_attempts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(190) NOT NULL,
+    ip VARCHAR(45) NOT NULL,
+    attempted_at DATETIME NOT NULL,
+    KEY idx_attempts (email, ip, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT UNSIGNED NULL,
+    actor_type ENUM('admin','user','system') NOT NULL,
+    actor_id INT UNSIGNED NULL,
+    action VARCHAR(80) NOT NULL,
+    entity VARCHAR(60) NULL,
+    entity_id INT UNSIGNED NULL,
+    details TEXT NULL,
+    ip VARCHAR(45) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_audit_tenant (tenant_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
