@@ -194,6 +194,39 @@ check('GRN with it is received', (int)$val('SELECT COUNT(*) FROM grns WHERE tena
 $post($all['show'], []);
 check('all forms back to normal', preg_match('/name="ship_to"/', $body('/sales/orders/create')) === 1 && !str_contains($body('/sales/orders/create'), 'type="hidden" name="ship_to"') && str_contains($body('/purchase/grns/create'), 'Extra cost (freight'));
 
+echo "Form design\n";
+$h = $body('/settings/formdesign');
+check('Form design page lists all 14 designable forms in 4 tabs, with every field', substr_count($h, 'class="card mb-3 fd-card"') === 14 && substr_count($h, 'data-bs-toggle="tab"') === 4 && substr_count($h, 'class="fd-row" data-col=') >= 60);
+check('default forms carry no design attributes (no extra style / help)', !str_contains($body('/customers/create'), 'data-help') && !preg_match('/<div class="col-md-4 mb-3" style="order/', $body('/customers/create')));
+$cols = array_keys(Core\FormDesign::FIELDS['customer']);
+$order = $cols;
+unset($order[array_search('email', $order)]);
+array_unshift($order, 'email');
+$a->post('/settings/formdesign', ['order' => ['customer' => $order],
+    'design' => ['customer' => ['phone' => ['label' => 'Mobile <b>no</b>', 'w' => '50', 'help' => 'WhatsApp number'], 'notes' => ['w' => '100'], 'email' => ['w' => '999'], 'name' => ['label' => 'Party name']]]], '/settings/formdesign');
+$f = $body('/customers/create');
+check('own label shown (tags stripped), default label otherwise', str_contains($f, 'Mobile no') && !str_contains($f, '<b>no</b>') && str_contains($f, 'Party name') && str_contains($f, 'Group'));
+check('width and hint applied to the field', preg_match('/<div class="col-md-4 mb-3" style="order:\d+;--w:50%;" data-help="WhatsApp number">/', $f) === 1 && preg_match('/style="order:\d+;--w:100%;"/', $f) === 1);
+check('an invalid width is ignored', !str_contains($f, '--w:999'));
+check('email now comes first (CSS order 1), name after it', preg_match('/name="email"|<div class="col-md-4 mb-3" style="order:1;"/', $f) === 1 && str_contains($f, 'style="order:1;"'));
+check('the same design shows on the Edit form', str_contains($body("/customers/$cust/edit"), 'Mobile no') && str_contains($body("/customers/$cust/edit"), 'data-help="WhatsApp number"'));
+check('the form still saves normally with the design on', (function () use ($a, $cust) { $a->post("/customers/$cust", ['name' => 'WithTax', 'tax_no' => 'GST9', 'phone' => '9999', 'is_active' => 1], "/customers/$cust/edit"); return $GLOBALS['val']('SELECT phone FROM customers WHERE id = ?', [$cust]) === '9999'; })());
+check('the page marks the form as customised', str_contains($body('/settings/formdesign'), 'customised') && str_contains($body('/settings/formdesign'), 'value="Mobile no"'));
+check('another company\'s customer form is untouched', !str_contains($b->get('/customers/create')['body'], 'Mobile'));
+$a->post('/settings/formdesign', ['order' => ['sales_order' => array_reverse(array_keys(Core\FormDesign::FIELDS['sales_order']))], 'design' => ['sales_order' => ['notes' => ['label' => 'Site instructions', 'w' => '100'], 'warehouse_id' => ['label' => 'Dispatch from']]]], '/settings/formdesign');
+$f = $body('/sales/orders/create');
+check('sales order: renamed labels and reversed order (notes first)', str_contains($f, 'Site instructions') && str_contains($f, 'Dispatch from') && preg_match('/<div class="col-md-8" style="order:1;--w:100%;">/', $f) === 1);
+check('sales order still saves with a custom design', (function () use ($a, $cust, $main, $vel, $cfSite) { $n = (int)$GLOBALS['val']('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$GLOBALS['tA']]);
+    $a->post('/sales/orders', ['customer_id' => $cust, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 250]], 'allow_backorder' => 1, 'cf' => [$cfSite => 'S']], '/sales/orders/create');
+    return (int)$GLOBALS['val']('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$GLOBALS['tA']]) === $n + 1; })());
+$a->post('/settings/formdesign', ['reset' => ['customer' => 1, 'sales_order' => 1]], '/settings/formdesign');
+check('Reset returns both forms to the standard design', !str_contains($body('/customers/create'), 'Mobile') && !str_contains($body('/sales/orders/create'), 'Site instructions') && !str_contains($body('/sales/orders/create'), 'data-help'));
+$a->post('/settings/formdesign', ['design' => ['nope' => ['x' => ['label' => 'hack']], 'item' => ['zzz' => ['label' => 'hack']]]], '/settings/formdesign');
+check('unknown forms / fields are ignored', !str_contains((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.design'", [$tA]), 'hack'));
+$a->post('/settings/formdesign', ['design' => ['warehouse' => ['name' => ['label' => str_repeat('x', 200)]]]], '/settings/formdesign');
+check('very long labels are cut to 60 characters', mb_strlen((string)json_decode($val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.design'", [$tA]), true)['warehouse']['fields']['name']['label']) === 60);
+$a->post('/settings/formdesign', ['reset' => ['warehouse' => 1]], '/settings/formdesign');
+
 echo "Getting-started guide\n";
 $user2 = DB::insert('users', ['tenant_id' => $tA, 'role_id' => (int)$val('SELECT role_id FROM users WHERE id = ?', [$ownerId]), 'name' => 'Second', 'email' => "second-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
 $s = new Client($base);

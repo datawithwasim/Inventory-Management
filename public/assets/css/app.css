@@ -360,3 +360,19 @@ html.sb-collapsed .sb-group-head { background: var(--sb-line); }
 }
 
 .content > form.row { position: relative; z-index: 3; }
+
+/* ===== Form design (order / width / help text set in Settings → Form design) ===== */
+.ffgrid { display: flex; flex-wrap: wrap; margin: 0 -.75rem; }
+.ffgrid .row { display: contents; }
+:where(.ffgrid > *, .ffgrid .row > *) { width: 100%; padding-inline: .75rem; max-width: 100%; }
+.ffgrid > .form-check { flex: 0 0 100%; }
+@media (min-width: 768px) { [style*="--w:"] { flex: 0 0 auto !important; width: var(--w) !important; } }
+[data-help]::after { content: attr(data-help); display: block; font-size: .74rem; color: var(--ink-3); margin-top: .3rem; line-height: 1.35; }
+.fd-row { display: grid; grid-template-columns: 34px minmax(120px, 1.1fr) minmax(140px, 1.4fr) 130px minmax(140px, 1.6fr); gap: .6rem; align-items: center; padding: .55rem .75rem; border-bottom: 1px solid var(--line); background: var(--surface); }
+.fd-row.fd-head { background: var(--surface-2); color: var(--ink-3); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 650; }
+.fd-row .fd-name { font-weight: 550; font-size: .85rem; }
+.fd-arrows { display: flex; flex-direction: column; gap: 2px; }
+.fd-arrows button { border: 0; background: var(--surface-2); color: var(--ink-2); border-radius: 5px; line-height: 1; padding: 2px 5px; font-size: .7rem; }
+.fd-arrows button:hover { background: var(--brand-soft); color: var(--brand-text); }
+.fd-row.moved { animation: fadeIn .3s; background: var(--brand-soft); }
+@media (max-width: 900px) { .fd-row { grid-template-columns: 34px 1fr 1fr; } .fd-head { display: none; } .fd-row .fd-help { grid-column: 2 / -1; } }

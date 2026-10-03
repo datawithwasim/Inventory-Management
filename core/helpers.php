@@ -234,3 +234,18 @@ function ffh(string $key, mixed $value = ''): string
     [$e, $c] = explode('.', $key, 2);
     return Core\FormFields::shown($e, $c) ? '' : '<input type="hidden" name="' . e($c) . '" value="' . e((string)$value) . '">';
 }
+
+/** Design attributes (order, width, help text) for one field wrapper: e.g. <div class="col-md-4"<?= ffa('customer.email') ?>> */
+function ffa(string $key): string
+{
+    [$e, $c] = explode('.', $key, 2);
+    return Core\FormDesign::attrs($e, $c);
+}
+
+/** The label to show: the company's own wording if set, else the default (already-escaped HTML). */
+function fl(string $key, string $default): string
+{
+    [$e, $c] = explode('.', $key, 2);
+    $custom = Core\FormDesign::label($e, $c);
+    return $custom !== '' ? e($custom) : $default;
+}

@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\PrintTemplate;
 use App\Models\SettingsNav;
+use Core\FormDesign;
 use Core\FormFields;
 use Core\Modules;
 use Core\Theme;
@@ -73,6 +74,9 @@ final class SettingsController extends Controller
                 break;
             case 'formfields':
                 $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
+                break;
+            case 'formdesign':
+                $data += ['fields' => FormDesign::FIELDS, 'widths' => FormDesign::WIDTHS, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
                 break;
             case 'labels':
                 $data['terms'] = TERMS;
@@ -159,6 +163,9 @@ final class SettingsController extends Controller
                 }
                 FormFields::save($hidden, $required);
                 $this->done($tab, 'Form fields saved. The forms now follow your choices.');
+            case 'formdesign':
+                FormDesign::save((array)($d['design'] ?? []), (array)($d['order'] ?? []), array_filter((array)($d['reset'] ?? [])));
+                $this->done($tab, 'Form design saved. Your forms now look the way you set them.');
             case 'workflow':
                 Settings::set('po_approval', empty($d['po_approval']) ? '0' : '1');
                 Settings::set('negative_stock', empty($d['negative_stock']) ? '0' : '1');
