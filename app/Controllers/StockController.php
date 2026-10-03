@@ -57,6 +57,7 @@ final class StockController extends Controller
                     COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0) AS value,
                     $itemTotal AS item_total
              $base GROUP BY v.id, i.id, u.id ORDER BY i.name, v.name LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
+        $this->attachRacks($rows, $wh);
         $totalValue = (float)DB::val(
             'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0)
              FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
@@ -66,6 +67,23 @@ final class StockController extends Controller
             'title' => 'Stock', 'rows' => $rows, 'q' => $q, 'wh' => $wh, 'low' => $low, 'warehouses' => $this->warehouses(),
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'totalValue' => $totalValue,
         ]);
+    }
+
+    /** Adds a short "where is it" list (rack: qty) to each variant row. */
+    private function attachRacks(array &$rows, int $wh): void
+    {
+        if (!$rows) return;
+        $ids = array_map(fn($r) => (int)$r['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $params = [$this->tid(), ...$ids];
+        $sql = "SELECT s.variant_id, w.name AS warehouse, COALESCE(l.code, '') AS code, SUM(s.qty) AS qty
+                FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
+                WHERE s.tenant_id = ? AND s.variant_id IN ($in)" . ($wh ? ' AND s.warehouse_id = ?' : '') . '
+                GROUP BY s.variant_id, w.id, w.name, s.location_id, l.code HAVING qty > 0.0005 ORDER BY qty DESC';
+        if ($wh) $params[] = $wh;
+        $by = [];
+        foreach (DB::all($sql, $params) as $p) $by[$p['variant_id']][] = $p;
+        foreach ($rows as &$r) $r['racks'] = $by[$r['id']] ?? [];
     }
 
     /* ---------- ledger ---------- */
@@ -84,8 +102,8 @@ final class StockController extends Controller
         $params = [$t];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR b.batch_no LIKE ?)';
-            array_push($params, $like, $like, $like, $like);
+            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR b.batch_no LIKE ? OR rk.code LIKE ?)';
+            array_push($params, $like, $like, $like, $like, $like);
         }
         if (isset(self::TYPES[$type])) { $where .= ' AND l.type = ?'; $params[] = $type; }
         if ($wh) { $where .= ' AND l.warehouse_id = ?'; $params[] = $wh; }
@@ -94,10 +112,11 @@ final class StockController extends Controller
 
         $base = "FROM stock_ledger l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id
                  JOIN warehouses w ON w.id = l.warehouse_id LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0
+                 LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
                  LEFT JOIN users u ON u.id = l.user_id WHERE $where";
         $total = (int)DB::val("SELECT COUNT(*) $base", $params);
         $rows = DB::all(
-            "SELECT l.*, i.name AS item_name, v.name AS vname, v.sku, w.name AS warehouse, b.batch_no, u.name AS user_name
+            "SELECT l.*, i.name AS item_name, v.name AS vname, v.sku, w.name AS warehouse, b.batch_no, rk.code AS rack, u.name AS user_name
              $base ORDER BY l.id DESC LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
 
         $this->view('app/stock/ledger', [
@@ -149,10 +168,12 @@ final class StockController extends Controller
              FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              WHERE b.tenant_id = ? AND b.id = ?', [$t, (int)$id]) ?? $this->notFound();
         $where = DB::all(
-            'SELECT w.name, s.qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
-             WHERE s.tenant_id = ? AND s.batch_id = ? AND s.qty <> 0 ORDER BY w.name', [$t, $b['id']]);
+            'SELECT w.name, COALESCE(l.code, \'\') AS rack, s.qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
+             LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
+             WHERE s.tenant_id = ? AND s.batch_id = ? AND s.qty <> 0 ORDER BY w.name, l.code', [$t, $b['id']]);
         $history = DB::all(
-            'SELECT l.*, w.name AS warehouse, u.name AS user_name FROM stock_ledger l JOIN warehouses w ON w.id = l.warehouse_id
+            'SELECT l.*, w.name AS warehouse, rk.code AS rack, u.name AS user_name FROM stock_ledger l JOIN warehouses w ON w.id = l.warehouse_id
+             LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
              LEFT JOIN users u ON u.id = l.user_id WHERE l.tenant_id = ? AND l.batch_id = ? ORDER BY l.id', [$t, $b['id']]);
         $this->view('app/stock/batch', [
             'title' => 'Batch ' . $b['batch_no'], 'b' => $b, 'where' => $where, 'history' => $history,
@@ -160,7 +181,50 @@ final class StockController extends Controller
         ]);
     }
 
+    /* ---------- stock by rack ---------- */
+
+    public function racks(): void
+    {
+        $t = $this->tid();
+        $q = trim((string)($_GET['q'] ?? ''));
+        $wh = (int)($_GET['warehouse'] ?? 0);
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $where = 's.tenant_id = ? AND s.qty > 0.0005';
+        $params = [$t];
+        if ($wh) { $where .= ' AND s.warehouse_id = ?'; $params[] = $wh; }
+        if ($q === '-') {
+            $where .= ' AND s.location_id = 0';
+        } elseif ($q !== '') {
+            $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+            $where .= ' AND (l.code LIKE ? OR l.description LIKE ? OR i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR b.batch_no LIKE ?)';
+            array_push($params, $like, $like, $like, $like, $like, $like);
+        }
+        $base = "FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+                 JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
+                 LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0 WHERE $where";
+        $total = (int)DB::val("SELECT COUNT(*) $base", $params);
+        $rows = DB::all(
+            "SELECT s.qty, w.name AS warehouse, l.code AS rack, l.description AS rack_desc, i.id AS item_id, i.name AS item_name, v.name AS vname, v.sku,
+                    b.batch_no, s.batch_id, u.short_name AS unit
+             $base ORDER BY w.name, (s.location_id = 0), l.code, i.name, v.name LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
+        $this->view('app/stock/racks', [
+            'title' => 'Stock by rack', 'rows' => $rows, 'q' => $q, 'wh' => $wh, 'warehouses' => $this->warehouses(),
+            'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)),
+        ]);
+    }
+
     /* ---------- JSON helpers for the line editor ---------- */
+
+    /** Racks holding a variant (optionally one batch) in a warehouse, biggest first. */
+    public function placement(): void
+    {
+        $variant = (int)($_GET['variant'] ?? 0);
+        $wh = (int)($_GET['warehouse'] ?? 0);
+        if (!Stock::variant($variant) || !Stock::warehouse($wh)) $this->json([]);
+        $batch = isset($_GET['batch']) && ctype_digit((string)$_GET['batch']) ? (int)$_GET['batch'] : null;
+        $this->json(Stock::placements($variant, $wh, $batch));
+    }
+
 
     private function json(mixed $data): never
     {

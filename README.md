@@ -7,6 +7,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
 - **Phase 2 – Items, stock & batches: done** (masters, warehouses, items with variants and bundles, stock ledger,
   batches where 1 batch = 1 roll/thaan, adjustments / opening stock, transfers, stock-takes, CSV import/export)
+- **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
 - Next: Phase 3 – Purchase
 
 ### Updating an installed copy (cPanel)
@@ -38,7 +39,8 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```bash
 php -S 127.0.0.1:8099 -t public public/index.php &
 php tests/smoke.php http://127.0.0.1:8099     # phase 1
-php tests/phase2.php http://127.0.0.1:8099    # phase 2  (run both against a throw-away database)
+php tests/phase2.php http://127.0.0.1:8099    # phase 2
+php tests/racks.php http://127.0.0.1:8099     # racks / locations  (run all against a throw-away database)
 ```
 
 ## Layout

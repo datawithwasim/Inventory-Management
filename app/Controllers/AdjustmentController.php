@@ -25,7 +25,7 @@ final class AdjustmentController extends StockDocController
     {
         $this->view('app/stock/adjustment_form', [
             'title' => 'New stock adjustment', 'warehouses' => $this->activeWarehouses(),
-            'reasons' => self::REASONS, 'oldLines' => $this->oldLines(),
+            'reasons' => self::REASONS, 'oldLines' => $this->oldLines(), 'racks' => $this->racksByWarehouse(),
         ]);
     }
 
@@ -89,10 +89,11 @@ final class AdjustmentController extends StockDocController
         }
         $type = $reason === 'opening' ? 'opening' : 'adjustment';
         $text = self::REASONS[$reason] . ($note ? ' — ' . $note : '');
-        Stock::move((int)$v['id'], (int)$wh['id'], $batchId, $qty, $type, 'stock_doc', $docId, $cost, mb_substr($text, 0, 255));
+        $rackId = (int)($l['location_id'] ?? 0);
+        Stock::move((int)$v['id'], (int)$wh['id'], $batchId, $qty, $type, 'stock_doc', $docId, $cost, mb_substr($text, 0, 255), $rackId);
         DB::insert('stock_doc_lines', [
             'tenant_id' => $this->tid(), 'doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,
-            'qty' => $qty, 'unit_cost' => $cost,
+            'location_id' => $rackId, 'qty' => $qty, 'unit_cost' => $cost,
         ]);
     }
 

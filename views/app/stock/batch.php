@@ -12,13 +12,13 @@
     <div class="text-muted small mt-2">Used so far</div><?= e(qty(max(0, (float)$b['received_qty'] - (float)$balance))) ?> <?= e($b['unit']) ?>
   </div></div></div>
   <div class="col-md-4"><div class="card"><div class="card-header">Where it is</div><ul class="list-group list-group-flush">
-    <?php foreach ($where as $w): ?><li class="list-group-item d-flex justify-content-between"><?= e($w['name']) ?><strong><?= e(qty($w['qty'])) ?> <?= e($b['unit']) ?></strong></li><?php endforeach; ?>
+    <?php foreach ($where as $w): ?><li class="list-group-item d-flex justify-content-between"><span><?= e($w['name']) ?> · <i class="bi bi-geo-alt"></i> <?= e($w['rack'] !== '' ? $w['rack'] : 'No rack') ?></span><strong><?= e(qty($w['qty'])) ?> <?= e($b['unit']) ?></strong></li><?php endforeach; ?>
     <?php if (!$where): ?><li class="list-group-item text-muted">No stock left.</li><?php endif; ?>
   </ul></div></div>
 </div>
 <div class="card"><div class="card-header">History of this batch</div>
-<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th>Warehouse</th><th class="text-end">Qty</th><th>By</th><th>Note</th></tr></thead><tbody>
+<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th>Warehouse</th><th>Rack</th><th class="text-end">Qty</th><th>By</th><th>Note</th></tr></thead><tbody>
 <?php foreach ($history as $h): ?>
-  <tr><td class="text-nowrap"><?= e($h['created_at']) ?></td><td><?= e(stock_type($h['type'])) ?></td><td><?= e($h['warehouse']) ?></td>
+  <tr><td class="text-nowrap"><?= e($h['created_at']) ?></td><td><?= e(stock_type($h['type'])) ?></td><td><?= e($h['warehouse']) ?></td><td><?= e($h['rack'] ?? '') ?></td>
     <td class="text-end <?= $h['qty_change'] < 0 ? 'text-danger' : 'text-success' ?>"><?= $h['qty_change'] > 0 ? '+' : '' ?><?= e(qty($h['qty_change'])) ?></td><td><?= e($h['user_name'] ?? '') ?></td><td><?= e($h['note'] ?? '') ?></td></tr>
 <?php endforeach; ?></tbody></table></div></div>

@@ -5,7 +5,8 @@
   <div class="col-md-3"><label class="form-label">To warehouse</label><select name="to_warehouse_id" class="form-select" required>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('to_warehouse_id') === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-6"><label class="form-label">Note (optional)</label><input name="note" class="form-control" maxlength="255" value="<?= e(old('note')) ?>"></div>
-</div></div></div>
+</div>
+<p class="text-muted small mt-3 mb-0">You can also move stock between racks <em>inside</em> one warehouse: choose the same warehouse on both sides and pick different racks on each line.</p></div></div>
 <?php $mode = 'transfer'; require __DIR__ . '/_lines.php'; ?>
 <button class="btn btn-primary">Transfer stock</button> <a class="btn btn-link" href="<?= url('stock/transfers') ?>">Cancel</a>
 </form>

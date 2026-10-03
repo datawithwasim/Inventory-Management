@@ -12,7 +12,7 @@ use Core\Numbering;
 /** Items CSV export / import. Excel users: File > Save As > CSV. */
 final class ImportController extends Controller
 {
-    private const COLUMNS = ['item_name', 'category', 'brand', 'unit', 'tax', 'track_batch', 'location', 'reorder_level',
+    private const COLUMNS = ['item_name', 'category', 'brand', 'unit', 'tax', 'track_batch', 'reorder_level',
         'variant_name', 'sku', 'barcode', 'cost_price', 'sale_price'];
     private const MAX_ROWS = 2000;
 
@@ -46,9 +46,9 @@ final class ImportController extends Controller
     {
         $this->csv('items-template.csv', [
             self::COLUMNS,
-            ['Velvet Fabric', 'Fabric', '', 'Meter', '', 'yes', 'Rack A2', '20', 'Grey', '', '', '450', '750'],
-            ['Velvet Fabric', '', '', '', '', '', '', '', 'Blue', '', '', '450', '750'],
-            ['Wooden Side Table', 'Furniture', 'Woodcraft', 'Piece', '', 'no', '', '5', '', 'TABLE-01', '', '2500', '4200'],
+            ['Velvet Fabric', 'Fabric', '', 'Meter', '', 'yes', '20', 'Grey', '', '', '450', '750'],
+            ['Velvet Fabric', '', '', '', '', '', '', 'Blue', '', '', '450', '750'],
+            ['Wooden Side Table', 'Furniture', 'Woodcraft', 'Piece', '', 'no', '5', '', 'TABLE-01', '', '2500', '4200'],
         ]);
     }
 
@@ -56,14 +56,14 @@ final class ImportController extends Controller
     {
         $rows = DB::all(
             'SELECT i.name AS item_name, c.name AS category, b.name AS brand, u.name AS unit, x.name AS tax,
-                    i.track_batch, i.location, i.reorder_level, v.name AS variant_name, v.sku, v.barcode, v.cost_price, v.sale_price
+                    i.track_batch, i.reorder_level, v.name AS variant_name, v.sku, v.barcode, v.cost_price, v.sale_price
              FROM items i JOIN item_variants v ON v.item_id = i.id AND v.is_active = 1 JOIN units u ON u.id = i.unit_id
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands b ON b.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id
              WHERE i.tenant_id = ? AND i.is_bundle = 0 ORDER BY i.name, v.id', [$this->tid()]);
         $out = [self::COLUMNS];
         foreach ($rows as $r) {
             $out[] = [$r['item_name'], $r['category'], $r['brand'], $r['unit'], $r['tax'], $r['track_batch'] ? 'yes' : 'no',
-                $r['location'], $r['reorder_level'] + 0, $r['variant_name'], $r['sku'], $r['barcode'], $r['cost_price'], $r['sale_price']];
+                $r['reorder_level'] + 0, $r['variant_name'], $r['sku'], $r['barcode'], $r['cost_price'], $r['sale_price']];
         }
         $this->csv('items-' . date('Y-m-d') . '.csv', $out);
     }
@@ -126,7 +126,7 @@ final class ImportController extends Controller
                     if (mb_strlen($name) > 190) { $errors[] = "Row $L: item name too long."; $current = null; continue; }
                     $items[$key] = ['name' => $name, 'category' => $r['category'] ?? '', 'brand' => $r['brand'] ?? '', 'unit_id' => $unit, 'tax_id' => $tax,
                         'track' => in_array(strtolower($r['track_batch'] ?? ''), ['yes', 'y', '1', 'true'], true) ? 1 : 0,
-                        'location' => $r['location'] ?? '', 'reorder' => (float)($r['reorder_level'] ?? 0), 'variants' => []];
+                        'reorder' => (float)($r['reorder_level'] ?? 0), 'variants' => []];
                     $current = $key;
                 }
             }
@@ -169,7 +169,7 @@ final class ImportController extends Controller
                 $itemId = DB::insert('items', [
                     'tenant_id' => $t, 'name' => $it['name'], 'category_id' => $lookup('categories', $it['category']),
                     'brand_id' => $lookup('brands', $it['brand']), 'unit_id' => $it['unit_id'], 'tax_id' => $it['tax_id'],
-                    'location' => $it['location'] ?: null, 'track_batch' => $it['track'], 'reorder_level' => $it['reorder'],
+                    'track_batch' => $it['track'], 'reorder_level' => $it['reorder'],
                 ]);
                 foreach ($it['variants'] ?: [['name' => '', 'sku' => '', 'barcode' => '', 'cost' => 0, 'sale' => 0]] as $v) {
                     DB::insert('item_variants', [

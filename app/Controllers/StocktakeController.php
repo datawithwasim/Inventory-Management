@@ -38,12 +38,12 @@ final class StocktakeController extends StockDocController
                 'warehouse_id' => $wh['id'], 'note' => $note, 'status' => 'draft', 'created_by' => Auth::user()['id'],
             ]);
             $snap = DB::all(
-                'SELECT s.variant_id, s.batch_id, s.qty FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id
+                'SELECT s.variant_id, s.batch_id, s.location_id, s.qty FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id
                  JOIN items i ON i.id = v.item_id
-                 WHERE s.tenant_id = ? AND s.warehouse_id = ? AND s.qty > 0 ORDER BY i.name, v.name, s.batch_id', [$t, $wh['id']]);
+                 WHERE s.tenant_id = ? AND s.warehouse_id = ? AND s.qty > 0 ORDER BY i.name, v.name, s.batch_id, s.location_id', [$t, $wh['id']]);
             foreach ($snap as $s) {
                 DB::insert('stock_doc_lines', ['tenant_id' => $t, 'doc_id' => $docId, 'variant_id' => $s['variant_id'],
-                    'batch_id' => $s['batch_id'], 'qty' => $s['qty'], 'expected_qty' => $s['qty']]);
+                    'batch_id' => $s['batch_id'], 'location_id' => $s['location_id'], 'qty' => $s['qty'], 'expected_qty' => $s['qty']]);
             }
             return $docId;
         });
@@ -78,11 +78,11 @@ final class StocktakeController extends StockDocController
                     DB::run('UPDATE stock_doc_lines SET qty = ? WHERE tenant_id = ? AND id = ?', [$counted, $t, $l['id']]);
                     if (!$post) continue;
                     // The count is the truth: correct whatever the system holds right now.
-                    $now = Stock::balance((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id']);
+                    $now = Stock::balance((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id'], (int)$l['location_id']);
                     $delta = Stock::round($counted - $now);
                     if (abs($delta) > 0.0005) {
                         Stock::move((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id'], $delta,
-                            'stocktake', 'stock_doc', (int)$doc['id'], null, 'Stock-take ' . $doc['doc_no']);
+                            'stocktake', 'stock_doc', (int)$doc['id'], null, 'Stock-take ' . $doc['doc_no'], (int)$l['location_id']);
                         $changes++;
                     }
                 }

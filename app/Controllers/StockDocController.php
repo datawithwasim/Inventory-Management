@@ -57,9 +57,12 @@ abstract class StockDocController extends Controller
     protected function docLines(int $docId): array
     {
         return DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no,
+                    r1.code AS rack, r2.code AS to_rack
              FROM stock_doc_lines l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id
              JOIN units u ON u.id = i.unit_id LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0
+             LEFT JOIN locations r1 ON r1.id = l.location_id AND l.location_id > 0
+             LEFT JOIN locations r2 ON r2.id = l.to_location_id AND l.to_location_id > 0
              WHERE l.tenant_id = ? AND l.doc_id = ? ORDER BY l.id', [$this->tid(), $docId]);
     }
 
@@ -74,6 +77,16 @@ abstract class StockDocController extends Controller
              LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.type = ? ORDER BY d.id DESC LIMIT 30 OFFSET ' . (($page - 1) * 30),
             [$this->tid(), $type]);
         $this->view($view, ['title' => $title, 'rows' => $rows, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30))]);
+    }
+
+    /** Racks per warehouse for the line editor: {warehouseId: [{id, code}]}. */
+    protected function racksByWarehouse(): array
+    {
+        $out = [];
+        foreach (DB::all('SELECT id, warehouse_id, code FROM locations WHERE tenant_id = ? AND is_active = 1 ORDER BY code', [$this->tid()]) as $r) {
+            $out[$r['warehouse_id']][] = ['id' => (int)$r['id'], 'code' => $r['code']];
+        }
+        return $out;
     }
 
     /** Old posted lines (after a failed save) so the editor can rebuild them. */

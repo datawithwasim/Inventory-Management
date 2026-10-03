@@ -55,6 +55,13 @@ $router->post('/warehouses/{id}', $A . 'WarehouseController@update', ['auth', 'p
 $router->post('/warehouses/{id}/default', $A . 'WarehouseController@makeDefault', ['auth', 'perm:warehouses.edit']);
 $router->post('/warehouses/{id}/delete', $A . 'WarehouseController@destroy', ['auth', 'perm:warehouses.delete']);
 
+$router->get('/locations', $A . 'LocationController@index', ['auth', 'perm:warehouses.view']);
+$router->get('/locations/create', $A . 'LocationController@create', ['auth', 'perm:warehouses.create']);
+$router->post('/locations', $A . 'LocationController@store', ['auth', 'perm:warehouses.create']);
+$router->get('/locations/{id}/edit', $A . 'LocationController@edit', ['auth', 'perm:warehouses.edit']);
+$router->post('/locations/{id}', $A . 'LocationController@update', ['auth', 'perm:warehouses.edit']);
+$router->post('/locations/{id}/delete', $A . 'LocationController@destroy', ['auth', 'perm:warehouses.delete']);
+
 $router->get('/items', $A . 'ItemController@index', ['auth', 'perm:items.view']);
 $router->get('/items/create', $A . 'ItemController@create', ['auth', 'perm:items.create']);
 $router->post('/items', $A . 'ItemController@store', ['auth', 'perm:items.create']);
@@ -70,6 +77,8 @@ $router->post('/items/{id}/delete', $A . 'ItemController@destroy', ['auth', 'per
 // ---- Stock ----
 $router->get('/stock', $A . 'StockController@index', ['auth', 'perm:stock.view']);
 $router->get('/stock/ledger', $A . 'StockController@ledger', ['auth', 'perm:stock.view']);
+$router->get('/stock/racks', $A . 'StockController@racks', ['auth', 'perm:stock.view']);
+$router->get('/stock/placement', $A . 'StockController@placement', ['auth', 'perm:stock.view']);
 $router->get('/stock/batches', $A . 'StockController@batches', ['auth', 'perm:stock.view']);
 $router->get('/stock/batches/{id}', $A . 'StockController@batch', ['auth', 'perm:stock.view']);
 $router->get('/stock/lookup', $A . 'StockController@lookup', ['auth', 'perm:stock.view']);

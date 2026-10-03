@@ -18,7 +18,6 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <div class="row">
       <div class="col-md-4 mb-3"><label class="form-label">Tax</label><select name="tax_id" class="form-select"><option value="">No tax</option>
         <?php foreach ($taxes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('tax_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['rate']) ?>%)</option><?php endforeach; ?></select></div>
-      <div class="col-md-4 mb-3"><label class="form-label">Rack / bin</label><input name="location" class="form-control" value="<?= $v('location') ?>" maxlength="100"></div>
     </div>
     <div class="mb-0"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"><?= $v('description') ?></textarea></div>
   </div></div>

@@ -8,10 +8,11 @@
   <?php if ($doc['note']): ?><div class="mt-2 text-muted"><?= e($doc['note']) ?></div><?php endif; ?>
 </div></div>
 <div class="card"><div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th>Item</th><th>SKU</th><th>Batch</th><th class="text-end">Qty</th></tr></thead><tbody>
+  <thead><tr><th>Item</th><th>SKU</th><th>Batch</th><th><?= $doc['to_warehouse'] ? 'From rack → To rack' : 'Rack' ?></th><th class="text-end">Qty</th></tr></thead><tbody>
   <?php foreach ($lines as $l): ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?></td><td><?= e($l['sku']) ?></td>
       <td><?= $l['batch_no'] ? '<a href="' . url('stock/batches/' . (int)$l['batch_id']) . '">' . e($l['batch_no']) . '</a>' : '' ?></td>
+      <td><?= e($l['rack'] ?? 'No rack') ?><?= $doc['to_warehouse'] ? ' → ' . e($l['to_rack'] ?? 'No rack') : '' ?></td>
       <td class="text-end <?= $signed ? ($l['qty'] < 0 ? 'text-danger' : 'text-success') : '' ?>"><?= $signed && $l['qty'] > 0 ? '+' : '' ?><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td></tr>
   <?php endforeach; ?></tbody></table></div></div>
 <a class="btn btn-link mt-2" href="<?= url($back) ?>">&laquo; Back</a>

@@ -47,11 +47,34 @@ final class Stock
         return DB::one('SELECT * FROM batches WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
     }
 
-    public static function balance(int $variantId, int $warehouseId, int $batchId = 0): float
+    public static function location(int $id): ?array
+    {
+        return DB::one('SELECT * FROM locations WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
+    }
+
+    /** Stock of a variant in a warehouse/batch; in one rack when $locationId is given, else across all racks. */
+    public static function balance(int $variantId, int $warehouseId, int $batchId = 0, ?int $locationId = null): float
     {
         return (float)DB::val(
-            'SELECT qty FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ?',
-            [self::tid(), $variantId, $warehouseId, $batchId]);
+            'SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ?'
+            . ($locationId === null ? '' : ' AND location_id = ?'),
+            $locationId === null ? [self::tid(), $variantId, $warehouseId, $batchId] : [self::tid(), $variantId, $warehouseId, $batchId, $locationId]);
+    }
+
+    /** Where a variant (optionally one batch) sits in a warehouse: racks with stock, biggest first. */
+    public static function placements(int $variantId, int $warehouseId, ?int $batchId = null): array
+    {
+        return DB::all(
+            'SELECT s.location_id, COALESCE(l.code, \'\') AS code, SUM(s.qty) AS qty
+             FROM stock_balances s LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
+             WHERE s.tenant_id = ? AND s.variant_id = ? AND s.warehouse_id = ?' . ($batchId === null ? '' : ' AND s.batch_id = ?') . '
+             GROUP BY s.location_id, l.code HAVING qty > 0.0005 ORDER BY qty DESC',
+            $batchId === null ? [self::tid(), $variantId, $warehouseId] : [self::tid(), $variantId, $warehouseId, $batchId]);
+    }
+
+    public static function rackName(?string $code): string
+    {
+        return $code !== null && $code !== '' ? $code : 'No rack';
     }
 
     /** Creates a roll/thaan batch with an auto number like SKU-B0001. */
@@ -73,7 +96,7 @@ final class Stock
 
     public static function move(
         int $variantId, int $warehouseId, int $batchId, float $qty, string $type,
-        ?string $refType = null, ?int $refId = null, ?float $cost = null, ?string $note = null
+        ?string $refType = null, ?int $refId = null, ?float $cost = null, ?string $note = null, int $locationId = 0
     ): void {
         $tid = self::tid();
         $qty = self::round($qty);
@@ -86,6 +109,17 @@ final class Stock
             throw new StockException(self::label($v) . ' is counted in whole ' . $v['unit'] . '; decimals are not allowed.');
         }
 
+        $rack = null;
+        if ($locationId > 0) {
+            $rack = self::location($locationId);
+            if (!$rack || (int)$rack['warehouse_id'] !== $warehouseId) {
+                throw new StockException('That rack does not belong to the chosen warehouse.');
+            }
+            if (!$rack['is_active'] && $qty > 0) throw new StockException('Rack ' . $rack['code'] . ' is inactive; choose another rack.');
+        } else {
+            $locationId = 0;
+        }
+
         if ($v['track_batch']) {
             $b = $batchId > 0 ? self::batch($batchId) : null;
             if (!$b || (int)$b['variant_id'] !== $variantId) {
@@ -95,20 +129,23 @@ final class Stock
             $batchId = 0;
         }
 
-        DB::run('INSERT IGNORE INTO stock_balances (tenant_id, variant_id, warehouse_id, batch_id, qty) VALUES (?,?,?,?,0)',
-            [$tid, $variantId, $warehouseId, $batchId]);
+        DB::run('INSERT IGNORE INTO stock_balances (tenant_id, variant_id, warehouse_id, batch_id, location_id, qty) VALUES (?,?,?,?,?,0)',
+            [$tid, $variantId, $warehouseId, $batchId, $locationId]);
         $have = (float)DB::val(
-            'SELECT qty FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? FOR UPDATE',
-            [$tid, $variantId, $warehouseId, $batchId]);
+            'SELECT qty FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ? FOR UPDATE',
+            [$tid, $variantId, $warehouseId, $batchId, $locationId]);
         if ($have + $qty < -0.0005) {
-            $where = $batchId ? ' in batch ' . $b['batch_no'] : '';
+            $where = ($batchId ? ' in batch ' . $b['batch_no'] : '') . ' at ' . self::rackName($rack['code'] ?? null);
+            $elsewhere = '';
+            $total = self::balance($variantId, $warehouseId, $batchId);
+            if ($total > $have + 0.0005) $elsewhere = ' (' . self::fmt($total) . ' ' . $v['unit'] . ' in this warehouse on other racks)';
             throw new StockException('Not enough stock for ' . self::label($v) . $where . ': only '
-                . rtrim(rtrim(number_format($have, 3, '.', ''), '0'), '.') . ' ' . $v['unit'] . ' available.');
+                . self::fmt($have) . ' ' . $v['unit'] . ' available' . $elsewhere . '.');
         }
-        DB::run('UPDATE stock_balances SET qty = qty + ? WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ?',
-            [$qty, $tid, $variantId, $warehouseId, $batchId]);
+        DB::run('UPDATE stock_balances SET qty = qty + ? WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?',
+            [$qty, $tid, $variantId, $warehouseId, $batchId, $locationId]);
         DB::insert('stock_ledger', [
-            'tenant_id' => $tid, 'variant_id' => $variantId, 'warehouse_id' => $warehouseId, 'batch_id' => $batchId,
+            'tenant_id' => $tid, 'variant_id' => $variantId, 'warehouse_id' => $warehouseId, 'batch_id' => $batchId, 'location_id' => $locationId,
             'qty_change' => $qty, 'type' => $type, 'ref_type' => $refType, 'ref_id' => $refId,
             'unit_cost' => $cost, 'note' => $note, 'user_id' => Auth::user()['id'] ?? null,
         ]);

@@ -106,6 +106,11 @@ final class ItemController extends Controller
             $v['by_wh'] = DB::all(
                 'SELECT w.name, SUM(s.qty) AS qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
                  WHERE s.tenant_id = ? AND s.variant_id = ? GROUP BY w.id, w.name HAVING qty <> 0 ORDER BY w.name', [$t, $v['id']]);
+            $v['by_rack'] = DB::all(
+                'SELECT w.name AS warehouse, COALESCE(l.code, \'\') AS rack, SUM(s.qty) AS qty FROM stock_balances s
+                 JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
+                 WHERE s.tenant_id = ? AND s.variant_id = ? GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
+                 ORDER BY w.name, l.code', [$t, $v['id']]);
             $v['total'] = array_sum(array_column($v['by_wh'], 'qty'));
             $v['batches'] = $item['track_batch'] ? Stock::batchesFor((int)$v['id'], null, false) : [];
         }
@@ -117,8 +122,9 @@ final class ItemController extends Controller
              JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              WHERE bc.tenant_id = ? AND bc.bundle_item_id = ?', [$t, $item['id']]) : [];
         $history = DB::all(
-            'SELECT l.*, w.name AS warehouse, b.batch_no, v.sku FROM stock_ledger l
+            'SELECT l.*, w.name AS warehouse, b.batch_no, v.sku, rk.code AS rack FROM stock_ledger l
              JOIN item_variants v ON v.id = l.variant_id JOIN warehouses w ON w.id = l.warehouse_id
+             LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
              LEFT JOIN batches b ON b.id = l.batch_id
              WHERE l.tenant_id = ? AND v.item_id = ? ORDER BY l.id DESC LIMIT 20', [$t, $item['id']]);
         $meta = DB::one(
@@ -199,7 +205,6 @@ final class ItemController extends Controller
             'unit_id' => (int)$unit['id'],
             'tax_id' => $own('taxes', $d['tax_id'] ?? 0),
             'description' => trim((string)($d['description'] ?? '')) ?: null,
-            'location' => trim((string)($d['location'] ?? '')) ?: null,
             'track_batch' => $track, 'is_bundle' => $isBundle,
             'reorder_level' => (float)($d['reorder_level'] ?? 0), 'reorder_qty' => (float)($d['reorder_qty'] ?? 0),
             'is_active' => empty($d['is_active']) && $item ? 0 : 1,
