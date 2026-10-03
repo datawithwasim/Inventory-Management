@@ -103,3 +103,28 @@ function send_mail(string $to, string $subject, string $body): void
     $entry = sprintf("[%s] To: %s | Subject: %s\n%s\n---\n", date('c'), $to, $subject, $body);
     file_put_contents(ROOT . '/storage/logs/mail.log', $entry, FILE_APPEND);
 }
+
+function qty(float|string|null $q): string
+{
+    return App\Models\Stock::fmt($q);
+}
+
+function money(float|string|null $v): string
+{
+    return number_format((float)$v, 2);
+}
+
+/** Prev / next links that keep the current filters. */
+function pager(int $page, int $pages): string
+{
+    if ($pages <= 1) return '';
+    $link = function (int $p, string $label, bool $enabled) {
+        $q = $_GET;
+        $q['page'] = $p;
+        return '<li class="page-item' . ($enabled ? '' : ' disabled') . '"><a class="page-link" href="?' . e(http_build_query($q)) . '">' . $label . '</a></li>';
+    };
+    return '<nav class="mt-3"><ul class="pagination pagination-sm mb-0">'
+        . $link($page - 1, '&laquo; Prev', $page > 1)
+        . '<li class="page-item disabled"><span class="page-link">Page ' . $page . ' of ' . $pages . '</span></li>'
+        . $link($page + 1, 'Next &raquo;', $page < $pages) . '</ul></nav>';
+}

@@ -15,8 +15,17 @@ $active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
   <ul class="nav flex-column">
     <li><a class="nav-link <?= $active('/dashboard') ?>" href="<?= url('dashboard') ?>"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
     <li class="nav-heading">Inventory</li>
-    <li><span class="nav-link disabled"><i class="bi bi-tags me-2"></i>Items <small>(soon)</small></span></li>
-    <li><span class="nav-link disabled"><i class="bi bi-boxes me-2"></i>Stock <small>(soon)</small></span></li>
+    <?php if (can('items.view')): ?><li><a class="nav-link <?= $active('/items') ?>" href="<?= url('items') ?>"><i class="bi bi-tags me-2"></i>Items</a></li><?php endif; ?>
+    <?php if (can('stock.view')): ?>
+      <li><a class="nav-link <?= $path === '/stock' ? 'active' : '' ?>" href="<?= url('stock') ?>"><i class="bi bi-boxes me-2"></i>Stock</a></li>
+      <li><a class="nav-link <?= $active('/stock/batches') ?>" href="<?= url('stock/batches') ?>"><i class="bi bi-layers me-2"></i>Batches (rolls)</a></li>
+      <li><a class="nav-link <?= $active('/stock/adjustments') ?>" href="<?= url('stock/adjustments') ?>"><i class="bi bi-sliders me-2"></i>Adjustments</a></li>
+      <li><a class="nav-link <?= $active('/stock/transfers') ?>" href="<?= url('stock/transfers') ?>"><i class="bi bi-arrow-left-right me-2"></i>Transfers</a></li>
+      <li><a class="nav-link <?= $active('/stock/takes') ?>" href="<?= url('stock/takes') ?>"><i class="bi bi-clipboard-check me-2"></i>Stock-takes</a></li>
+      <li><a class="nav-link <?= $active('/stock/ledger') ?>" href="<?= url('stock/ledger') ?>"><i class="bi bi-journal-text me-2"></i>Stock ledger</a></li>
+    <?php endif; ?>
+    <?php if (can('warehouses.view')): ?><li><a class="nav-link <?= $active('/warehouses') ?>" href="<?= url('warehouses') ?>"><i class="bi bi-building me-2"></i>Warehouses</a></li><?php endif; ?>
+    <?php if (can('masters.view')): ?><li><a class="nav-link <?= $active('/masters') ?>" href="<?= url('masters/categories') ?>"><i class="bi bi-list-check me-2"></i>Masters</a></li><?php endif; ?>
     <li><span class="nav-link disabled"><i class="bi bi-cart-plus me-2"></i>Purchase <small>(soon)</small></span></li>
     <li><span class="nav-link disabled"><i class="bi bi-receipt me-2"></i>Sales <small>(soon)</small></span></li>
     <li class="nav-heading">Administration</li>

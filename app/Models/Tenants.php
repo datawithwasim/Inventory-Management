@@ -31,6 +31,15 @@ final class Tenants
         return $slug;
     }
 
+    /** Starter master data every new company gets. */
+    public static function seedDefaults(int $tenantId): void
+    {
+        foreach ([['Piece', 'pcs', 0], ['Meter', 'm', 1], ['Yard', 'yd', 1], ['Set', 'set', 0], ['Box', 'box', 0], ['Kg', 'kg', 1]] as [$n, $s, $d]) {
+            DB::insert('units', ['tenant_id' => $tenantId, 'name' => $n, 'short_name' => $s, 'allow_decimal' => $d]);
+        }
+        DB::insert('warehouses', ['tenant_id' => $tenantId, 'name' => 'Main Warehouse', 'code' => 'MAIN', 'is_default' => 1]);
+    }
+
     /** Creates company + default roles + owner user. Returns the tenant id. */
     public static function provision(array $d): int
     {
@@ -66,6 +75,7 @@ final class Tenants
                 'name' => $d['owner_name'], 'email' => $d['owner_email'],
                 'password_hash' => password_hash($d['owner_password'], PASSWORD_DEFAULT),
             ]);
+            self::seedDefaults($tenantId);
             return $tenantId;
         });
     }

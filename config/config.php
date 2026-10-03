@@ -30,4 +30,5 @@ return [
         'password' => $get('SUPERADMIN_PASSWORD', 'ChangeMe123!'),
     ],
     'permissions' => require __DIR__ . '/permissions.php',
+    'masters' => require __DIR__ . '/masters.php',
 ];

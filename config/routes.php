@@ -39,6 +39,59 @@ $router->get('/roles/{id}/edit', $A . 'RoleController@edit', ['auth', 'perm:role
 $router->post('/roles/{id}', $A . 'RoleController@update', ['auth', 'perm:roles.edit']);
 $router->post('/roles/{id}/delete', $A . 'RoleController@destroy', ['auth', 'perm:roles.delete']);
 
+// ---- Masters, warehouses, items ----
+$router->get('/masters/{type}', $A . 'MasterController@index', ['auth', 'perm:masters.view']);
+$router->get('/masters/{type}/create', $A . 'MasterController@create', ['auth', 'perm:masters.create']);
+$router->post('/masters/{type}', $A . 'MasterController@store', ['auth', 'perm:masters.create']);
+$router->get('/masters/{type}/{id}/edit', $A . 'MasterController@edit', ['auth', 'perm:masters.edit']);
+$router->post('/masters/{type}/{id}', $A . 'MasterController@update', ['auth', 'perm:masters.edit']);
+$router->post('/masters/{type}/{id}/delete', $A . 'MasterController@destroy', ['auth', 'perm:masters.delete']);
+
+$router->get('/warehouses', $A . 'WarehouseController@index', ['auth', 'perm:warehouses.view']);
+$router->get('/warehouses/create', $A . 'WarehouseController@create', ['auth', 'perm:warehouses.create']);
+$router->post('/warehouses', $A . 'WarehouseController@store', ['auth', 'perm:warehouses.create']);
+$router->get('/warehouses/{id}/edit', $A . 'WarehouseController@edit', ['auth', 'perm:warehouses.edit']);
+$router->post('/warehouses/{id}', $A . 'WarehouseController@update', ['auth', 'perm:warehouses.edit']);
+$router->post('/warehouses/{id}/default', $A . 'WarehouseController@makeDefault', ['auth', 'perm:warehouses.edit']);
+$router->post('/warehouses/{id}/delete', $A . 'WarehouseController@destroy', ['auth', 'perm:warehouses.delete']);
+
+$router->get('/items', $A . 'ItemController@index', ['auth', 'perm:items.view']);
+$router->get('/items/create', $A . 'ItemController@create', ['auth', 'perm:items.create']);
+$router->post('/items', $A . 'ItemController@store', ['auth', 'perm:items.create']);
+$router->get('/items/import', $A . 'ImportController@show', ['auth', 'perm:items.create']);
+$router->post('/items/import', $A . 'ImportController@run', ['auth', 'perm:items.create']);
+$router->get('/items/import/template', $A . 'ImportController@template', ['auth', 'perm:items.create']);
+$router->get('/items/export', $A . 'ImportController@export', ['auth', 'perm:items.view']);
+$router->get('/items/{id}', $A . 'ItemController@show', ['auth', 'perm:items.view']);
+$router->get('/items/{id}/edit', $A . 'ItemController@edit', ['auth', 'perm:items.edit']);
+$router->post('/items/{id}', $A . 'ItemController@update', ['auth', 'perm:items.edit']);
+$router->post('/items/{id}/delete', $A . 'ItemController@destroy', ['auth', 'perm:items.delete']);
+
+// ---- Stock ----
+$router->get('/stock', $A . 'StockController@index', ['auth', 'perm:stock.view']);
+$router->get('/stock/ledger', $A . 'StockController@ledger', ['auth', 'perm:stock.view']);
+$router->get('/stock/batches', $A . 'StockController@batches', ['auth', 'perm:stock.view']);
+$router->get('/stock/batches/{id}', $A . 'StockController@batch', ['auth', 'perm:stock.view']);
+$router->get('/stock/lookup', $A . 'StockController@lookup', ['auth', 'perm:stock.view']);
+$router->get('/stock/batch-options', $A . 'StockController@batchOptions', ['auth', 'perm:stock.view']);
+
+$router->get('/stock/adjustments', $A . 'AdjustmentController@index', ['auth', 'perm:stock.view']);
+$router->get('/stock/adjustments/create', $A . 'AdjustmentController@create', ['auth', 'perm:stock.adjust']);
+$router->post('/stock/adjustments', $A . 'AdjustmentController@store', ['auth', 'perm:stock.adjust']);
+$router->get('/stock/adjustments/{id}', $A . 'AdjustmentController@show', ['auth', 'perm:stock.view']);
+
+$router->get('/stock/transfers', $A . 'TransferController@index', ['auth', 'perm:stock.view']);
+$router->get('/stock/transfers/create', $A . 'TransferController@create', ['auth', 'perm:stock.transfer']);
+$router->post('/stock/transfers', $A . 'TransferController@store', ['auth', 'perm:stock.transfer']);
+$router->get('/stock/transfers/{id}', $A . 'TransferController@show', ['auth', 'perm:stock.view']);
+
+$router->get('/stock/takes', $A . 'StocktakeController@index', ['auth', 'perm:stock.view']);
+$router->get('/stock/takes/create', $A . 'StocktakeController@create', ['auth', 'perm:stock.adjust']);
+$router->post('/stock/takes', $A . 'StocktakeController@store', ['auth', 'perm:stock.adjust']);
+$router->get('/stock/takes/{id}', $A . 'StocktakeController@show', ['auth', 'perm:stock.view']);
+$router->post('/stock/takes/{id}', $A . 'StocktakeController@update', ['auth', 'perm:stock.adjust']);
+$router->post('/stock/takes/{id}/delete', $A . 'StocktakeController@destroy', ['auth', 'perm:stock.adjust']);
+
 $router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
 
 // ---- Super Admin panel ----
@@ -63,3 +116,6 @@ $router->get('/admin/plans/{id}/edit', $S . 'PlanController@edit', ['admin']);
 $router->post('/admin/plans/{id}', $S . 'PlanController@update', ['admin']);
 
 $router->get('/admin/audit', $S . 'DashboardController@audit', ['admin']);
+
+$router->get('/admin/system', $S . 'SystemController@index', ['admin']);
+$router->post('/admin/system/migrate', $S . 'SystemController@migrate', ['admin']);

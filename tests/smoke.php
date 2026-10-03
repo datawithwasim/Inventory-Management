@@ -9,47 +9,7 @@ declare(strict_types=1);
 $base = rtrim($argv[1] ?? 'http://127.0.0.1:8099', '/');
 require dirname(__DIR__) . '/core/bootstrap.php';
 
-final class Client
-{
-    private string $jar;
-    public function __construct(private string $base) { $this->jar = tempnam(sys_get_temp_dir(), 'jar'); }
-
-    public function req(string $method, string $path, array $data = []): array
-    {
-        $ch = curl_init($this->base . $path);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar, CURLOPT_CUSTOMREQUEST => $method,
-        ]);
-        if ($method === 'POST') curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-        $raw = (string)curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $hs = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
-        $headers = substr($raw, 0, $hs);
-        preg_match('/^Location:\s*(\S+)/mi', $headers, $m);
-        return ['status' => $status, 'body' => substr($raw, $hs), 'location' => $m[1] ?? null];
-    }
-
-    public function get(string $p): array { return $this->req('GET', $p); }
-
-    /** POST with a CSRF token scraped from a page that has a form. */
-    public function post(string $p, array $data, string $tokenPage): array
-    {
-        $page = $this->get($tokenPage)['body'];
-        preg_match('/name="_csrf" value="([a-f0-9]+)"/', $page, $m);
-        return $this->req('POST', $p, $data + ['_csrf' => $m[1] ?? '']);
-    }
-}
-
-$fails = 0;
-function check(string $name, bool $ok): void
-{
-    global $fails;
-    echo ($ok ? "  PASS " : "  FAIL ") . $name . "\n";
-    if (!$ok) $fails++;
-}
-function flashed(array $r, string $needle): bool { return str_contains($r['body'], $needle); }
+require __DIR__ . '/lib.php';
 
 $suffix = bin2hex(random_bytes(3));
 $sa = config('superadmin');

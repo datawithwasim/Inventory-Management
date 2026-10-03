@@ -5,7 +5,12 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 
 ## Status
 - **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
-- Next: Phase 2 – items, stock ledger, batches (1 batch = 1 roll)
+- **Phase 2 – Items, stock & batches: done** (masters, warehouses, items with variants and bundles, stock ledger,
+  batches where 1 batch = 1 roll/thaan, adjustments / opening stock, transfers, stock-takes, CSV import/export)
+- Next: Phase 3 – Purchase
+
+### Updating an installed copy (cPanel)
+Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
 
 ## Deploy on cPanel (no terminal needed)
 1. **PHP version:** cPanel → *MultiPHP Manager* → select PHP 8.1 or higher for your domain.
@@ -32,7 +37,8 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ## Tests
 ```bash
 php -S 127.0.0.1:8099 -t public public/index.php &
-php tests/smoke.php http://127.0.0.1:8099     # run against a throw-away database
+php tests/smoke.php http://127.0.0.1:8099     # phase 1
+php tests/phase2.php http://127.0.0.1:8099    # phase 2  (run both against a throw-away database)
 ```
 
 ## Layout
