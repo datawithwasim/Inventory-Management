@@ -129,7 +129,7 @@ final class QuotationController extends SalesBase
         if (!in_array($q['status'], ['draft', 'sent'], true)) $this->bounce('This quotation can no longer be edited.', "sales/quotations/{$q['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        [$cf, $cfErr] = CustomFields::validate('quotation', $this->input());
+        [$cf, $cfErr] = CustomFields::validate('quotation', $this->input(), (int)$id);
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         DB::transaction(function () use ($q, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));

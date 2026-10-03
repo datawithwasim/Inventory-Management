@@ -263,7 +263,7 @@ final class ItemController extends Controller
             }
             if (!$components) $bounce('Add at least one component to the bundle.');
         }
-        [$cfValues, $cfErrors] = CustomFields::validate('item', $d);
+        [$cfValues, $cfErrors] = CustomFields::validate('item', $d, $item ? (int)$item['id'] : null);
         if ($cfErrors) $bounce(implode(' ', $cfErrors));
         return [$fields, $variants, $components, $cfValues];
     }

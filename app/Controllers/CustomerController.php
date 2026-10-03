@@ -99,7 +99,7 @@ final class CustomerController extends SalesBase
     {
         $c = $this->load($id);
         $data = $this->fields("customers/{$c['id']}/edit", (int)$c['id']);
-        [$cf, $cfErr] = CustomFields::validate('customer', $this->input());
+        [$cf, $cfErr] = CustomFields::validate('customer', $this->input(), (int)$id);
         if ($cfErr) $this->bounce(implode(' ', $cfErr), "customers/{$c['id']}/edit");
         CustomFields::save('customer', (int)$c['id'], $cf);
         if ($c['is_walkin']) $data['name'] = $c['name'];

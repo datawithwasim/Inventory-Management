@@ -16,7 +16,6 @@ final class SettingsNav
             'appearance' => ['Appearance', 'palette', 'settings/appearance'],
             'modules' => ['Modules & menu', 'grid-1x2', 'settings/modules'],
             'formdesign' => ['Form designer', 'layout-text-window', 'settings/formdesign'],
-            'fields' => ['Custom fields', 'input-cursor-text', 'settings/custom-fields'],
             'labels' => ['Names (labels)', 'type', 'settings/labels'],
             'templates' => ['Print templates', 'printer', 'settings/templates'],
         ],

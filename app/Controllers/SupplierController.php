@@ -96,7 +96,7 @@ final class SupplierController extends PurchaseBase
     {
         $s = $this->load($id);
         $data = $this->fields("suppliers/{$s['id']}/edit", (int)$s['id']);
-        [$cf, $cfErr] = CustomFields::validate('supplier', $this->input());
+        [$cf, $cfErr] = CustomFields::validate('supplier', $this->input(), (int)$id);
         if ($cfErr) $this->bounce(implode(' ', $cfErr), "suppliers/{$s['id']}/edit");
         CustomFields::save('supplier', (int)$s['id'], $cf);
         $data['is_active'] = empty($this->input()['is_active']) ? 0 : 1;

@@ -160,7 +160,7 @@ final class PurchaseOrderController extends PurchaseBase
         if ($po['status'] !== 'draft') $this->bounce('Only draft purchase orders can be edited.', "purchase/orders/{$po['id']}");
         $head = $this->header($back);
         $lines = $this->collectLines($this->postedLines($back), $back);
-        [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input());
+        [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input(), (int)$id);
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         DB::transaction(function () use ($po, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));

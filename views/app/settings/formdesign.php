@@ -1,5 +1,5 @@
 <?php $typeIcons = ['text' => 'input-cursor-text', 'textarea' => 'text-paragraph', 'email' => 'envelope', 'phone' => 'telephone', 'url' => 'link-45deg', 'number' => '123', 'decimal' => 'hash',
-    'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'checkbox' => 'check2-square']; ?>
+    'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square']; ?>
 <div class="dz" id="dz" data-start="<?= e($start) ?>">
   <header class="dz-top">
     <a class="dz-back" href="<?= url('settings/company') ?>" title="Back to settings"><i class="bi bi-arrow-left"></i></a>
@@ -51,6 +51,7 @@
         <div class="dz-lbl">Width</div>
         <div class="dz-seg w" id="pWidth"><?php foreach ($widths as $k => $l): ?><button type="button" data-w="<?= e((string)$k) ?>"><?= e($k === '' ? 'Auto' : ($k === '100' ? 'Full' : $k . '%')) ?></button><?php endforeach; ?></div>
         <div class="dz-row" id="pReqRow"><span>Mandatory field</span><label class="dz-sw"><input type="checkbox" id="pReq"><i></i></label></div>
+        <div class="dz-row" id="pUniqRow"><span>Unique (no duplicate values)</span><label class="dz-sw"><input type="checkbox" id="pUniq"><i></i></label></div>
         <div class="dz-row" id="pListRow"><span>Show as a column in the list</span><label class="dz-sw"><input type="checkbox" id="pList"><i></i></label></div>
         <div class="dz-note" id="pCore"><i class="bi bi-lock me-1"></i>This is an essential field. It is always on the form and always filled in.</div>
         <div class="d-flex gap-2 mt-3"><button type="button" class="dz-btn" id="pUp"><i class="bi bi-arrow-up"></i> Earlier</button><button type="button" class="dz-btn" id="pDown"><i class="bi bi-arrow-down"></i> Later</button></div>

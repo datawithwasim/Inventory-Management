@@ -40,7 +40,7 @@ $tmp = function (string $bytes, string $name, string $mime): CURLFile { $f = tem
 
 echo "Settings pages\n";
 check('/settings opens the company tab', str_ends_with((string)$a->get('/settings')['location'], '/settings/company'));
-check('every settings tab loads', array_reduce(['company', 'preferences', 'numbering', 'workflow', 'labels', 'templates', 'custom-fields', 'custom-fields/create'], fn($ok, $t) => $ok && $a->get("/settings/$t")['status'] === 200, true));
+check('every settings tab loads', array_reduce(['company', 'preferences', 'numbering', 'workflow', 'labels', 'templates', 'formdesign', 'custom-fields/create'], fn($ok, $t) => $ok && $a->get("/settings/$t")['status'] === 200, true));
 check('an unknown settings tab is a 404', $a->get('/settings/nonsense')['status'] === 404);
 
 echo "Company profile and logo\n";
@@ -298,10 +298,10 @@ check('a field can be renamed but its type is fixed', $val('SELECT label FROM cu
 $a->post("/settings/custom-fields/$fWidth", ['label' => 'Fabric width (inch)', 'sort_order' => 1], "/settings/custom-fields/$fWidth/edit");
 check('an inactive field disappears from the form and is no longer required', !str_contains($a->get('/items/create')['body'], 'Fabric width (inch)') && (function () use ($itemPost, $count) { $n = $count('items'); $itemPost([], 'No Width Needed'); return $count('items') === $n + 1; })());
 check('...but its saved values are kept', $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fWidth, $cot]) === '60');
-$a->post("/settings/custom-fields/$fWidth/delete", [], '/settings/custom-fields');
+$a->post("/settings/custom-fields/$fWidth/delete", [], '/settings/custom-fields/create');
 check('deleting a field deletes its values', !$val('SELECT 1 FROM custom_fields WHERE id = ?', [$fWidth]) && !$val('SELECT 1 FROM custom_field_values WHERE field_id = ?', [$fWidth]));
 check("another company sees none of A's fields and cannot edit them", !str_contains($b->get('/items/create')['body'], 'Surface') && $b->get("/settings/custom-fields/$fBday/edit")['status'] === 404);
-$b->post("/settings/custom-fields/$fBday/delete", [], '/settings/custom-fields');
+$b->post("/settings/custom-fields/$fBday/delete", [], '/settings/custom-fields/create');
 check("another company cannot delete A's field", (bool)$val('SELECT 1 FROM custom_fields WHERE id = ?', [$fBday]));
 $bUnit = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Piece'", [$tB]);
 $b->post('/items', ['name' => 'B Item', 'unit_id' => $bUnit, 'variants' => [['sku' => 'BI']], 'cf' => [$fBday => 'hijack', $fCourier => 'hijack']], '/items/create');
@@ -343,7 +343,7 @@ check("another company cannot print A's documents (404)", $b->get("/sales/invoic
 check("another company's template is independent", $S('template.invoice', $tB) === '' && !str_contains($b->get('/settings/templates?doc=invoice')['body'], 'My Invoice'));
 
 echo "Permissions\n";
-check('staff can read the settings pages', $s->get('/settings/company')['status'] === 200 && $s->get('/settings/custom-fields')['status'] === 200 && $s->get('/settings/templates')['status'] === 200 && $s->get('/company/logo')['status'] === 200);
+check('staff can read the settings pages', $s->get('/settings/company')['status'] === 200 && $s->get('/settings/formdesign')['status'] === 200 && $s->get('/settings/templates')['status'] === 200 && $s->get('/company/logo')['status'] === 200);
 $before = $S('company.phone');
 $s->post('/settings/company', ['name' => 'Hacked', 'phone' => '000'], '/settings/company');
 $s->post('/settings/workflow', ['negative_stock' => 1], '/settings/workflow');

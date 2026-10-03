@@ -21,14 +21,10 @@ final class CustomFieldController extends Controller
         return DB::one('SELECT * FROM custom_fields WHERE tenant_id = ? AND id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
+    /** Custom fields are now managed in the Form designer; the old list lives there. */
     public function index(): void
     {
-        $by = [];
-        foreach (array_keys(CustomFields::ENTITIES) as $e) {
-            $by[$e] = CustomFields::fields($e, false);
-            foreach ($by[$e] as &$f) $f['used'] = (int)DB::val('SELECT COUNT(*) FROM custom_field_values WHERE field_id = ?', [$f['id']]);
-        }
-        $this->settingsView('app/settings/fields', ['title' => 'Settings', 'by' => $by], 'fields');
+        redirect('settings/formdesign');
     }
 
     public function create(): void

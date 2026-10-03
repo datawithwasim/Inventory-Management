@@ -11,9 +11,11 @@ final class CustomFields
 {
     public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'quotation' => 'Quotations', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders'];
     public const TYPES = ['text' => 'Single line', 'textarea' => 'Multi-line', 'email' => 'Email', 'phone' => 'Phone', 'url' => 'URL', 'number' => 'Number', 'decimal' => 'Decimal',
-        'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'checkbox' => 'Yes / No'];
+        'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'datetime' => 'Date & time', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'multiselect' => 'Multi-select (tick several)', 'checkbox' => 'Yes / No'];
+    /** Types where a duplicate value can be refused ("Unique"). */
+    public const UNIQUE_TYPES = ['text', 'email', 'phone', 'url', 'number', 'decimal', 'dropdown', 'date'];
     /** Types that need a list of choices. */
-    public const CHOICE_TYPES = ['dropdown', 'radio'];
+    public const CHOICE_TYPES = ['dropdown', 'radio', 'multiselect'];
 
     private static function tid(): int
     {
@@ -45,7 +47,7 @@ final class CustomFields
     }
 
     /** @return array{0: array<int,string>, 1: string[]} values by field id, error messages */
-    public static function validate(string $entity, array $input): array
+    public static function validate(string $entity, array $input, ?int $entityId = null): array
     {
         $posted = (array)($input['cf'] ?? []);
         $values = [];
@@ -53,6 +55,10 @@ final class CustomFields
         foreach (self::fields($entity) as $f) {
             $id = (int)$f['id'];
             $raw = $posted[$id] ?? '';
+            if ($f['type'] === 'multiselect') {
+                $picked = array_values(array_intersect($f['choices'], array_map('strval', is_array($raw) ? $raw : [])));
+                $raw = $picked ? json_encode($picked, JSON_UNESCAPED_UNICODE) : '';
+            }
             $v = is_array($raw) ? '' : trim((string)$raw);
             $label = $f['label'];
             if ($f['type'] === 'checkbox') {
@@ -72,10 +78,19 @@ final class CustomFields
                 if (!preg_match('/^[0-9+()\-.\s]{5,25}$/', $v)) $errors[] = "$label must be a valid phone number.";
             } elseif ($f['type'] === 'date') {
                 if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) $errors[] = "$label must be a valid date.";
+            } elseif ($f['type'] === 'datetime') {
+                $d = \DateTime::createFromFormat('Y-m-d\TH:i', $v) ?: \DateTime::createFromFormat('Y-m-d H:i', $v);
+                if (!$d) $errors[] = "$label must be a valid date and time."; else $v = $d->format('Y-m-d H:i');
+            } elseif ($f['type'] === 'multiselect') {
+                // already filtered to the listed options
             } elseif (in_array($f['type'], self::CHOICE_TYPES, true)) {
                 if (!in_array($v, $f['choices'], true)) $errors[] = "$label: choose one of the listed options.";
             } elseif (mb_strlen($v) > ($f['type'] === 'textarea' ? 1000 : 255)) {
                 $errors[] = "$label is too long (max " . ($f['type'] === 'textarea' ? 1000 : 255) . " characters).";
+            }
+            if ($v !== '' && !empty($f['is_unique']) && in_array($f['type'], self::UNIQUE_TYPES, true)
+                && DB::val('SELECT 1 FROM custom_field_values WHERE tenant_id = ? AND field_id = ? AND value = ? AND entity_id <> ? LIMIT 1', [self::tid(), $id, $v, (int)$entityId]) !== null) {
+                $errors[] = "$label \"$v\" is already used. It must be unique.";
             }
             $values[$id] = $v;
         }
@@ -105,6 +120,8 @@ final class CustomFields
         return match ($f['type']) {
             'checkbox' => $value === '1' ? 'Yes' : 'No',
             'date' => fdate($value),
+            'datetime' => fdate(substr($value, 0, 10)) . ' ' . substr($value, 11, 5),
+            'multiselect' => implode(', ', (array)(json_decode($value, true) ?: [])),
             'currency' => money($value),
             'percent' => rtrim(rtrim(number_format((float)$value, 2, '.', ''), '0'), '.') . '%',
             default => $value,
@@ -147,6 +164,12 @@ final class CustomFields
                 return $o . '</div>';
             case 'textarea':
                 return '<textarea name="' . $name . '" class="form-control" rows="2" maxlength="1000"' . $req . '>' . $e($val) . '</textarea>';
+            case 'multiselect':
+                $sel = (array)(json_decode($val, true) ?: []);
+                $o = '<div class="d-flex flex-wrap gap-3 pt-1">';
+                foreach ($f['choices'] as $i => $c) $o .= '<div class="form-check"><input class="form-check-input" type="checkbox" name="' . $name . '[]" id="' . $name . $i . '" value="' . $e($c) . '"' . (in_array($c, $sel, true) ? ' checked' : '') . '><label class="form-check-label" for="' . $name . $i . '">' . $e($c) . '</label></div>';
+                return $o . '</div>';
+            case 'datetime': $t = 'datetime-local'; $x = ''; $val = str_replace(' ', 'T', $val); break;
             case 'date': $t = 'date'; $x = ''; break;
             case 'number': $t = 'number'; $x = ' step="1"'; break;
             case 'decimal': case 'currency': $t = 'number'; $x = ' step="0.01"'; break;

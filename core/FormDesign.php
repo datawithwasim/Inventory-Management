@@ -218,7 +218,7 @@ final class FormDesign
     private static function typeIcon(string $type): string
     {
         return ['text' => 'input-cursor-text', 'textarea' => 'text-paragraph', 'email' => 'envelope', 'phone' => 'telephone', 'url' => 'link-45deg', 'number' => '123', 'decimal' => 'hash',
-            'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'checkbox' => 'check2-square'][$type] ?? 'input-cursor-text';
+            'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square'][$type] ?? 'input-cursor-text';
     }
 
     /** Everything the visual designer needs, for every form. */
@@ -236,7 +236,7 @@ final class FormDesign
                     if (isset($r['cf'][$k])) {
                         $c = $r['cf'][$k];
                         $fields[$k] = ['key' => $k, 'label' => $c['label'], 'kind' => self::typeIcon($c['type']), 'optional' => true, 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'],
-                            'options' => implode("\n", $c['choices']), 'show' => (bool)$c['is_active'], 'req' => (bool)$c['is_required'], 'inList' => (bool)$c['show_in_list'],
+                            'options' => implode("\n", $c['choices']), 'show' => (bool)$c['is_active'], 'req' => (bool)$c['is_required'], 'unique' => (bool)$c['is_unique'], 'inList' => (bool)$c['show_in_list'],
                             'w' => $r['props'][$k]['w'], 'help' => $r['props'][$k]['help'], 'span' => 4];
                         continue;
                     }
@@ -310,8 +310,8 @@ final class FormDesign
                         if (in_array($c['type'], CustomFields::CHOICE_TYPES, true) && isset($f['options'])) $opts = self::cleanChoices((string)$f['options'], $opts);
                         $dup = false;
                         foreach ($existing as $k2 => $c2) if ($k2 !== $k && mb_strtolower($c2['label']) === mb_strtolower($label)) $dup = true;
-                        DB::run('UPDATE custom_fields SET label = ?, options = ?, is_required = ?, show_in_list = ?, is_active = ? WHERE tenant_id = ? AND id = ?',
-                            [$dup ? $c['label'] : $label, $opts, !empty($f['req']) && $c['type'] !== 'checkbox' ? 1 : 0, !empty($f['inList']) ? 1 : 0, !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0, $t, $c['id']]);
+                        DB::run('UPDATE custom_fields SET label = ?, options = ?, is_required = ?, show_in_list = ?, is_active = ?, is_unique = ? WHERE tenant_id = ? AND id = ?',
+                            [$dup ? $c['label'] : $label, $opts, !empty($f['req']) && $c['type'] !== 'checkbox' ? 1 : 0, !empty($f['inList']) ? 1 : 0, !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0, !empty($f['unique']) && in_array($c['type'], CustomFields::UNIQUE_TYPES, true) ? 1 : 0, $t, $c['id']]);
                         $map[$k] = $k;
                     } elseif (!empty($f['isNew'])) {
                         $type = (string)($f['type'] ?? 'text');
@@ -322,7 +322,7 @@ final class FormDesign
                         $opts = null;
                         if (in_array($type, CustomFields::CHOICE_TYPES, true)) $opts = self::cleanChoices((string)($f['options'] ?? ''), "Option 1\nOption 2");
                         $id = DB::insert('custom_fields', ['tenant_id' => $t, 'entity' => $entity, 'label' => $label, 'type' => $type, 'options' => $opts,
-                            'is_required' => !empty($f['req']) && $type !== 'checkbox' ? 1 : 0, 'show_in_list' => !empty($f['inList']) ? 1 : 0, 'sort_order' => 0,
+                            'is_required' => !empty($f['req']) && $type !== 'checkbox' ? 1 : 0, 'show_in_list' => !empty($f['inList']) ? 1 : 0, 'sort_order' => 0, 'is_unique' => !empty($f['unique']) && in_array($type, CustomFields::UNIQUE_TYPES, true) ? 1 : 0,
                             'is_active' => !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0]);
                         $map[$k] = 'cf:' . $id; $notes['created']++;
                     }

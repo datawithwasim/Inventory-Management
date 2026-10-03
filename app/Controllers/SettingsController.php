@@ -48,7 +48,7 @@ final class SettingsController extends Controller
 
     public function show(string $tab): void
     {
-        if ($tab === 'fields') redirect('settings/custom-fields');
+        if ($tab === 'fields') redirect('settings/formdesign');
         if ($tab === 'formfields') redirect('settings/formdesign');
         if (!SettingsNav::valid($tab)) $this->notFound();
         if ($tab === 'formdesign') {

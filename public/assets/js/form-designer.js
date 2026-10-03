@@ -1,5 +1,6 @@
 (function () {
   var raw = JSON.parse(document.getElementById('dzData').textContent);
+  var CHOICE = { dropdown: 1, radio: 1, multiselect: 1 }, UNIQ = { text: 1, email: 1, phone: 1, url: 1, number: 1, decimal: 1, dropdown: 1, date: 1 };
   var data = raw.model, TYPES = raw.types, ICONS = raw.icons;
   var $ = function (id) { return document.getElementById(id); };
   var cur = 0, sel = null, drag = null, preview = false, history = [], newSeq = 0, typing = null;
@@ -105,10 +106,11 @@
     var hp = $('pHelp'); if (document.activeElement !== hp) hp.value = x.help;
     $('pTypeBox').hidden = !x.custom; $('pType').value = x.type || 'text'; $('pType').disabled = !x.isNew;
     $('pTypeNote').textContent = x.isNew ? '' : 'The type of a saved field cannot be changed. Delete it and add a new one if needed.';
-    var choice = x.custom && (x.type === 'dropdown' || x.type === 'radio'); $('pOptBox').hidden = !choice;
+    var choice = x.custom && CHOICE[x.type]; $('pOptBox').hidden = !choice;
     var op = $('pOptions'); if (document.activeElement !== op) op.value = x.options || '';
     document.querySelectorAll('#pWidth button').forEach(function (b) { b.classList.toggle('on', b.dataset.w === (x.w || '')); });
     $('pReqRow').hidden = !x.optional || x.type === 'checkbox'; $('pReq').checked = !!x.req;
+    $('pUniqRow').hidden = !(x.custom && UNIQ[x.type]); $('pUniq').checked = !!x.unique;
     $('pListRow').hidden = !x.custom; $('pList').checked = !!x.inList;
     $('pCore').hidden = x.optional; $('pHide').hidden = !x.optional; $('pDelete').hidden = !x.custom;
   }
@@ -123,7 +125,7 @@
   }
   function newField(type) {
     var key = 'cf:new' + (++newSeq);
-    F().fields[key] = { key: key, label: TYPES[type] || 'New field', kind: ICONS[type] || 'input-cursor-text', optional: true, custom: true, isNew: true, type: type, options: (type === 'dropdown' || type === 'radio') ? 'Option 1\nOption 2' : '',
+    F().fields[key] = { key: key, label: TYPES[type] || 'New field', kind: ICONS[type] || 'input-cursor-text', optional: true, custom: true, isNew: true, type: type, options: CHOICE[type] ? 'Option 1\nOption 2' : '',
       show: true, req: false, inList: false, w: '', help: '', span: 4 };
     return key;
   }
@@ -229,10 +231,11 @@
   $('pLabel').addEventListener('input', typed(function (x, el) { if (x.custom) x.label = el.value; else x.custom_label = el.value === x.label ? '' : el.value; }));
   $('pHelp').addEventListener('input', typed(function (x, el) { x.help = el.value; }));
   $('pOptions').addEventListener('input', typed(function (x, el) { x.options = el.value; }));
-  $('pType').addEventListener('change', function () { var x = fld(sel); if (!x || !x.isNew) return; x.type = this.value; x.kind = ICONS[this.value] || x.kind; if ((x.type === 'dropdown' || x.type === 'radio') && !x.options) x.options = 'Option 1\nOption 2'; if (x.type === 'checkbox') x.req = false; touch(); render(); });
+  $('pType').addEventListener('change', function () { var x = fld(sel); if (!x || !x.isNew) return; x.type = this.value; x.kind = ICONS[this.value] || x.kind; if (CHOICE[x.type] && !x.options) x.options = 'Option 1\nOption 2'; if (x.type === 'checkbox') x.req = false; touch(); render(); });
   $('pWidth').addEventListener('click', function (e) { var b = e.target.closest('button'), x = sel && fld(sel); if (!b || !x) return; x.w = b.dataset.w; touch(); render(); });
   $('pReq').addEventListener('change', function () { var x = fld(sel); x.req = this.checked; touch(); render(); });
   $('pList').addEventListener('change', function () { var x = fld(sel); x.inList = this.checked; touch(); });
+  $('pUniq').addEventListener('change', function () { var x = fld(sel); x.unique = this.checked; touch(); });
   $('pUp').addEventListener('click', function () { move(sel, -1); });
   $('pDown').addEventListener('click', function () { move(sel, 1); });
   $('pHide').addEventListener('click', function () { hideField(sel); touch(); render(); });
@@ -270,7 +273,7 @@
       Object.keys(f.fields).forEach(function (k) {
         var x = f.fields[k];
         o.fields[k] = { w: x.w, help: x.help, show: x.show, req: x.req };
-        if (x.custom) { o.fields[k].name = x.label; o.fields[k].type = x.type; o.fields[k].options = x.options; o.fields[k].inList = x.inList; if (x.isNew) o.fields[k].isNew = true; }
+        if (x.custom) { o.fields[k].name = x.label; o.fields[k].type = x.type; o.fields[k].options = x.options; o.fields[k].inList = x.inList; o.fields[k].unique = !!x.unique; if (x.isNew) o.fields[k].isNew = true; }
         else o.fields[k].custom_label = x.custom_label;
       });
       out[f.key] = o;

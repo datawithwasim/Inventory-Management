@@ -124,7 +124,7 @@ final class SalesOrderController extends SalesBase
         if ($o['status'] !== 'draft') $this->bounce('Only draft orders can be edited.', "sales/orders/{$o['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
+        [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input(), (int)$id);
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         DB::transaction(function () use ($o, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
