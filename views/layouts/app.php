@@ -59,10 +59,13 @@ $dashActive = $path === '/dashboard';
   <?php endif; ?>
   <header class="topbar">
     <button type="button" class="icon-btn d-lg-none" id="menuBtn" aria-label="Open menu"><i class="bi bi-list fs-4"></i></button>
-    <button type="button" class="search-trigger" data-palette aria-label="Search">
-      <i class="bi bi-search"></i><span class="d-none d-sm-inline">Search or jump to…</span><kbd class="d-none d-md-inline">Ctrl K</kbd>
-    </button>
+    <?php if ($crumbItem && $path !== '/dashboard'): ?>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="<?= url('dashboard') ?>">Home</a><i class="bi bi-chevron-right"></i><span><?= e($crumbGroup) ?></span><i class="bi bi-chevron-right"></i><a href="<?= url(ltrim($crumbItem['href'], '/')) ?>"><?= e($crumbItem['label']) ?></a></nav>
+    <?php else: ?>
+      <nav class="crumbs" aria-label="Breadcrumb"><span>Home</span></nav>
+    <?php endif; ?>
     <div class="topbar-actions">
+      <button type="button" class="icon-btn" data-palette aria-label="Search" title="Search (Ctrl K)"><i class="bi bi-search"></i></button>
       <?php if ($quick): ?>
         <div class="dropdown">
           <button class="btn btn-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline">New</span></button>
@@ -71,7 +74,6 @@ $dashActive = $path === '/dashboard';
           </ul>
         </div>
       <?php endif; ?>
-      <button type="button" class="icon-btn" id="modeBtn" aria-label="Switch light / dark" title="Light / dark"><i class="bi bi-moon-stars"></i></button>
       <div class="dropdown">
         <button class="user-btn" data-bs-toggle="dropdown" aria-expanded="false"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
         <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -80,6 +82,7 @@ $dashActive = $path === '/dashboard';
             <li><a class="dropdown-item" href="<?= url(ltrim($it['href'], '/')) ?>"><i class="bi bi-<?= e($it['icon']) ?> me-2 text-muted"></i><?= e($it['label']) ?></a></li>
           <?php endforeach; ?>
           <li><hr class="dropdown-divider"></li>
+          <li><button type="button" class="dropdown-item" id="modeBtn"><i class="bi bi-moon-stars me-2 text-muted"></i><span>Dark mode</span></button></li>
           <li><form method="post" action="<?= url('logout') ?>"><?= csrf_field() ?><button class="dropdown-item"><i class="bi bi-box-arrow-right me-2 text-muted"></i>Sign out</button></form></li>
         </ul>
       </div>
@@ -88,9 +91,6 @@ $dashActive = $path === '/dashboard';
   <main class="content" id="main">
     <div class="page-head">
       <div>
-        <?php if ($crumbItem && $path !== '/dashboard'): ?>
-          <nav class="crumbs" aria-label="Breadcrumb"><a href="<?= url('dashboard') ?>">Home</a><i class="bi bi-chevron-right"></i><span><?= e($crumbGroup) ?></span><i class="bi bi-chevron-right"></i><a href="<?= url(ltrim($crumbItem['href'], '/')) ?>"><?= e($crumbItem['label']) ?></a></nav>
-        <?php endif; ?>
         <h1><?= e($title ?? '') ?></h1>
       </div>
     </div>

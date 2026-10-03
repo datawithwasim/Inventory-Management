@@ -57,7 +57,7 @@
 
   /* ---- light / dark ---- */
   var modeBtn = doc.getElementById('modeBtn');
-  function syncModeIcon() { if (modeBtn) modeBtn.innerHTML = '<i class="bi bi-' + (root.getAttribute('data-bs-theme') === 'dark' ? 'sun' : 'moon-stars') + '"></i>'; }
+  function syncModeIcon() { if (!modeBtn) return; var d = root.getAttribute('data-bs-theme') === 'dark'; modeBtn.innerHTML = '<i class="bi bi-' + (d ? 'sun' : 'moon-stars') + ' me-2 text-muted"></i><span>' + (d ? 'Light mode' : 'Dark mode') + '</span>'; }
   syncModeIcon();
   if (modeBtn) modeBtn.addEventListener('click', function () {
     var m = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';

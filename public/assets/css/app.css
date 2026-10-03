@@ -83,7 +83,8 @@ kbd { background: var(--surface); border: 1px solid var(--line-strong); border-b
 .content { padding: 1.5rem 1.75rem 3rem; width: 100%; max-width: 1480px; margin: 0 auto; flex: 1; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
 .page-head h1 { font-size: 1.45rem; margin: 0; line-height: 1.2; }
-.crumbs { display: flex; align-items: center; gap: .4rem; color: var(--ink-3); font-size: .78rem; margin-bottom: .35rem; flex-wrap: wrap; }
+.crumbs { display: flex; align-items: center; gap: .4rem; color: var(--ink-3); font-size: .85rem; min-width: 0; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.crumbs > span:last-child, .crumbs > a:last-child { color: var(--ink); font-weight: 500; }
 .crumbs a { color: var(--ink-3); } .crumbs a:hover { color: var(--brand-text); }
 .crumbs i { font-size: .6rem; }
 html.sb-collapsed .sb { width: var(--sb-w-min); }
