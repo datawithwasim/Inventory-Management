@@ -6,15 +6,16 @@
   /* ---- sidebar ---- */
   var sb = doc.getElementById('sidebar');
   if (sb) {
-    var closed = []; try { closed = JSON.parse(store('inv-closed') || '[]'); } catch (e) {}
+    // Groups are closed by default; the one holding the current page is open, and so are any the user opened themselves.
+    var opened = []; try { opened = JSON.parse(store('inv-open') || '[]'); } catch (e) {}
     sb.querySelectorAll('.sb-group').forEach(function (g) {
       var key = g.dataset.group, hasActive = !!g.querySelector('.sb-link.active');
-      if (hasActive || closed.indexOf(key) === -1) g.classList.add('open');
+      if (hasActive || opened.indexOf(key) > -1) g.classList.add('open');
       g.querySelector('.sb-group-head').setAttribute('aria-expanded', g.classList.contains('open'));
       g.querySelector('.sb-group-head').addEventListener('click', function () {
         g.classList.toggle('open');
-        var c = []; sb.querySelectorAll('.sb-group').forEach(function (x) { if (!x.classList.contains('open')) c.push(x.dataset.group); });
-        store('inv-closed', JSON.stringify(c));
+        var o = []; sb.querySelectorAll('.sb-group.open').forEach(function (x) { o.push(x.dataset.group); });
+        store('inv-open', JSON.stringify(o));
         this.setAttribute('aria-expanded', g.classList.contains('open'));
       });
     });

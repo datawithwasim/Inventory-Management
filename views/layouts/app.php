@@ -75,8 +75,10 @@ $dashActive = $path === '/dashboard';
       <div class="dropdown">
         <button class="user-btn" data-bs-toggle="dropdown" aria-expanded="false"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
         <ul class="dropdown-menu dropdown-menu-end shadow">
-          <li><a class="dropdown-item" href="<?= url('profile') ?>"><i class="bi bi-person-circle me-2 text-muted"></i>My profile</a></li>
-          <?php if (can('settings.view')): ?><li><a class="dropdown-item" href="<?= url('settings') ?>"><i class="bi bi-sliders2 me-2 text-muted"></i>Settings</a></li><?php endif; ?>
+          <li class="dropdown-header">Account &amp; administration</li>
+          <?php foreach ($menu['account'] as $it): ?>
+            <li><a class="dropdown-item" href="<?= url(ltrim($it['href'], '/')) ?>"><i class="bi bi-<?= e($it['icon']) ?> me-2 text-muted"></i><?= e($it['label']) ?></a></li>
+          <?php endforeach; ?>
           <li><hr class="dropdown-divider"></li>
           <li><form method="post" action="<?= url('logout') ?>"><?= csrf_field() ?><button class="dropdown-item"><i class="bi bi-box-arrow-right me-2 text-muted"></i>Sign out</button></form></li>
         </ul>
@@ -105,11 +107,13 @@ $dashActive = $path === '/dashboard';
     <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span></div>
   </div>
 </div>
-<script id="paletteData" type="application/json"><?= json_encode(array_merge(
-    [['t' => 'Page', 'l' => 'Dashboard', 'i' => $menu['dashboard']['icon'], 'u' => url('dashboard')]],
-    array_merge(...array_map(fn($g) => array_map(fn($it) => ['t' => 'Go to', 'l' => $it['label'], 'i' => $it['icon'], 'u' => url(ltrim($it['href'], '/')), 's' => $g['label']], $g['items']), array_values($menu['groups']) ?: [[]])),
-    array_map(fn($q) => ['t' => 'Create', 'l' => $q['label'], 'i' => $q['icon'], 'u' => url(ltrim($q['href'], '/'))], $quick)
-), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?></script>
+<?php
+$pal = [['t' => 'Page', 'l' => 'Dashboard', 'i' => $menu['dashboard']['icon'], 'u' => url('dashboard')]];
+foreach ($menu['groups'] as $g) foreach ($g['items'] as $it) $pal[] = ['t' => 'Go to', 'l' => $it['label'], 'i' => $it['icon'], 'u' => url(ltrim($it['href'], '/')), 's' => $g['label']];
+foreach ($menu['account'] as $it) $pal[] = ['t' => 'Go to', 'l' => $it['label'], 'i' => $it['icon'], 'u' => url(ltrim($it['href'], '/')), 's' => 'Administration'];
+foreach ($quick as $q) $pal[] = ['t' => 'Create', 'l' => $q['label'], 'i' => $q['icon'], 'u' => url(ltrim($q['href'], '/'))];
+?>
+<script id="paletteData" type="application/json"><?= json_encode($pal, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?></script>
 <?php require __DIR__ . '/foot.php'; ?>
 </body>
 </html>

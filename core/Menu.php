@@ -29,7 +29,8 @@ final class Menu
             $items = array_map([self::class, 'norm'], array_values(array_filter($g['items'], [self::class, 'allowed'])));
             if ($items) $groups[$key] = ['label' => $g['label'], 'icon' => $g['icon'], 'items' => $items];
         }
-        return ['dashboard' => self::norm($cfg['dashboard']), 'groups' => $groups];
+        $account = array_map([self::class, 'norm'], array_values(array_filter($cfg['account'], [self::class, 'allowed'])));
+        return ['dashboard' => self::norm($cfg['dashboard']), 'groups' => $groups, 'account' => $account];
     }
 
     public static function quick(): array
@@ -47,6 +48,9 @@ final class Menu
     {
         $best = [null, null];
         $len = -1;
+        foreach ($menu['account'] as $it) {
+            if (self::isActive($it, $path) && strlen($it['path']) > $len) { $best = ['Administration', $it]; $len = strlen($it['path']); }
+        }
         foreach ($menu['groups'] as $g) {
             foreach ($g['items'] as $it) {
                 if (self::isActive($it, $path) && strlen($it['path']) > $len) { $best = [$g['label'], $it]; $len = strlen($it['path']); }

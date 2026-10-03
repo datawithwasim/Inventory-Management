@@ -38,12 +38,13 @@ return [
         'insights' => ['label' => 'Insights', 'icon' => 'bar-chart-line', 'items' => [
             ['label' => fn() => 'Reports', 'icon' => 'bar-chart-line', 'path' => '/reports', 'perm' => ['reports.view'], 'module' => 'reports'],
         ]],
-        'admin' => ['label' => 'Administration', 'icon' => 'gear', 'items' => [
+    ],
+    // Shown in the profile dropdown (top right), not in the sidebar.
+    'account' => [
             ['label' => fn() => 'Users', 'icon' => 'people', 'path' => '/users', 'perm' => ['users.view']],
             ['label' => fn() => 'Roles', 'icon' => 'shield-lock', 'path' => '/roles', 'perm' => ['roles.view']],
             ['label' => fn() => 'Settings', 'icon' => 'sliders2', 'path' => '/settings', 'perm' => ['settings.view']],
             ['label' => fn() => 'My profile', 'icon' => 'person-circle', 'path' => '/profile'],
-        ]],
     ],
     'quick' => [
         ['label' => fn() => 'New ' . term('item', true), 'icon' => 'tags', 'path' => '/items/create', 'perm' => ['items.create']],
