@@ -124,6 +124,7 @@ $router->post('/purchase/orders/approval-setting', $A . 'PurchaseOrderController
 $router->get('/purchase/orders/create', $A . 'PurchaseOrderController@create', ['auth', 'perm:purchase.create']);
 $router->post('/purchase/orders', $A . 'PurchaseOrderController@store', ['auth', 'perm:purchase.create']);
 $router->get('/purchase/orders/{id}', $A . 'PurchaseOrderController@show', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/orders/{id}/print', $A . 'PurchaseOrderController@print', ['auth', 'perm:purchase.view']);
 $router->get('/purchase/orders/{id}/edit', $A . 'PurchaseOrderController@edit', ['auth', 'perm:purchase.edit']);
 $router->post('/purchase/orders/{id}', $A . 'PurchaseOrderController@update', ['auth', 'perm:purchase.edit']);
 $router->post('/purchase/orders/{id}/submit', $A . 'PurchaseOrderController@submit', ['auth', 'perm:purchase.create']);
@@ -177,6 +178,7 @@ $router->get('/sales/quotations', $A . 'QuotationController@index', ['auth', 'pe
 $router->get('/sales/quotations/create', $A . 'QuotationController@create', ['auth', 'perm:sales.create']);
 $router->post('/sales/quotations', $A . 'QuotationController@store', ['auth', 'perm:sales.create']);
 $router->get('/sales/quotations/{id}', $A . 'QuotationController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/quotations/{id}/print', $A . 'QuotationController@print', ['auth', 'perm:sales.view']);
 $router->get('/sales/quotations/{id}/edit', $A . 'QuotationController@edit', ['auth', 'perm:sales.edit']);
 $router->post('/sales/quotations/{id}', $A . 'QuotationController@update', ['auth', 'perm:sales.edit']);
 $router->post('/sales/quotations/{id}/send', $A . 'QuotationController@send', ['auth', 'perm:sales.edit']);
@@ -203,6 +205,7 @@ $router->get('/sales/deliveries', $A . 'DeliveryController@index', ['auth', 'per
 $router->get('/sales/deliveries/create', $A . 'DeliveryController@create', ['auth', 'perm:sales.create']);
 $router->post('/sales/deliveries', $A . 'DeliveryController@store', ['auth', 'perm:sales.create']);
 $router->get('/sales/deliveries/{id}', $A . 'DeliveryController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/deliveries/{id}/print', $A . 'DeliveryController@print', ['auth', 'perm:sales.view']);
 $router->post('/sales/deliveries/{id}/invoice', $A . 'DeliveryController@invoice', ['auth', 'perm:sales.create']);
 
 $router->get('/sales/invoices', $A . 'InvoiceController@index', ['auth', 'perm:sales.view']);
@@ -220,6 +223,18 @@ $router->get('/sales/returns/{id}', $A . 'SalesReturnController@show', ['auth', 
 
 $router->get('/pos', $A . 'PosController@index', ['auth', 'perm:pos.use']);
 $router->post('/pos/checkout', $A . 'PosController@checkout', ['auth', 'perm:pos.use']);
+
+// ---- Settings ----
+$router->get('/settings', $A . 'SettingsController@index', ['auth', 'perm:settings.view']);
+$router->get('/settings/custom-fields', $A . 'CustomFieldController@index', ['auth', 'perm:settings.view']);
+$router->get('/settings/custom-fields/create', $A . 'CustomFieldController@create', ['auth', 'perm:settings.edit']);
+$router->post('/settings/custom-fields', $A . 'CustomFieldController@store', ['auth', 'perm:settings.edit']);
+$router->get('/settings/custom-fields/{id}/edit', $A . 'CustomFieldController@edit', ['auth', 'perm:settings.edit']);
+$router->post('/settings/custom-fields/{id}', $A . 'CustomFieldController@update', ['auth', 'perm:settings.edit']);
+$router->post('/settings/custom-fields/{id}/delete', $A . 'CustomFieldController@destroy', ['auth', 'perm:settings.edit']);
+$router->get('/settings/{tab}', $A . 'SettingsController@show', ['auth', 'perm:settings.view']);
+$router->post('/settings/{tab}', $A . 'SettingsController@save', ['auth', 'perm:settings.edit']);
+$router->get('/company/logo', $A . 'SettingsController@logo', ['auth']);
 
 $router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
 

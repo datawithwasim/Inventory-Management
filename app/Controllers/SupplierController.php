@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\CustomFields;
 use App\Models\Purchase;
 use Core\Audit;
 use Core\DB;
@@ -27,12 +28,13 @@ final class SupplierController extends PurchaseBase
         $rows = DB::all(
             "SELECT s.*, COALESCE((SELECT SUM(b.total - b.returned_amount - b.paid_amount) FROM purchase_bills b WHERE b.supplier_id = s.id), 0) AS outstanding
              FROM suppliers s WHERE $where ORDER BY s.name LIMIT 500", $params);
-        $this->view('app/suppliers/index', ['title' => 'Suppliers', 'rows' => $rows, 'q' => $q]);
+        $cfList = CustomFields::attachList('supplier', $rows);
+        $this->view('app/suppliers/index', ['title' => term('suppliers'), 'cfList' => $cfList, 'rows' => $rows, 'q' => $q]);
     }
 
     public function create(): void
     {
-        $this->view('app/suppliers/form', ['title' => 'New supplier', 'row' => null]);
+        $this->view('app/suppliers/form', ['title' => 'New ' . term('supplier', true), 'row' => null, 'cfFields' => CustomFields::fields('supplier'), 'cfValues' => CustomFields::formValues('supplier', null)]);
     }
 
     private function fields(string $back, ?int $exceptId): array
@@ -59,7 +61,10 @@ final class SupplierController extends PurchaseBase
     public function store(): void
     {
         $data = $this->fields('suppliers/create', null);
+        [$cf, $cfErr] = CustomFields::validate('supplier', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), 'suppliers/create');
         $id = DB::insert('suppliers', ['tenant_id' => $this->tid()] + $data);
+        CustomFields::save('supplier', $id, $cf);
         Audit::log('supplier_create', 'supplier', $id, $data['name']);
         flash('success', 'Supplier added.');
         redirect("suppliers/$id");
@@ -70,7 +75,7 @@ final class SupplierController extends PurchaseBase
         $s = $this->load($id);
         $t = $this->tid();
         $this->view('app/suppliers/show', [
-            'title' => $s['name'], 's' => $s, 'outstanding' => Purchase::supplierOutstanding((int)$s['id']),
+            'title' => $s['name'], 's' => $s, 'cfFields' => CustomFields::fields('supplier'), 'cfValues' => CustomFields::values('supplier', (int)$s['id']), 'outstanding' => Purchase::supplierOutstanding((int)$s['id']),
             'pos' => DB::all('SELECT id, po_no, order_date, status, total FROM purchase_orders WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
             'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
             'bills' => DB::all('SELECT * FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 20', [$t, $s['id']]),
@@ -79,13 +84,17 @@ final class SupplierController extends PurchaseBase
 
     public function edit(string $id): void
     {
-        $this->view('app/suppliers/form', ['title' => 'Edit supplier', 'row' => $this->load($id)]);
+        $s = $this->load($id);
+        $this->view('app/suppliers/form', ['title' => 'Edit ' . term('supplier', true), 'row' => $s, 'cfFields' => CustomFields::fields('supplier'), 'cfValues' => CustomFields::formValues('supplier', (int)$s['id'])]);
     }
 
     public function update(string $id): void
     {
         $s = $this->load($id);
         $data = $this->fields("suppliers/{$s['id']}/edit", (int)$s['id']);
+        [$cf, $cfErr] = CustomFields::validate('supplier', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), "suppliers/{$s['id']}/edit");
+        CustomFields::save('supplier', (int)$s['id'], $cf);
         $data['is_active'] = empty($this->input()['is_active']) ? 0 : 1;
         $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
         DB::run("UPDATE suppliers SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), $this->tid(), $s['id']]);

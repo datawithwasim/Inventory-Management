@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\PrintTemplate;
 use App\Models\Sales;
 use App\Models\Stock;
 use App\Models\StockException;
@@ -128,7 +129,7 @@ final class DeliveryController extends SalesBase
             } else {
                 $oi = null;
                 $v = $this->sellable((int)($l['variant_id'] ?? 0)) ?? $this->bounce("$prefix: choose a valid item.", $back);
-                $price = $this->money($l['unit_price'] ?? '', "$prefix price", $back); $disc = $this->percent($l['discount_pct'] ?? '', "$prefix discount", $back); $tax = $this->taxFor($l['tax_rate'] ?? '', $prefix, $back);
+                $price = $this->money($l['unit_price'] ?? '', "$prefix price", $back); $disc = $this->percent($l['discount_pct'] ?? '', "$prefix discount", $back); $this->checkDiscount($disc, $prefix, $back); $tax = $this->taxFor($l['tax_rate'] ?? '', $prefix, $back);
             }
             $qty = $this->qtyFor($v, $qtyRaw, $prefix, $back);
             $batch = (int)($l['batch_id'] ?? 0);
@@ -171,6 +172,15 @@ final class DeliveryController extends SalesBase
              FROM delivery_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations k ON k.id = l.location_id AND l.location_id > 0
              WHERE l.tenant_id = ? AND l.delivery_id = ? ORDER BY COALESCE(l.parent_id, l.id), l.parent_id IS NOT NULL, l.id', [$tenantId, $deliveryId]);
+    }
+
+    public function print(string $id): void
+    {
+        $d = $this->load($id);
+        $c = DB::one('SELECT phone, address FROM customers WHERE tenant_id = ? AND id = ?', [$this->tid(), $d['customer_id']]);
+        $d['cust_phone'] = $c['phone'] ?? null;
+        $d['cust_address'] = $c['address'] ?? null;
+        $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => self::rows((int)$d['id'], $this->tid()), 'tpl' => PrintTemplate::get('delivery_note')], 'layouts/print');
     }
 
     public function invoice(string $id): void

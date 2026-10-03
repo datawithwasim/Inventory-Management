@@ -6,7 +6,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
 <form method="post" action="<?= $item ? url("items/{$item['id']}") : url('items') ?>"><?= csrf_field() ?>
 <div class="row g-3">
   <div class="col-lg-8"><div class="card mb-3"><div class="card-body">
-    <div class="mb-3"><label class="form-label">Item name</label><input name="name" class="form-control" value="<?= $v('name') ?>" required maxlength="190"></div>
+    <div class="mb-3"><label class="form-label"><?= e(term('item')) ?> name</label><input name="name" class="form-control" value="<?= $v('name') ?>" required maxlength="190"></div>
     <div class="row">
       <div class="col-md-4 mb-3"><label class="form-label">Category</label><select name="category_id" class="form-select"><option value="">—</option>
         <?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('category_id', $c['id']) ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
@@ -42,7 +42,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
 
   <div class="card mb-3" id="componentsCard" <?= $isBundle ? '' : 'hidden' ?>><div class="card-header d-flex justify-content-between align-items-center">
     <span>Bundle contents</span><button type="button" class="btn btn-sm btn-outline-primary" id="addComp"><i class="bi bi-plus-lg"></i> Add component</button></div>
-    <div class="table-responsive"><table class="table mb-0 align-middle" id="compTable"><thead><tr><th>Item</th><th style="width:140px">Qty per set</th><th></th></tr></thead><tbody>
+    <div class="table-responsive"><table class="table mb-0 align-middle" id="compTable"><thead><tr><th><?= e(term('item')) ?></th><th style="width:140px">Qty per set</th><th></th></tr></thead><tbody>
       <?php foreach ($components as $i => $c): ?>
         <tr>
           <td><select name="components[<?= $i ?>][variant_id]" class="form-select form-select-sm">
@@ -51,6 +51,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
           <td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td>
         </tr>
       <?php endforeach; ?></tbody></table></div></div>
+  <?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
   </div>
 
   <div class="col-lg-4"><div class="card mb-3"><div class="card-body">
@@ -60,8 +61,8 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <?php else: ?><input type="hidden" id="isBundle" value="<?= (int)$isBundle ?>"><?php endif; ?>
     <div id="batchBox" <?= $isBundle ? 'hidden' : '' ?>>
       <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="track_batch" value="1" id="trk" <?= old('track_batch', $item['track_batch'] ?? 0) ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>>
-        <label class="form-check-label" for="trk">Track by batch (roll / thaan)
-          <small class="text-muted d-block">Each purchased roll becomes its own batch, and every sale is traced to it. Use for fabric.</small></label></div>
+        <label class="form-check-label" for="trk">Track by <?= e(term('batch', true)) ?> (roll / thaan)
+          <small class="text-muted d-block">Each purchased roll becomes its own <?= e(term('batch', true)) ?>, and every sale is traced to it. Use for fabric.</small></label></div>
       <?php if ($locked): ?><input type="hidden" name="track_batch" value="<?= (int)$item['track_batch'] ?>"><small class="text-muted">Locked: stock has already moved.</small><?php endif; ?>
     </div>
     <hr>
@@ -69,7 +70,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <div class="mb-2"><label class="form-label">Reorder quantity</label><input name="reorder_qty" type="number" step="0.001" min="0" class="form-control" value="<?= $v('reorder_qty', 0) ?>"></div>
     <?php if ($item): ?><div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="is_active" value="1" id="isActive" <?= $item['is_active'] ? 'checked' : '' ?>><label class="form-check-label" for="isActive">Active</label></div><?php endif; ?>
   </div></div>
-  <button class="btn btn-primary">Save item</button> <a class="btn btn-link" href="<?= $item ? url("items/{$item['id']}") : url('items') ?>">Cancel</a></div>
+  <button class="btn btn-primary">Save <?= e(term('item', true)) ?></button> <a class="btn btn-link" href="<?= $item ? url("items/{$item['id']}") : url('items') ?>">Cancel</a></div>
 </div>
 </form>
 <script>

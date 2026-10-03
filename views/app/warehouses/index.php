@@ -1,5 +1,5 @@
 <div class="d-flex justify-content-between mb-3">
-  <div class="text-muted"><?= count($rows) ?> warehouse(s)</div>
+  <div class="text-muted"><?= count($rows) ?> <?= e(term('warehouse', true)) ?>(s)</div>
   <?php if (can('warehouses.create')): ?>
     <?= $limitReached ? '<span class="text-warning">Warehouse limit reached for your plan</span>' : '<a class="btn btn-primary" href="' . url('warehouses/create') . '"><i class="bi bi-plus-lg"></i> Add warehouse</a>' ?>
   <?php endif; ?>

@@ -54,6 +54,7 @@ final class PosController extends SalesBase
             foreach ([[$price, 'price', 1e9], [$disc, 'discount', 100], [$tax, 'tax', 100]] as [$val, $what, $max]) {
                 if ($val !== '' && (!is_numeric($val) || (float)$val < 0 || (float)$val > $max)) $this->fail("$prefix: $what is not valid.");
             }
+            if (($max = self::discountLimitExceeded((float)$disc)) !== null) $this->fail("$prefix: a discount above " . qty($max) . '% needs someone with approval rights.');
             $lines[] = ['variant_id' => (int)$v['id'], 'qty' => $q, 'price' => (float)$price, 'disc' => (float)$disc, 'tax' => (float)$tax, 'auto' => true];
         }
         if (!$lines) $this->fail('The cart is empty.');

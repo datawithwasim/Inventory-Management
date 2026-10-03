@@ -8,6 +8,7 @@ use App\Models\Stock;
 use Core\Auth;
 use Core\Controller;
 use Core\DB;
+use Core\Settings;
 
 /** Shared helpers for the purchase screens. */
 abstract class PurchaseBase extends Controller
@@ -63,6 +64,13 @@ abstract class PurchaseBase extends Controller
         $w = Stock::warehouse((int)$id);
         if (!$w || !$w['is_active']) $this->bounce('Choose a valid warehouse.', $back);
         return $w;
+    }
+
+    /** Settings → Rules: stock coming into a warehouse that has racks must be put on one. */
+    protected function rackRequired(int $warehouseId, int $rackId): bool
+    {
+        return $rackId === 0 && Settings::bool('require_rack')
+            && (bool)DB::val('SELECT 1 FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND is_active = 1 LIMIT 1', [$this->tid(), $warehouseId]);
     }
 
     protected function suppliers(bool $onlyActive = true): array

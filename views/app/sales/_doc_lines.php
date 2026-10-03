@@ -1,6 +1,6 @@
 <?php /** read-only priced lines. $items need qty-ish column in $qtyKey, $withDelivered for orders */ ?>
 <div class="card mb-3"><div class="table-responsive"><table class="table mb-0 align-middle">
-  <thead><tr><th>Item</th><th class="text-end">Qty</th><?= !empty($withDelivered) ? '<th class="text-end">Delivered</th>' : '' ?><th class="text-end">Price</th><th class="text-end">Disc %</th><th class="text-end">Tax %</th><th class="text-end">Total</th></tr></thead><tbody>
+  <thead><tr><th><?= e(term('item')) ?></th><th class="text-end">Qty</th><?= !empty($withDelivered) ? '<th class="text-end">Delivered</th>' : '' ?><th class="text-end">Price</th><th class="text-end">Disc %</th><th class="text-end">Tax %</th><th class="text-end">Total</th></tr></thead><tbody>
   <?php foreach ($items as $l): [, , , , $tot] = App\Models\Sales::line((float)$l[$qtyKey], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']); ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small><?= !empty($l['is_bundle']) ? ' <span class="badge text-bg-info">Set</span>' : '' ?>
         <?php if (isset($l['free'])): ?><div class="small text-muted">free for others now: <?= e(qty($l['free'])) ?></div><?php endif; ?></td>

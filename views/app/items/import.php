@@ -8,10 +8,10 @@
 </div></div></div>
 <div class="col-lg-5"><div class="card"><div class="card-body">
   <h2 class="h6">File format</h2>
-  <p class="small">One row per variant. Leave <code>item_name</code> blank on following rows to add more variants to the same item.</p>
+  <p class="small">One row per variant. Leave <code>item_name</code> blank on following rows to add more variants to the same <?= e(term('item', true)) ?>.</p>
   <p class="small mb-2"><code><?= e(implode(', ', $columns)) ?></code></p>
   <ul class="small text-muted ps-3">
-    <li>Racks are not part of this file: add stock and choose racks under Stock → Adjustments.</li>
+    <li><?= e(term('racks')) ?> are not part of this file: add stock and choose <?= e(term('racks', true)) ?> under Stock → Adjustments.</li>
     <li><code>unit</code> and <code>tax</code> must already exist (Masters). Categories and brands are created automatically.</li>
     <li><code>track_batch</code>: yes / no. Use yes for fabric sold from rolls.</li>
     <li>Blank <code>sku</code> is generated for you.</li>

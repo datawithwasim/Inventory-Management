@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\PrintTemplate;
 use App\Models\Purchase;
 use Core\Audit;
 use Core\Auth;
@@ -174,6 +175,14 @@ final class PurchaseOrderController extends PurchaseBase
             'title' => $po['po_no'], 'po' => $po, 'items' => $items, 'remaining' => $remaining, 'approval' => Settings::bool('po_approval'),
             'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND po_id = ? ORDER BY id', [$t, $po['id']]),
         ]);
+    }
+
+    public function print(string $id): void
+    {
+        $po = $this->load($id);
+        $s = DB::one('SELECT address, phone, tax_no FROM suppliers WHERE tenant_id = ? AND id = ?', [$this->tid(), $po['supplier_id']]);
+        $po += ['sup_address' => $s['address'] ?? null, 'sup_phone' => $s['phone'] ?? null, 'sup_tax' => $s['tax_no'] ?? null];
+        $this->view('app/purchase/po_print', ['title' => $po['po_no'], 'po' => $po, 'items' => $this->items((int)$po['id']), 'tpl' => PrintTemplate::get('purchase_order')], 'layouts/print');
     }
 
     private function transition(string $id, array $from, string $to, ?string $msg, ?callable $extra = null): array

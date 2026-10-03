@@ -53,7 +53,7 @@ final class LocationController extends Controller
                     (SELECT COUNT(DISTINCT s.variant_id) FROM stock_balances s WHERE s.location_id = l.id AND s.qty > 0.0005) AS items
              FROM locations l JOIN warehouses w ON w.id = l.warehouse_id WHERE $where ORDER BY w.name, l.code LIMIT 500", $params);
         $unassigned = (int)DB::val('SELECT COUNT(DISTINCT variant_id) FROM stock_balances WHERE tenant_id = ? AND location_id = 0 AND qty > 0.0005', [$this->tid()]);
-        $this->view('app/locations/index', ['title' => 'Racks / locations', 'rows' => $rows, 'wh' => $wh, 'q' => $q,
+        $this->view('app/locations/index', ['title' => term('racks') . ' / locations', 'rows' => $rows, 'wh' => $wh, 'q' => $q,
             'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY name', [$this->tid()]), 'unassigned' => $unassigned]);
     }
 

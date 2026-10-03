@@ -4,7 +4,7 @@
   <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
   <div class="col text-end"><?php if (can('sales.create')): ?><a class="btn btn-primary" href="<?= url('sales/quotations/create') ?>"><i class="bi bi-plus-lg"></i> New quotation</a><?php endif; ?></div>
 </form>
-<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr><th>Quotation</th><th>Date</th><th>Customer</th><th>Valid until</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>
-  <?php foreach ($rows as $r): ?><tr><td><a href="<?= url("sales/quotations/{$r['id']}") ?>"><?= e($r['quote_no']) ?></a></td><td><?= e($r['quote_date']) ?></td><td><?= e($r['customer']) ?></td><td><?= e($r['valid_until'] ?? '') ?></td><td class="text-end"><?= e(money($r['total'])) ?></td><td><?= sale_badge('quote', $r['status']) ?></td></tr><?php endforeach; ?>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr><th>Quotation</th><th>Date</th><th><?= e(term('customer')) ?></th><th>Valid until</th><th class="text-end">Total</th><th>Status</th></tr></thead><tbody>
+  <?php foreach ($rows as $r): ?><tr><td><a href="<?= url("sales/quotations/{$r['id']}") ?>"><?= e($r['quote_no']) ?></a></td><td><?= e(fdate($r['quote_date'])) ?></td><td><?= e($r['customer']) ?></td><td><?= e(fdate($r['valid_until'])) ?></td><td class="text-end"><?= e(money($r['total'])) ?></td><td><?= sale_badge('quote', $r['status']) ?></td></tr><?php endforeach; ?>
   <?php if (!$rows): ?><tr><td colspan="6" class="text-muted">No quotations found.</td></tr><?php endif; ?></tbody></table></div></div>
 <?= pager($page, $pages) ?>

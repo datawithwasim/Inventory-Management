@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\StockException;
 use Core\Audit;
 use Core\DB;
+use Core\Settings;
 use Core\Numbering;
 
 final class AdjustmentController extends StockDocController
@@ -90,6 +91,9 @@ final class AdjustmentController extends StockDocController
         $type = $reason === 'opening' ? 'opening' : 'adjustment';
         $text = self::REASONS[$reason] . ($note ? ' — ' . $note : '');
         $rackId = (int)($l['location_id'] ?? 0);
+        if ($qty > 0 && $rackId === 0 && Settings::bool('require_rack') && DB::val('SELECT 1 FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND is_active = 1 LIMIT 1', [$this->tid(), $wh['id']])) {
+            throw new StockException('Choose the rack this stock goes on (your settings require it).');
+        }
         Stock::move((int)$v['id'], (int)$wh['id'], $batchId, $qty, $type, 'stock_doc', $docId, $cost, mb_substr($text, 0, 255), $rackId);
         DB::insert('stock_doc_lines', [
             'tenant_id' => $this->tid(), 'doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,

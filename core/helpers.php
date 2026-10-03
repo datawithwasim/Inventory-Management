@@ -111,7 +111,54 @@ function qty(float|string|null $q): string
 
 function money(float|string|null $v): string
 {
-    return number_format((float)$v, 2);
+    $decimals = max(0, min(3, (int)Core\Settings::get('currency.decimals')));
+    $n = round((float)$v, $decimals);
+    $neg = $n < 0;
+    $str = number_format(abs($n), $decimals, '.', Core\Settings::get('number.grouping') === 'indian' ? '' : ',');
+    if (Core\Settings::get('number.grouping') === 'indian') {
+        [$int, $dec] = array_pad(explode('.', $str, 2), 2, null);
+        $int = strlen($int) > 3 ? preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', substr($int, 0, -3)) . ',' . substr($int, -3) : $int;
+        $str = $int . ($dec !== null ? '.' . $dec : '');
+    }
+    $sym = Core\Settings::get('currency.symbol');
+    if ($sym !== '') $str = Core\Settings::get('currency.position') === 'after' ? "$str $sym" : "$sym $str";
+    return ($neg ? '-' : '') . $str;
+}
+
+/** Formats a date (or date-time) the way the company likes (Settings → Preferences). */
+function fdate(?string $v): string
+{
+    if ($v === null || $v === '' || str_starts_with($v, '0000')) return '';
+    $t = strtotime($v);
+    return $t ? date(Core\Settings::get('date.format') ?: 'Y-m-d', $t) : $v;
+}
+
+const TERMS = [
+    'supplier' => ['Supplier', 'Suppliers'], 'customer' => ['Customer', 'Customers'], 'item' => ['Item', 'Items'],
+    'warehouse' => ['Warehouse', 'Warehouses'], 'rack' => ['Rack', 'Racks'], 'batch' => ['Batch', 'Batches'],
+];
+
+/** The company's own word for something (Settings → Labels). term('supplier'), term('suppliers'), term('supplier', true) for lower case. */
+function term(string $key, bool $lower = false): string
+{
+    static $cache = [];
+    $plural = false;
+    if (!isset(TERMS[$key])) {
+        $found = null;
+        foreach (TERMS as $k => [, $pl]) if (strtolower($pl) === strtolower($key)) $found = $k;
+        if ($found === null) return $key;
+        $key = $found;
+        $plural = true;
+    }
+    $tid = (int)Core\Auth::tenantId();
+    $labels = $cache[$tid] ??= Core\Settings::json('labels', []);
+    $word = $labels[$key][$plural ? 1 : 0] ?? TERMS[$key][$plural ? 1 : 0];
+    return $lower ? mb_strtolower($word) : $word;
+}
+
+function company_logo_url(): ?string
+{
+    return Core\Settings::get('company.logo') !== '' ? url('company/logo') : null;
 }
 
 /** Prev / next links that keep the current filters. */

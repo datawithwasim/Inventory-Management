@@ -6,10 +6,10 @@
       <div id="results" class="list-group position-absolute shadow" style="z-index:30;left:16px;right:16px;max-height:300px;overflow:auto" hidden></div>
     </div></div>
     <div class="card"><div class="table-responsive"><table class="table mb-0 align-middle">
-      <thead><tr><th>Item</th><th style="width:110px">Qty</th><th style="width:110px">Price</th><th style="width:85px">Disc %</th><th class="text-end">Total</th><th></th></tr></thead><tbody id="cart"></tbody></table></div></div>
+      <thead><tr><th><?= e(term('item')) ?></th><th style="width:110px">Qty</th><th style="width:110px">Price</th><th style="width:85px">Disc %</th><th class="text-end">Total</th><th></th></tr></thead><tbody id="cart"></tbody></table></div></div>
   </div>
   <div class="col-lg-4"><div class="card"><div class="card-body">
-    <div class="mb-2"><label class="form-label small mb-0">Customer</label><select id="customer" class="form-select"><?php foreach ($customers as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === (int)$walkIn ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
+    <div class="mb-2"><label class="form-label small mb-0"><?= e(term('customer')) ?></label><select id="customer" class="form-select"><?php foreach ($customers as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === (int)$walkIn ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
     <div class="mb-3"><label class="form-label small mb-0">Take stock from</label><select id="wh" class="form-select"><?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>"><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
     <table class="table table-sm table-borderless mb-2"><tr><td>Discount</td><td class="text-end" id="tDisc">0.00</td></tr><tr><td>Tax</td><td class="text-end" id="tTax">0.00</td></tr>
       <tr class="border-top"><th class="fs-5">Total</th><th class="text-end fs-4" id="tTotal">0.00</th></tr></table>

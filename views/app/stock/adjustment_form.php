@@ -1,12 +1,12 @@
 <form method="post" action="<?= url('stock/adjustments') ?>"><?= csrf_field() ?>
 <div class="card mb-3"><div class="card-body"><div class="row g-3">
-  <div class="col-md-3"><label class="form-label">Warehouse</label><select name="warehouse_id" id="warehouse_id" class="form-select" required>
+  <div class="col-md-3"><label class="form-label"><?= e(term('warehouse')) ?></label><select name="warehouse_id" id="warehouse_id" class="form-select" required>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('warehouse_id') === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-3"><label class="form-label">Reason</label><select name="reason" class="form-select" required>
     <?php foreach ($reasons as $k => $label): ?><option value="<?= e($k) ?>" <?= old('reason') === $k ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-6"><label class="form-label">Note (optional)</label><input name="note" class="form-control" maxlength="255" value="<?= e(old('note')) ?>"></div>
 </div>
-<p class="text-muted small mt-3 mb-0">Use a positive quantity to add stock (for fabric, <strong>+ New batch</strong> creates a new roll) and a negative quantity to remove it from a chosen batch.</p>
+<p class="text-muted small mt-3 mb-0">Use a positive quantity to add stock (for fabric, <strong>+ New <?= e(term('batch', true)) ?></strong> creates a new roll) and a negative quantity to remove it from a chosen <?= e(term('batch', true)) ?>.</p>
 </div></div>
 <?php $mode = 'adjust'; require __DIR__ . '/_lines.php'; ?>
 <button class="btn btn-primary">Post adjustment</button> <a class="btn btn-link" href="<?= url('stock/adjustments') ?>">Cancel</a>

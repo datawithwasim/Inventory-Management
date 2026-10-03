@@ -13,6 +13,7 @@
     <div class="col-6"><div class="text-muted small">Owes us</div><div class="fs-2 <?= $owed > 0.004 ? 'text-danger' : '' ?>"><?= e(money($owed)) ?></div><div class="text-muted small">after returns and payments</div></div>
     <div class="col-6"><div class="text-muted small">Advance held</div><div class="fs-2"><?= e(money($advance)) ?></div><div class="text-muted small">taken on orders, not yet adjusted</div></div></div></div></div></div>
 </div>
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
 <div class="row g-3">
   <div class="col-md-6"><div class="card"><div class="card-header">Recent orders</div><ul class="list-group list-group-flush">
     <?php foreach ($orders as $o): ?><li class="list-group-item d-flex justify-content-between"><a href="<?= url("sales/orders/{$o['id']}") ?>"><?= e($o['order_no']) ?></a><span><?= sale_badge('order', $o['status']) ?> <?= e(money($o['total'])) ?></span></li><?php endforeach; ?>

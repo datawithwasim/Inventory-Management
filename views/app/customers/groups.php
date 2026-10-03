@@ -1,8 +1,8 @@
 <div class="d-flex justify-content-between mb-3"><div class="text-muted">Groups such as Retail, Dealer or Designer can have a default discount and their own prices.</div>
   <?php if (can('customers.create')): ?><a class="btn btn-primary" href="<?= url('customers/groups/create') ?>"><i class="bi bi-plus-lg"></i> New group</a><?php endif; ?></div>
-<div class="card"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Group</th><th class="text-end">Default discount</th><th class="text-end">Special prices</th><th class="text-end">Customers</th><th></th></tr></thead><tbody>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Group</th><th class="text-end">Default discount</th><th class="text-end">Special prices</th><th class="text-end"><?= e(term('customers')) ?></th><th></th></tr></thead><tbody>
   <?php foreach ($rows as $r): ?><tr><td><?= e($r['name']) ?></td><td class="text-end"><?= e(qty($r['discount_pct'])) ?>%</td><td class="text-end"><?= (int)$r['prices'] ?></td><td class="text-end"><?= (int)$r['customers'] ?></td>
     <td class="text-end text-nowrap"><?php if (can('customers.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("customers/groups/{$r['id']}/edit") ?>">Edit &amp; prices</a><?php endif; ?>
       <?php if (can('customers.delete')): ?><form class="d-inline" method="post" action="<?= url("customers/groups/{$r['id']}/delete") ?>" onsubmit="return confirm('Delete this group?')"><?= csrf_field() ?><button class="btn btn-sm btn-outline-danger">Delete</button></form><?php endif; ?></td></tr><?php endforeach; ?>
   <?php if (!$rows): ?><tr><td colspan="5" class="text-muted">No groups yet.</td></tr><?php endif; ?></tbody></table></div></div>
-<a class="btn btn-link mt-2" href="<?= url('customers') ?>">&laquo; Customers</a>
+<a class="btn btn-link mt-2" href="<?= url('customers') ?>">&laquo; <?= e(term('customers')) ?></a>

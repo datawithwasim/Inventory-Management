@@ -3,14 +3,14 @@
   <div class="col-md-3"><input name="q" class="form-control" placeholder="Item, SKU, batch no., rack" value="<?= e($q) ?>"></div>
   <div class="col-md-2"><select name="type" class="form-select"><option value="">All types</option>
     <?php foreach ($types as $k => $l): ?><option value="<?= e($k) ?>" <?= $type === $k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></div>
-  <div class="col-md-2"><select name="warehouse" class="form-select"><option value="">All warehouses</option>
+  <div class="col-md-2"><select name="warehouse" class="form-select"><option value="">All <?= e(term('warehouses', true)) ?></option>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= $wh === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-2"><input type="date" name="from" class="form-control" value="<?= e($from) ?>"></div>
   <div class="col-md-2"><input type="date" name="to" class="form-control" value="<?= e($to) ?>"></div>
   <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
 </form>
 <div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle">
-  <thead><tr><th>When</th><th>Type</th><th>Item</th><th>Warehouse</th><th>Rack</th><th>Batch</th><th class="text-end">Qty</th><th>By</th><th>Note</th></tr></thead>
+  <thead><tr><th>When</th><th>Type</th><th><?= e(term('item')) ?></th><th><?= e(term('warehouse')) ?></th><th><?= e(term('rack')) ?></th><th><?= e(term('batch')) ?></th><th class="text-end">Qty</th><th>By</th><th>Note</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): ?>
     <tr><td class="text-nowrap"><?= e($r['created_at']) ?></td><td><?= e(stock_type($r['type'])) ?></td>

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\PrintTemplate;
 use App\Models\Sales;
 use Core\Audit;
 use Core\Auth;
@@ -90,6 +91,15 @@ final class QuotationController extends SalesBase
     {
         $q = $this->load($id);
         $this->view('app/sales/quote_show', ['title' => $q['quote_no'], 'q' => $q, 'items' => $this->items((int)$q['id']), 'warehouses' => $this->warehouses()]);
+    }
+
+    public function print(string $id): void
+    {
+        $q = $this->load($id);
+        $c = DB::one('SELECT phone, address FROM customers WHERE tenant_id = ? AND id = ?', [$this->tid(), $q['customer_id']]);
+        $q['cust_phone'] = $c['phone'] ?? null;
+        $q['cust_address'] = $c['address'] ?? null;
+        $this->view('app/sales/quote_print', ['title' => $q['quote_no'], 'q' => $q, 'items' => $this->items((int)$q['id']), 'tpl' => PrintTemplate::get('quotation')], 'layouts/print');
     }
 
     public function edit(string $id): void

@@ -1,7 +1,7 @@
 <?php $v = fn($k, $d = '') => e(old($k, $q[$k] ?? $d)); $pre = (int)($_GET['customer'] ?? 0); ?>
 <form method="post" action="<?= $q ? url("sales/quotations/{$q['id']}") : url('sales/quotations') ?>"><?= csrf_field() ?>
 <div class="card mb-3"><div class="card-body"><div class="row g-3">
-  <div class="col-md-5"><label class="form-label">Customer</label><select name="customer_id" id="customer_id" class="form-select" required>
+  <div class="col-md-5"><label class="form-label"><?= e(term('customer')) ?></label><select name="customer_id" id="customer_id" class="form-select" required>
     <?php foreach ($customers as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)old('customer_id', $q['customer_id'] ?? $pre) === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-3"><label class="form-label">Date</label><input type="date" name="quote_date" class="form-control" value="<?= $v('quote_date', date('Y-m-d')) ?>" required></div>
   <div class="col-md-4"><label class="form-label">Valid until</label><input type="date" name="valid_until" class="form-control" value="<?= $v('valid_until', date('Y-m-d', strtotime('+15 days'))) ?>"></div>

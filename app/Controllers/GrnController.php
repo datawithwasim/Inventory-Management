@@ -126,6 +126,7 @@ final class GrnController extends PurchaseBase
             }
             $qty = $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back);
             $lot = $this->text($l['lot_no'] ?? '', 60, "$prefix supplier lot", $back);
+            if ($this->rackRequired((int)$wh['id'], (int)($l['location_id'] ?? 0))) $this->bounce("$prefix: choose the rack this goes on (your settings require it).", $back);
             $lines[] = ['n' => $n + 1, 'po_item' => $pi, 'v' => $v, 'qty' => $qty, 'price' => $price, 'tax' => $tax, 'lot' => $lot, 'rack' => (int)($l['location_id'] ?? 0)];
             if ($pi) $perPoItem[$pi['id']] = ($perPoItem[$pi['id']] ?? 0) + $qty;
         }

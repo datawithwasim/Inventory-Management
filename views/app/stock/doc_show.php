@@ -8,7 +8,7 @@
   <?php if ($doc['note']): ?><div class="mt-2 text-muted"><?= e($doc['note']) ?></div><?php endif; ?>
 </div></div>
 <div class="card"><div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th>Item</th><th>SKU</th><th>Batch</th><th><?= $doc['to_warehouse'] ? 'From rack → To rack' : 'Rack' ?></th><th class="text-end">Qty</th></tr></thead><tbody>
+  <thead><tr><th><?= e(term('item')) ?></th><th>SKU</th><th><?= e(term('batch')) ?></th><th><?= $doc['to_warehouse'] ? 'From rack → To rack' : 'Rack' ?></th><th class="text-end">Qty</th></tr></thead><tbody>
   <?php foreach ($lines as $l): ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?></td><td><?= e($l['sku']) ?></td>
       <td><?= $l['batch_no'] ? '<a href="' . url('stock/batches/' . (int)$l['batch_id']) . '">' . e($l['batch_no']) . '</a>' : '' ?></td>

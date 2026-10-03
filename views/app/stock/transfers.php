@@ -1,4 +1,4 @@
-<div class="d-flex justify-content-between mb-3"><div class="text-muted">Move stock between warehouses. Batches (rolls) keep their identity.</div>
+<div class="d-flex justify-content-between mb-3"><div class="text-muted">Move stock between <?= e(term('warehouses', true)) ?>. <?= e(term('batches')) ?> (rolls) keep their identity.</div>
   <?php if (can('stock.transfer')): ?><a class="btn btn-primary" href="<?= url('stock/transfers/create') ?>"><i class="bi bi-plus-lg"></i> New transfer</a><?php endif; ?></div>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0">
   <thead><tr><th>No.</th><th>Date</th><th>From</th><th>To</th><th>Lines</th><th>By</th></tr></thead><tbody>

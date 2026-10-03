@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\PrintTemplate;
 use App\Models\Purchase;
 use App\Models\Sales;
 use Core\Audit;
@@ -66,7 +67,7 @@ final class InvoiceController extends SalesBase
         $i = $this->load($id);
         $this->view('app/sales/invoice_print', [
             'title' => $i['invoice_no'], 'i' => $i, 'items' => $this->lines($i), 'receipt' => !empty($_GET['receipt']), 'due' => Purchase::outstanding($i),
-            'company' => Auth::user()['tenant_name'],
+            'tpl' => PrintTemplate::get(!empty($_GET['receipt']) ? 'receipt' : 'invoice'),
         ], 'layouts/print');
     }
 

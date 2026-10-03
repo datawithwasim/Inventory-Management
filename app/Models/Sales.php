@@ -6,6 +6,7 @@ namespace App\Models;
 use Core\Auth;
 use Core\DB;
 use Core\Numbering;
+use Core\Settings;
 
 /** Rules for selling: prices, reservations, picking stock (rolls / racks), deliveries and invoices. */
 final class Sales
@@ -105,6 +106,7 @@ final class Sales
             $free = self::available((int)$variantId, $warehouseId, $excludeOrderId);
             if ($need > $free + 0.0005) {
                 $v = Stock::variant((int)$variantId);
+                if (!$v['track_batch'] && Settings::bool('negative_stock')) continue;          // selling ahead of stock is allowed for ordinary items
                 $reserved = self::reserved((int)$variantId, $warehouseId, $excludeOrderId);
                 throw new StockException('Not enough free stock for ' . Stock::label($v) . ': need ' . Stock::fmt($need) . ' ' . $v['unit'] . ', free ' . Stock::fmt(max(0, $free)) . ' ' . $v['unit']
                     . ($reserved > 0.0005 ? ' (' . Stock::fmt($reserved) . ' is reserved for confirmed orders)' : '') . '.');
@@ -140,7 +142,13 @@ final class Sales
         if (!$v['track_batch']) {
             $racks = $racksOf(0);
             $have = array_sum(array_column($racks, 'qty'));
-            if ($have + 0.0005 < $qty) throw $short($have);
+            if ($have + 0.0005 < $qty) {
+                if (!Settings::bool('negative_stock')) throw $short($have);
+                // Negative stock allowed: take what exists, the rest goes below zero on the fullest rack.
+                $out = $take($racks, max(0, $have), 0, null, false);
+                $out[] = ['batch_id' => 0, 'location_id' => (int)($racks[0]['location_id'] ?? 0), 'qty' => Stock::round($qty - max(0, $have)), 'batch_no' => null, 'rack' => $racks[0]['code'] ?? null, 'multi' => false];
+                return $out;
+            }
             return $take($racks, $qty, 0, null, false);
         }
 
@@ -215,6 +223,17 @@ final class Sales
             foreach ($lines as $l) $needs[$l['variant_id']] = ($needs[$l['variant_id']] ?? 0) + $l['qty'];
             self::assertAvailable($needs, $wh, $orderId ? (int)$orderId : null);
 
+            // Shade rule: one item cut from several rolls may not look the same (Settings → Rules).
+            $shadeBlock = Settings::get('shade_rule') === 'block';
+            if ($shadeBlock) {
+                $rolls = [];
+                foreach ($lines as $l) if (!empty($l['batch_id'])) $rolls[$l['variant_id']][$l['batch_id']] = 1;
+                foreach ($rolls as $variantId => $set) if (count($set) > 1) {
+                    $v = Stock::variant((int)$variantId);
+                    throw new StockException($v['item_name'] . ' would be cut from ' . count($set) . ' different rolls. Your shade rule only allows one roll per sale.');
+                }
+            }
+
             $no = Numbering::next($t, 'DLV');
             $id = DB::insert('deliveries', ['tenant_id' => $t, 'delivery_no' => $no, 'order_id' => $orderId, 'customer_id' => $head['customer_id'], 'warehouse_id' => $wh,
                 'delivery_date' => $head['delivery_date'], 'ship_to' => $head['ship_to'] ?? null, 'note' => $head['note'] ?? null,
@@ -240,6 +259,9 @@ final class Sales
                     } else {
                         $picks = !empty($l['auto']) ? self::allocate((int)$v['id'], $wh, $l['qty'])
                             : [['batch_id' => (int)($l['batch_id'] ?? 0), 'location_id' => (int)($l['location_id'] ?? 0), 'qty' => $l['qty']]];
+                        if ($shadeBlock && !empty($l['auto']) && $v['track_batch'] && count(array_unique(array_column($picks, 'batch_id'))) > 1) {
+                            throw new StockException($v['item_name'] . ' would be cut from more than one roll. Your shade rule only allows one roll per sale.');
+                        }
                         foreach ($picks as $a) {
                             Stock::move((int)$v['id'], $wh, $a['batch_id'], -$a['qty'], 'sale', 'delivery', $id, self::unitCost((int)$v['id'], $a['batch_id']), $note, $a['location_id']);
                             $row($l, (int)$v['id'], $v['track_batch'] ? $a['batch_id'] : 0, $a['location_id'], $a['qty'], $l['price'], $l['disc'], $l['tax'], null);

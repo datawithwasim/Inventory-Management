@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\CustomFields;
 use App\Models\Stock;
 use Core\Audit;
 use Core\Auth;
@@ -86,12 +87,13 @@ final class ItemController extends Controller
             if ($r['is_bundle']) $r['stock'] = Stock::bundleAvailable((int)$r['id']);
         }
         unset($r);
+        $cfList = CustomFields::attachList('item', $rows);
 
         $this->view('app/items/index', [
-            'title' => 'Items', 'rows' => $rows, 'q' => $q, 'cat' => $cat, 'low' => $low,
+            'title' => term('items'), 'rows' => $rows, 'q' => $q, 'cat' => $cat, 'low' => $low,
             'categories' => DB::all('SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY name', [$t]),
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'total' => $total,
-            'limitReached' => $this->limitReached(),
+            'limitReached' => $this->limitReached(), 'cfList' => $cfList,
         ]);
     }
 
@@ -133,6 +135,7 @@ final class ItemController extends Controller
              WHERE i.id = ?', [$item['id']]);
         $this->view('app/items/show', [
             'title' => $item['name'], 'item' => $item, 'meta' => $meta, 'variants' => $variants, 'components' => $components,
+            'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::values('item', (int)$item['id']),
             'history' => $history, 'bundleAvailable' => $item['is_bundle'] ? Stock::bundleAvailable((int)$item['id']) : null,
         ]);
     }
@@ -144,6 +147,7 @@ final class ItemController extends Controller
         $this->view('app/items/form', $this->lookups() + [
             'title' => $title, 'item' => $item, 'variants' => $variants, 'components' => $components,
             'locked' => $item ? $this->hasMovements((int)$item['id']) : false,
+            'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::formValues('item', $item ? (int)$item['id'] : null),
             'pickable' => DB::all(
                 'SELECT v.id, v.sku, v.name, i.name AS item_name FROM item_variants v JOIN items i ON i.id = v.item_id
                  WHERE v.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 ORDER BY i.name, v.name', [$this->tid()]),
@@ -256,7 +260,9 @@ final class ItemController extends Controller
             }
             if (!$components) $bounce('Add at least one component to the bundle.');
         }
-        return [$fields, $variants, $components];
+        [$cfValues, $cfErrors] = CustomFields::validate('item', $d);
+        if ($cfErrors) $bounce(implode(' ', $cfErrors));
+        return [$fields, $variants, $components, $cfValues];
     }
 
     private function saveChildren(int $itemId, array $variants, array $components, bool $isBundle): void
@@ -293,10 +299,11 @@ final class ItemController extends Controller
     public function store(): void
     {
         if ($this->limitReached()) redirect('items');
-        [$fields, $variants, $components] = $this->collect(null, 'items/create');
-        $id = DB::transaction(function () use ($fields, $variants, $components) {
+        [$fields, $variants, $components, $cf] = $this->collect(null, 'items/create');
+        $id = DB::transaction(function () use ($fields, $variants, $components, $cf) {
             $id = DB::insert('items', ['tenant_id' => $this->tid()] + $fields);
             $this->saveChildren($id, $variants, $components, (bool)$fields['is_bundle']);
+            CustomFields::save('item', $id, $cf);
             return $id;
         });
         Audit::log('item_create', 'item', $id, $fields['name']);
@@ -307,9 +314,10 @@ final class ItemController extends Controller
     public function update(string $id): void
     {
         $item = $this->load($id);
-        [$fields, $variants, $components] = $this->collect($item, "items/{$item['id']}/edit");
+        [$fields, $variants, $components, $cf] = $this->collect($item, "items/{$item['id']}/edit");
         unset($fields['is_bundle']);
-        DB::transaction(function () use ($item, $fields, $variants, $components) {
+        DB::transaction(function () use ($item, $fields, $variants, $components, $cf) {
+            CustomFields::save('item', (int)$item['id'], $cf);
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($fields)));
             DB::run("UPDATE items SET $set WHERE tenant_id = ? AND id = ?", [...array_values($fields), $this->tid(), $item['id']]);
             $this->saveChildren((int)$item['id'], $variants, $components, (bool)$item['is_bundle']);

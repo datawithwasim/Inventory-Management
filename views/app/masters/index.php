@@ -6,7 +6,7 @@
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
   <thead><tr>
     <?php foreach ($def['fields'] as [$col, $label]): ?><th><?= e($type === 'units' && $col === 'allow_decimal' ? 'Decimals' : $label) ?></th><?php endforeach; ?>
-    <th>Used by items</th><th></th>
+    <th>Used by <?= e(term('items', true)) ?></th><th></th>
   </tr></thead>
   <tbody>
   <?php foreach ($rows as $r): ?>

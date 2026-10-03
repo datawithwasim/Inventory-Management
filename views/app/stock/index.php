@@ -1,6 +1,6 @@
 <form class="row g-2 mb-3" method="get">
   <div class="col-md-4"><input name="q" class="form-control" placeholder="Search name, SKU, barcode" value="<?= e($q) ?>"></div>
-  <div class="col-md-3"><select name="warehouse" class="form-select"><option value="">All warehouses</option>
+  <div class="col-md-3"><select name="warehouse" class="form-select"><option value="">All <?= e(term('warehouses', true)) ?></option>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= $wh === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-auto form-check d-flex align-items-center ms-2"><input class="form-check-input me-2" type="checkbox" name="low" value="1" id="low" <?= $low ? 'checked' : '' ?>><label for="low" class="form-check-label">Low stock only</label></div>
   <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
@@ -9,9 +9,9 @@
   </div>
 </form>
 <div class="card mb-3"><div class="card-body py-2"><span class="text-muted">Stock value<?= $wh ? ' (selected warehouse)' : '' ?>:</span> <strong><?= e(money($totalValue)) ?></strong>
-  <span class="text-muted small ms-2">quantity × batch cost (or item cost)</span></div></div>
+  <span class="text-muted small ms-2">quantity × <?= e(term('batch', true)) ?> cost (or <?= e(term('item', true)) ?> cost)</span></div></div>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-  <thead><tr><th>Item</th><th>SKU</th><th class="text-end">On hand</th><th class="text-end">Reserved</th><th>Where (rack)</th><th class="text-end">Batches</th><th class="text-end">Value</th><th>Reorder</th></tr></thead>
+  <thead><tr><th><?= e(term('item')) ?></th><th>SKU</th><th class="text-end">On hand</th><th class="text-end">Reserved</th><th>Where (<?= e(term('rack', true)) ?>)</th><th class="text-end"><?= e(term('batches')) ?></th><th class="text-end">Value</th><th>Reorder</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $isLow = $r['reorder_level'] > 0 && $r['item_total'] <= $r['reorder_level']; ?>
     <tr>

@@ -11,10 +11,11 @@
     </div>
   </div></div></div>
   <div class="col-md-7"><div class="card"><div class="card-body">
-    <div class="text-muted small">We owe this supplier</div><div class="fs-2 <?= $outstanding > 0.004 ? 'text-danger' : '' ?>"><?= e(money($outstanding)) ?></div>
+    <div class="text-muted small">We owe this <?= e(term('supplier', true)) ?></div><div class="fs-2 <?= $outstanding > 0.004 ? 'text-danger' : '' ?>"><?= e(money($outstanding)) ?></div>
     <div class="text-muted small">after returns and payments, across all bills</div>
   </div></div></div>
 </div>
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
 <div class="row g-3">
   <div class="col-md-6"><div class="card"><div class="card-header">Recent purchase orders</div><ul class="list-group list-group-flush">
     <?php foreach ($pos as $p): ?><li class="list-group-item d-flex justify-content-between"><a href="<?= url("purchase/orders/{$p['id']}") ?>"><?= e($p['po_no']) ?></a><span><?= po_badge($p['status']) ?> <?= e(money($p['total'])) ?></span></li><?php endforeach; ?>

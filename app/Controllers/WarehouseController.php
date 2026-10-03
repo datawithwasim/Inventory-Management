@@ -26,7 +26,7 @@ final class WarehouseController extends Controller
         $rows = DB::all(
             'SELECT w.*, COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = w.tenant_id AND s.warehouse_id = w.id), 0) AS total_qty
              FROM warehouses w WHERE w.tenant_id = ? ORDER BY w.is_default DESC, w.name', [Auth::tenantId()]);
-        $this->view('app/warehouses/index', ['title' => 'Warehouses', 'rows' => $rows, 'limitReached' => $this->limitReached()]);
+        $this->view('app/warehouses/index', ['title' => term('warehouses'), 'rows' => $rows, 'limitReached' => $this->limitReached()]);
     }
 
     public function create(): void

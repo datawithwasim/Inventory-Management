@@ -5,6 +5,7 @@ namespace App\Models;
 
 use Core\Auth;
 use Core\DB;
+use Core\Settings;
 
 /**
  * The only place stock changes. Every change is an immutable ledger row plus an
@@ -134,7 +135,9 @@ final class Stock
         $have = (float)DB::val(
             'SELECT qty FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ? FOR UPDATE',
             [$tid, $variantId, $warehouseId, $batchId, $locationId]);
-        if ($have + $qty < -0.0005) {
+        // "Negative stock" (Settings → Rules) lets ordinary items go below zero; rolls (batch-tracked) never can.
+        $mayGoNegative = $qty < 0 && !$v['track_batch'] && Settings::bool('negative_stock');
+        if ($have + $qty < -0.0005 && !$mayGoNegative) {
             $where = ($batchId ? ' in batch ' . $b['batch_no'] : '') . ' at ' . self::rackName($rack['code'] ?? null);
             $elsewhere = '';
             $total = self::balance($variantId, $warehouseId, $batchId);

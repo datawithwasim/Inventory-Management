@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\CustomFields;
 use App\Models\Purchase;
 use App\Models\Sales;
 use Core\Audit;
@@ -31,12 +32,13 @@ final class CustomerController extends SalesBase
         $rows = DB::all(
             "SELECT c.*, g.name AS group_name, COALESCE((SELECT SUM(i.total - i.returned_amount - i.paid_amount) FROM sales_invoices i WHERE i.customer_id = c.id), 0) AS outstanding
              FROM customers c LEFT JOIN customer_groups g ON g.id = c.group_id WHERE $where ORDER BY c.is_walkin DESC, c.name LIMIT 500", $params);
-        $this->view('app/customers/index', ['title' => 'Customers', 'rows' => $rows, 'q' => $q, 'group' => $group, 'groups' => $this->groups()]);
+        $cfList = CustomFields::attachList('customer', $rows);
+        $this->view('app/customers/index', ['title' => term('customers'), 'cfList' => $cfList, 'rows' => $rows, 'q' => $q, 'group' => $group, 'groups' => $this->groups()]);
     }
 
     public function create(): void
     {
-        $this->view('app/customers/form', ['title' => 'New customer', 'row' => null, 'groups' => $this->groups()]);
+        $this->view('app/customers/form', ['title' => 'New ' . term('customer', true), 'row' => null, 'groups' => $this->groups(), 'cfFields' => CustomFields::fields('customer'), 'cfValues' => CustomFields::formValues('customer', null)]);
     }
 
     private function fields(string $back, ?int $exceptId): array
@@ -61,7 +63,10 @@ final class CustomerController extends SalesBase
     public function store(): void
     {
         $data = $this->fields('customers/create', null);
+        [$cf, $cfErr] = CustomFields::validate('customer', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), 'customers/create');
         $id = DB::insert('customers', ['tenant_id' => $this->tid()] + $data);
+        CustomFields::save('customer', $id, $cf);
         Audit::log('customer_create', 'customer', $id, $data['name']);
         flash('success', 'Customer added.');
         redirect("customers/$id");
@@ -72,7 +77,7 @@ final class CustomerController extends SalesBase
         $c = $this->load($id);
         $t = $this->tid();
         $this->view('app/customers/show', [
-            'title' => $c['name'], 'c' => $c,
+            'title' => $c['name'], 'c' => $c, 'cfFields' => CustomFields::fields('customer'), 'cfValues' => CustomFields::values('customer', (int)$c['id']),
             'owed' => (float)DB::val('SELECT COALESCE(SUM(total - returned_amount - paid_amount),0) FROM sales_invoices WHERE tenant_id = ? AND customer_id = ?', [$t, $c['id']]),
             'advance' => (float)DB::val('SELECT COALESCE(SUM(amount - applied),0) FROM customer_payments WHERE tenant_id = ? AND customer_id = ? AND order_id IS NOT NULL AND invoice_id IS NULL', [$t, $c['id']]),
             'orders' => DB::all('SELECT id, order_no, order_date, status, total FROM sales_orders WHERE tenant_id = ? AND customer_id = ? ORDER BY id DESC LIMIT 10', [$t, $c['id']]),
@@ -82,13 +87,17 @@ final class CustomerController extends SalesBase
 
     public function edit(string $id): void
     {
-        $this->view('app/customers/form', ['title' => 'Edit customer', 'row' => $this->load($id), 'groups' => $this->groups()]);
+        $c = $this->load($id);
+        $this->view('app/customers/form', ['title' => 'Edit ' . term('customer', true), 'row' => $c, 'groups' => $this->groups(), 'cfFields' => CustomFields::fields('customer'), 'cfValues' => CustomFields::formValues('customer', (int)$c['id'])]);
     }
 
     public function update(string $id): void
     {
         $c = $this->load($id);
         $data = $this->fields("customers/{$c['id']}/edit", (int)$c['id']);
+        [$cf, $cfErr] = CustomFields::validate('customer', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), "customers/{$c['id']}/edit");
+        CustomFields::save('customer', (int)$c['id'], $cf);
         if ($c['is_walkin']) $data['name'] = $c['name'];
         $data['is_active'] = $c['is_walkin'] || !empty($this->input()['is_active']) ? 1 : 0;
         $set = implode(',', array_map(fn($col) => "`$col` = ?", array_keys($data)));

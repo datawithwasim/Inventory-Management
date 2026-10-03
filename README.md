@@ -12,7 +12,10 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   landed cost, bills with payment status, purchase returns)
 - **Phase 4 – Sales: done** (customers & groups with price lists, quotations, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
   invoices with payments and advances, customer returns, set/bundle sales, POS with barcode scanning)
-- Next: Phase 5 – Customization
+- **Phase 5 – Customization: done** (company profile + logo, currency / date / digit formats, document number styles, workflow rules,
+  your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice, receipt,
+  delivery note, purchase order and quotation)
+- Next: Phase 6 – Reports & dashboard
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
@@ -25,6 +28,7 @@ Upload the new files over the old ones (keep your `.env`), then sign in as Super
 5. Sign in at `/admin/login`, create your first company and give it a plan.
 
 Better, if cPanel lets you: point the domain's document root at the `public/` folder (then nothing but `public/` is web-visible).
+The folder `storage/` must be writable (company logos are stored in `storage/uploads/`, outside the web folder).
 Password-reset emails use PHP `mail()` on the installer-generated `.env`; if sending fails they are logged to `storage/logs/mail.log`.
 
 ## Setup (command line / local development)
@@ -46,7 +50,8 @@ php tests/smoke.php http://127.0.0.1:8099     # phase 1
 php tests/phase2.php http://127.0.0.1:8099    # phase 2
 php tests/racks.php http://127.0.0.1:8099     # racks / locations
 php tests/purchase.php http://127.0.0.1:8099  # phase 3
-php tests/sales.php http://127.0.0.1:8099     # phase 4  (run all against a throw-away database)
+php tests/sales.php http://127.0.0.1:8099     # phase 4
+php tests/settings.php http://127.0.0.1:8099  # phase 5  (run all against a throw-away database)
 ```
 
 ## Layout

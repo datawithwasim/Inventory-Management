@@ -13,7 +13,7 @@
   </div>
 </form>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-  <thead><tr><th>Item</th><th>Category</th><th>Brand</th><th>Variants</th><th class="text-end">Sale price</th><th class="text-end">Stock</th><th></th></tr></thead>
+  <thead><tr><th><?= e(term('item')) ?></th><th>Category</th><th>Brand</th><?php foreach ($cfList as $f): ?><th><?= e($f['label']) ?></th><?php endforeach; ?><th>Variants</th><th class="text-end">Sale price</th><th class="text-end">Stock</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $isLow = !$r['is_bundle'] && $r['reorder_level'] > 0 && $r['stock'] <= $r['reorder_level']; ?>
     <tr class="<?= $r['is_active'] ? '' : 'text-muted' ?>">
@@ -21,13 +21,13 @@
         <?= $r['is_bundle'] ? '<span class="badge text-bg-info">Bundle</span>' : '' ?>
         <?= $r['track_batch'] ? '<span class="badge text-bg-secondary">Batch</span>' : '' ?>
         <?= $r['is_active'] ? '' : '<span class="badge text-bg-dark">Inactive</span>' ?></td>
-      <td><?= e($r['category'] ?? '') ?></td><td><?= e($r['brand'] ?? '') ?></td>
+      <td><?= e($r['category'] ?? '') ?></td><td><?= e($r['brand'] ?? '') ?></td><?php foreach ($cfList as $f): ?><td><?= e(App\Models\CustomFields::display($f, $r['cf'][$f['id']] ?? null)) ?></td><?php endforeach; ?>
       <td><?= (int)$r['variant_count'] ?></td>
       <td class="text-end"><?= e(money($r['min_price'])) ?><?= $r['variant_count'] > 1 ? '+' : '' ?></td>
       <td class="text-end"><?= e(qty($r['stock'])) ?> <?= $r['is_bundle'] ? 'sets' : e($r['unit']) ?> <?= $isLow ? '<span class="badge text-bg-danger">Low</span>' : '' ?></td>
       <td class="text-end"><?php if (can('items.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("items/{$r['id']}/edit") ?>">Edit</a><?php endif; ?></td>
     </tr>
   <?php endforeach; ?>
-  <?php if (!$rows): ?><tr><td colspan="7" class="text-muted">No items found.</td></tr><?php endif; ?>
+  <?php if (!$rows): ?><tr><td colspan="10" class="text-muted">No <?= e(term('items', true)) ?> found.</td></tr><?php endif; ?>
   </tbody></table></div></div>
-<div class="d-flex justify-content-between align-items-center"><?= pager($page, $pages) ?><span class="text-muted small mt-3"><?= (int)$total ?> item(s)</span></div>
+<div class="d-flex justify-content-between align-items-center"><?= pager($page, $pages) ?><span class="text-muted small mt-3"><?= (int)$total ?> <?= e(term('item', true)) ?>(s)</span></div>

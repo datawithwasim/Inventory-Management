@@ -21,6 +21,7 @@
   </tbody></table></div>
 <?php endif; ?>
 
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
 <?php foreach ($variants as $v): ?>
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between">
@@ -36,12 +37,12 @@
             <?php foreach ($v['by_rack'] as $r): ?><span class="badge text-bg-<?= $r['rack'] === '' ? 'warning' : 'primary' ?> ms-1"><?= e($r['warehouse']) ?> · <?= e($r['rack'] !== '' ? $r['rack'] : 'No rack') ?>: <?= e(qty($r['qty'])) ?></span><?php endforeach; ?></div>
         <?php endif; ?>
         <?php if ($item['track_batch']): ?>
-          <table class="table table-sm mb-0"><thead><tr><th>Batch</th><th>Supplier lot</th><th>Received</th><th class="text-end">Roll size</th><th class="text-end">Balance</th><th>Status</th></tr></thead><tbody>
+          <table class="table table-sm mb-0"><thead><tr><th><?= e(term('batch')) ?></th><th><?= e(term('supplier')) ?> lot</th><th>Received</th><th class="text-end">Roll size</th><th class="text-end">Balance</th><th>Status</th></tr></thead><tbody>
             <?php foreach ($v['batches'] as $b): $st = App\Models\Stock::batchStatus((float)$b['balance'], (float)$b['received_qty']); ?>
-              <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e($b['received_date']) ?></td>
+              <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e(fdate($b['received_date'])) ?></td>
                 <td class="text-end"><?= e(qty($b['received_qty'])) ?></td><td class="text-end"><?= e(qty($b['balance'])) ?></td><td><?= e($st) ?></td></tr>
             <?php endforeach; ?>
-            <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No batches yet.</td></tr><?php endif; ?>
+            <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No <?= e(term('batches', true)) ?> yet.</td></tr><?php endif; ?>
           </tbody></table>
         <?php endif; ?>
       <?php endif; ?>
@@ -51,7 +52,7 @@
 
 <?php if (!$item['is_bundle']): ?>
 <div class="card"><div class="card-header">Recent stock movements</div>
-  <div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th>SKU</th><th>Warehouse</th><th>Rack</th><th>Batch</th><th class="text-end">Qty</th><th>Note</th></tr></thead><tbody>
+  <div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th>SKU</th><th><?= e(term('warehouse')) ?></th><th><?= e(term('rack')) ?></th><th><?= e(term('batch')) ?></th><th class="text-end">Qty</th><th>Note</th></tr></thead><tbody>
   <?php foreach ($history as $h): ?>
     <tr><td class="text-nowrap"><?= e($h['created_at']) ?></td><td><?= e(stock_type($h['type'])) ?></td><td><?= e($h['sku']) ?></td><td><?= e($h['warehouse']) ?></td><td><?= e($h['rack'] ?? '') ?></td>
       <td><?= $h['batch_no'] ? e($h['batch_no']) : '' ?></td>
