@@ -70,6 +70,7 @@ final class LocationController extends Controller
     public function store(): void
     {
         $back = 'locations/create';
+        $this->enforceFields('location', $back);
         $d = $this->input();
         $wh = $this->warehouseId($d['warehouse_id'] ?? 0, $back);
         $desc = trim((string)($d['description'] ?? '')) ?: null;
@@ -122,6 +123,7 @@ final class LocationController extends Controller
     {
         $row = $this->load($id);
         $back = "locations/{$row['id']}/edit";
+        $this->enforceFields('location', $back);
         $d = $this->input();
         $code = $this->cleanCode((string)($d['code'] ?? ''));
         if ($code === '' || mb_strlen($code) > 30) $this->fail('Rack code is required (max 30 characters).', $back);

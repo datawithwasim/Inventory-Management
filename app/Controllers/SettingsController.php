@@ -72,7 +72,7 @@ final class SettingsController extends Controller
                 $data['off'] = Modules::off();
                 break;
             case 'formfields':
-                $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS];
+                $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
                 break;
             case 'labels':
                 $data['terms'] = TERMS;

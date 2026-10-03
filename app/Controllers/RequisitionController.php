@@ -71,6 +71,7 @@ final class RequisitionController extends PurchaseBase
     public function store(): void
     {
         $back = 'purchase/requisitions/create';
+        $this->enforceFields('requisition', $back);
         $d = $this->input();
         $note = $this->text($d['note'] ?? '', 255, 'Note', $back);
         $lines = [];

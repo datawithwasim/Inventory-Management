@@ -33,6 +33,7 @@ final class AdjustmentController extends StockDocController
     public function store(): void
     {
         $back = 'stock/adjustments/create';
+        $this->enforceFields('adjustment', $back);
         $d = $this->input();
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
         $reason = (string)($d['reason'] ?? '');

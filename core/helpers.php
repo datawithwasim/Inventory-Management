@@ -227,3 +227,10 @@ function ffstar(string $key): string
     [$e, $c] = explode('.', $key, 2);
     return Core\FormFields::required($e, $c) ? ' <span class="text-danger">*</span>' : '';
 }
+
+/** When a field is switched off, keep its current value travelling with the form so editing never wipes saved data. */
+function ffh(string $key, mixed $value = ''): string
+{
+    [$e, $c] = explode('.', $key, 2);
+    return Core\FormFields::shown($e, $c) ? '' : '<input type="hidden" name="' . e($c) . '" value="' . e((string)$value) . '">';
+}

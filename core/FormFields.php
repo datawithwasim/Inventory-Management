@@ -13,8 +13,26 @@ final class FormFields
             'tax_no' => 'Tax number', 'credit_days' => 'Credit days', 'notes' => 'Notes', 'group_id' => 'Group'],
         'supplier' => ['contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Address', 'tax_no' => 'Tax number',
             'payment_terms_days' => 'Payment terms', 'notes' => 'Notes'],
+        'warehouse' => ['address' => 'Address'],
+        'location' => ['description' => 'Description'],
+        'quotation' => ['valid_until' => 'Valid until', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes / terms'],
+        'sales_order' => ['expected_date' => 'Delivery date', 'ship_to' => 'Delivery address', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes'],
+        'delivery' => ['ship_to' => 'Deliver to', 'note' => 'Note'],
+        'sales_return' => ['reason' => 'Reason'],
+        'requisition' => ['note' => 'Note'],
+        'purchase_order' => ['expected_date' => 'Expected on', 'notes' => 'Notes'],
+        'grn' => ['supplier_ref' => 'Supplier challan / invoice no.', 'extra_cost' => 'Extra cost', 'extra_cost_note' => 'Extra cost note', 'note' => 'Note'],
+        'bill' => ['supplier_bill_no' => "Supplier's bill number", 'due_date' => 'Due date', 'other_charges' => 'Other charges', 'notes' => 'Notes'],
+        'purchase_return' => ['reason' => 'Reason'],
+        'adjustment' => ['note' => 'Note'],
+        'transfer' => ['note' => 'Note'],
     ];
-    public const ENTITY_LABELS = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers'];
+    public const ENTITY_LABELS = ['item' => 'Item form', 'customer' => 'Customer form', 'supplier' => 'Supplier form', 'warehouse' => 'Warehouse form', 'location' => 'Rack / location form',
+        'quotation' => 'Quotation', 'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',
+        'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer'];
+    /** Settings page sections: heading => entities. */
+    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['quotation', 'sales_order', 'delivery', 'sales_return'],
+        'Purchase documents' => ['requisition', 'purchase_order', 'grn', 'bill', 'purchase_return'], 'Stock documents' => ['adjustment', 'transfer']];
 
     private static ?array $hidden = null;
     private static ?array $required = null;
@@ -57,6 +75,16 @@ final class FormFields
         Settings::set('fields.required', json_encode($required));
         self::$hidden = $hidden;
         self::$required = $required;
+    }
+
+    /** Mandatory (and visible) fields that were left empty in the posted data — for forms that build their own rows. */
+    public static function missing(string $entity, array $post): array
+    {
+        $errors = [];
+        foreach (self::REGISTRY[$entity] as $col => $label) {
+            if (self::required($entity, $col) && trim((string)($post[$col] ?? '')) === '') $errors[] = "$label is required.";
+        }
+        return $errors;
     }
 
     /** Removes posted values for fields the company has hidden, so they are neither validated nor saved. */

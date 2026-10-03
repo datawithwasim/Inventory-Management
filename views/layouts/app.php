@@ -34,11 +34,11 @@ $dashActive = $path === '/dashboard';
         foreach ($g['items'] as $it) if (Menu::isActive($it, $path)) $open = true; ?>
       <div class="sb-group <?= $open ? 'open' : '' ?>" data-group="<?= e($key) ?>">
         <button type="button" class="sb-group-head" aria-expanded="<?= $open ? 'true' : 'false' ?>" title="<?= e($g['label']) ?>"><i class="bi bi-<?= e($g['icon']) ?> sb-gicon"></i><span><?= e($g['label']) ?></span><i class="bi bi-chevron-down sb-caret"></i></button>
-        <div class="sb-items">
+        <div class="sb-items"><div class="sb-items-inner">
           <?php foreach ($g['items'] as $it): $on = $crumbItem === $it; ?>
             <a class="sb-link <?= $on ? 'active' : '' ?>" href="<?= url(ltrim($it['href'], '/')) ?>" title="<?= e($it['label']) ?>"><i class="bi bi-<?= e($it['icon']) ?>"></i><span><?= e($it['label']) ?></span></a>
           <?php endforeach; ?>
-        </div>
+        </div></div>
       </div>
     <?php endforeach; ?>
   </nav>

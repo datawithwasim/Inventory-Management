@@ -40,6 +40,7 @@ final class WarehouseController extends Controller
 
     private function fields(string $back, ?int $exceptId): array
     {
+        $this->enforceFields('warehouse', $back);
         $d = $this->validate(['name' => 'required|max:100', 'code' => 'required|max:20', 'address' => 'max:255'], $back);
         $name = trim($d['name']);
         if (DB::val('SELECT 1 FROM warehouses WHERE tenant_id = ? AND name = ? AND id <> ?', [Auth::tenantId(), $name, $exceptId ?? 0])) {

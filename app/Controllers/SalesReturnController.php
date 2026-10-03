@@ -57,6 +57,7 @@ final class SalesReturnController extends SalesBase
         $d = $this->input();
         $invId = (int)($d['invoice_id'] ?? 0);
         $back = "sales/returns/create?invoice=$invId";
+        $this->enforceFields('sales_return', $back);
         $i = DB::one('SELECT i.*, d.warehouse_id, d.delivery_no FROM sales_invoices i JOIN deliveries d ON d.id = i.delivery_id WHERE i.tenant_id = ? AND i.id = ?', [$t, $invId]) ?? $this->notFound();
         $date = $this->date($d['return_date'] ?? '', 'Return date', $back);
         $reason = $this->text($d['reason'] ?? '', 150, 'Reason', $back);

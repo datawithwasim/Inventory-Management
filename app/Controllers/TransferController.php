@@ -27,6 +27,7 @@ final class TransferController extends StockDocController
     public function store(): void
     {
         $back = 'stock/transfers/create';
+        $this->enforceFields('transfer', $back);
         $d = $this->input();
         $from = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back, 'source warehouse');
         $to = $this->activeWarehouse($d['to_warehouse_id'] ?? 0, $back, 'destination warehouse');

@@ -20,6 +20,16 @@ abstract class Controller
         $this->view('app/settings/_frame', ['title' => $data['title'] ?? 'Settings', 'tab' => $tab, 'inner' => $inner]);
     }
 
+    /** Refuses the form if a field the company made mandatory is empty. */
+    protected function enforceFields(string $entity, string $back): void
+    {
+        $errors = FormFields::missing($entity, $_POST);
+        if (!$errors) return;
+        foreach ($errors as $m) flash('danger', $m);
+        with_old($_POST);
+        redirect($back);
+    }
+
     protected function input(): array
     {
         return $_POST;

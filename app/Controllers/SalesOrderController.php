@@ -87,6 +87,7 @@ final class SalesOrderController extends SalesBase
     public function store(): void
     {
         $back = 'sales/orders/create';
+        $this->enforceFields('sales_order', $back);
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
         [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
@@ -119,6 +120,7 @@ final class SalesOrderController extends SalesBase
     {
         $o = $this->load($id);
         $back = "sales/orders/{$o['id']}/edit";
+        $this->enforceFields('sales_order', $back);
         if ($o['status'] !== 'draft') $this->bounce('Only draft orders can be edited.', "sales/orders/{$o['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);

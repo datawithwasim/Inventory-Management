@@ -9,8 +9,8 @@ $pre = (int)($_GET['supplier'] ?? 0);
   <div class="col-md-3"><label class="form-label">Deliver to</label><select name="warehouse_id" class="form-select" required>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('warehouse_id', $po['warehouse_id'] ?? 0) === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-2"><label class="form-label">Order date</label><input type="date" name="order_date" class="form-control" value="<?= $v('order_date', date('Y-m-d')) ?>" required></div>
-  <div class="col-md-3"><label class="form-label">Expected on</label><input type="date" name="expected_date" class="form-control" value="<?= $v('expected_date') ?>"></div>
-  <div class="col-12"><label class="form-label">Notes (optional)</label><input name="notes" class="form-control" maxlength="255" value="<?= $v('notes') ?>"></div>
+<?php if (ff('purchase_order.expected_date')): ?>  <div class="col-md-3"><label class="form-label">Expected on<?= ffstar('purchase_order.expected_date') ?></label><input type="date" name="expected_date"<?= ffreq('purchase_order.expected_date') ?> class="form-control" value="<?= $v('expected_date') ?>"></div><?php else: ?><?= ffh('purchase_order.expected_date', $v('expected_date')) ?><?php endif; ?>
+<?php if (ff('purchase_order.notes')): ?>  <div class="col-12"><label class="form-label">Notes (optional)<?= ffstar('purchase_order.notes') ?></label><input name="notes"<?= ffreq('purchase_order.notes') ?> class="form-control" maxlength="255" value="<?= $v('notes') ?>"></div><?php else: ?><?= ffh('purchase_order.notes', $v('notes')) ?><?php endif; ?>
 </div></div></div>
 <?php $mode = 'po'; require __DIR__ . '/_lines.php'; ?>
 <?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>

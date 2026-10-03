@@ -70,6 +70,7 @@ final class PurchaseReturnController extends PurchaseBase
         $d = $this->input();
         $grnId = (int)($d['grn_id'] ?? 0);
         $back = "purchase/returns/create?grn=$grnId";
+        $this->enforceFields('purchase_return', $back);
         $g = DB::one('SELECT * FROM grns WHERE tenant_id = ? AND id = ?', [$t, $grnId]) ?? $this->notFound();
         $date = $this->date($d['return_date'] ?? '', 'Return date', $back);
         $reason = $this->text($d['reason'] ?? '', 150, 'Reason', $back);

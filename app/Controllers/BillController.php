@@ -100,6 +100,7 @@ final class BillController extends PurchaseBase
     {
         $b = $this->load($id);
         $back = "purchase/bills/{$b['id']}/edit";
+        $this->enforceFields('bill', $back);
         $d = $this->input();
         $billDate = $this->date($d['bill_date'] ?? '', 'Bill date', $back);
         $dueDate = $this->date($d['due_date'] ?? '', 'Due date', $back, false);

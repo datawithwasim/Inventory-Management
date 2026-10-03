@@ -63,7 +63,7 @@ final class Charts
             $k++;
             $pts = [];
             foreach (array_values($vals) as $i => $v) $pts[] = round($x($i), 1) . ',' . round($y((float)$v), 1);
-            $o .= '<polyline class="line s' . $k . '" points="' . implode(' ', $pts) . '"/>';
+            $o .= '<polyline class="line s' . $k . '" pathLength="1" points="' . implode(' ', $pts) . '"/>';
             $last = count($vals) - 1;
             $ly = $y((float)array_values($vals)[$last]);
             $o .= '<circle class="end s' . $k . '" cx="' . round($x($last), 1) . '" cy="' . round($ly, 1) . '" r="4"/>';
@@ -133,7 +133,7 @@ final class Charts
         $span = ($max - $min) ?: 1;
         $pts = [];
         foreach (array_values($vals) as $i => $v) $pts[] = round(100 * $i / ($n - 1), 1) . ',' . round(22 - 20 * (($v - $min) / $span), 1);
-        return '<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="' . implode(' ', $pts) . '"/></svg>';
+        return '<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" points="' . implode(' ', $pts) . '"/></svg>';
     }
 
     /** Change vs previous period, as a small badge. $goodWhenUp=false for things like purchases/dues. */

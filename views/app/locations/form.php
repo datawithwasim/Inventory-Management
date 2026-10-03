@@ -4,7 +4,7 @@
   <?php if ($row): ?>
     <p class="text-muted"><?= e(term('warehouse')) ?>: <strong><?= e($row['warehouse']) ?></strong></p>
     <div class="mb-3"><label class="form-label"><?= e(term('rack')) ?> code</label><input name="code" class="form-control" maxlength="30" value="<?= e(old('code', $row['code'])) ?>" required></div>
-    <div class="mb-3"><label class="form-label">Description (optional)</label><input name="description" class="form-control" maxlength="150" value="<?= e(old('description', $row['description'] ?? '')) ?>"></div>
+<?php if (ff('location.description')): ?>    <div class="mb-3"><label class="form-label">Description (optional)<?= ffstar('location.description') ?></label><input name="description"<?= ffreq('location.description') ?> class="form-control" maxlength="150" value="<?= e(old('description', $row['description'] ?? '')) ?>"></div><?php else: ?><?= ffh('location.description', e(old('description', $row['description'] ?? ''))) ?><?php endif; ?>
     <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_active" value="1" id="act" <?= $row['is_active'] ? 'checked' : '' ?>><label class="form-check-label" for="act">Active (new stock can be put here)</label></div>
   <?php else: ?>
     <div class="mb-3"><label class="form-label"><?= e(term('warehouse')) ?></label><select name="warehouse_id" class="form-select" required>
@@ -23,7 +23,7 @@
       </div>
       <p class="text-muted small">Prefix <code>A-</code>, from 1 to 10 with 2 digits creates A-01 … A-10 (max 200 at a time).</p>
     </div>
-    <div class="mb-3"><label class="form-label">Description (optional)</label><input name="description" class="form-control" maxlength="150" value="<?= e(old('description')) ?>"></div>
+<?php if (ff('location.description')): ?>    <div class="mb-3"><label class="form-label">Description (optional)<?= ffstar('location.description') ?></label><input name="description"<?= ffreq('location.description') ?> class="form-control" maxlength="150" value="<?= e(old('description')) ?>"></div><?php else: ?><?= ffh('location.description', e(old('description'))) ?><?php endif; ?>
     <script>
       (function () {
         function sync() { var r = document.getElementById('m2').checked; document.getElementById('range').hidden = !r; document.getElementById('single').hidden = r; }

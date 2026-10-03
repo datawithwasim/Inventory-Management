@@ -96,6 +96,7 @@ final class GrnController extends PurchaseBase
         $d = $this->input();
         $poId = (int)($d['po_id'] ?? 0);
         $back = $poId ? "purchase/orders/$poId/receive" : 'purchase/grns/create';
+        $this->enforceFields('grn', $back);
         $po = $poId ? $this->openPo((string)$poId) : null;
         $supplier = $po ? Purchase::supplier((int)$po['supplier_id']) : $this->activeSupplier($d['supplier_id'] ?? 0, $back);
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);

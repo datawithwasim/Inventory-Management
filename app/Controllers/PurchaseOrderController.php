@@ -110,6 +110,7 @@ final class PurchaseOrderController extends PurchaseBase
     public function store(): void
     {
         $back = 'purchase/orders/create';
+        $this->enforceFields('purchase_order', $back);
         $head = $this->header($back);
         $lines = $this->collectLines($this->postedLines($back), $back);
         [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input());
@@ -155,6 +156,7 @@ final class PurchaseOrderController extends PurchaseBase
     {
         $po = $this->load($id);
         $back = "purchase/orders/{$po['id']}/edit";
+        $this->enforceFields('purchase_order', $back);
         if ($po['status'] !== 'draft') $this->bounce('Only draft purchase orders can be edited.', "purchase/orders/{$po['id']}");
         $head = $this->header($back);
         $lines = $this->collectLines($this->postedLines($back), $back);

@@ -76,6 +76,7 @@ final class QuotationController extends SalesBase
     public function store(): void
     {
         $back = 'sales/quotations/create';
+        $this->enforceFields('quotation', $back);
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
         [$cf, $cfErr] = CustomFields::validate('quotation', $this->input());
@@ -124,6 +125,7 @@ final class QuotationController extends SalesBase
     {
         $q = $this->load($id);
         $back = "sales/quotations/{$q['id']}/edit";
+        $this->enforceFields('quotation', $back);
         if (!in_array($q['status'], ['draft', 'sent'], true)) $this->bounce('This quotation can no longer be edited.', "sales/quotations/{$q['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);

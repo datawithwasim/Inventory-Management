@@ -107,6 +107,7 @@ final class DeliveryController extends SalesBase
         $d = $this->input();
         $orderId = (int)($d['order_id'] ?? 0);
         $back = $orderId ? "sales/orders/$orderId/deliver" : 'sales/deliveries/create';
+        $this->enforceFields('delivery', $back);
         $order = $orderId ? $this->openOrder((string)$orderId) : null;
         $customer = $order ? Sales::customer((int)$order['customer_id']) : $this->activeCustomer($d['customer_id'] ?? 0, $back);
         $wh = $order ? Stock::warehouse((int)$order['warehouse_id']) : $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);

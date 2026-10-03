@@ -11,7 +11,7 @@
 <div class="card mb-3"><div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div><strong>Backup</strong><div class="small text-muted">Downloads every company's data as one .sql file. Do this before each update and keep copies away from the server.
     To restore: cPanel → phpMyAdmin → Import into an empty database. Uploaded logos live in <code>storage/uploads</code>; copy that folder too.</div></div>
-  <form method="post" action="<?= url('admin/system/backup') ?>"><?= csrf_field() ?><button class="btn btn-primary"><i class="bi bi-download me-1"></i>Download backup</button></form>
+  <form method="post" data-noload action="<?= url('admin/system/backup') ?>"><?= csrf_field() ?><button class="btn btn-primary"><i class="bi bi-download me-1"></i>Download backup</button></form>
 </div></div>
 <div class="row g-3">
   <div class="col-md-5"><div class="card"><div class="card-header">Environment</div>

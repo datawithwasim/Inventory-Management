@@ -2,7 +2,7 @@
 <div class="card mb-3"><div class="card-body"><div class="row g-3">
   <div class="col-md-4"><div class="text-muted small"><?= e(term('customer')) ?></div><?= e($i['customer']) ?><br><small class="text-muted">Invoice <?= e($i['invoice_no']) ?> · stock goes back to <?= e($i['warehouse']) ?></small></div>
   <div class="col-md-3"><label class="form-label">Return date</label><input type="date" name="return_date" class="form-control" value="<?= e(old('return_date', date('Y-m-d'))) ?>" required></div>
-  <div class="col-md-5"><label class="form-label">Reason</label><input name="reason" class="form-control" maxlength="150" value="<?= e(old('reason')) ?>" placeholder="e.g. wrong colour, damaged"></div>
+<?php if (ff('sales_return.reason')): ?>  <div class="col-md-5"><label class="form-label">Reason<?= ffstar('sales_return.reason') ?></label><input name="reason"<?= ffreq('sales_return.reason') ?> class="form-control" maxlength="150" value="<?= e(old('reason')) ?>" placeholder="e.g. wrong colour, damaged"></div><?php else: ?><?= ffh('sales_return.reason', e(old('reason'))) ?><?php endif; ?>
 </div><p class="text-muted small mt-3 mb-0">For a <strong>set</strong>, return the set line (for the credit) and each part you take back (to put it back on a <?= e(term('rack', true)) ?>). Untick "Put back" for goods that are damaged and must not return to stock.</p></div></div>
 <div class="card mb-3"><div class="table-responsive"><table class="table mb-0 align-middle">
   <thead><tr><th><?= e(term('item')) ?></th><th>Roll (<?= e(term('batch', true)) ?>)</th><th class="text-end">Sold</th><th class="text-end">Can return</th><th>Put back on <?= e(term('rack', true)) ?></th><th style="width:130px">Return qty</th></tr></thead><tbody>

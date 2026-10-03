@@ -3,6 +3,33 @@
   var base = ((doc.querySelector('meta[name=base]') || {}).content || '').replace(/\/+$/, '');
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
 
+  /* ---- feedback: top progress bar while a page loads, and a spinner on submit buttons (also stops double-clicks) ---- */
+  var bar = doc.createElement('div'); bar.id = 'navbar-progress'; body.appendChild(bar);
+  function startBar() { bar.className = ''; void bar.offsetWidth; bar.className = 'on'; }
+  function resetBar() { bar.className = ''; }
+  window.addEventListener('pageshow', function () {
+    resetBar();
+    doc.querySelectorAll('.btn.is-loading').forEach(function (b) { b.classList.remove('is-loading'); b.disabled = false; var sp = b.querySelector('.btn-spin'); if (sp) sp.remove(); });
+  });
+  doc.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var h = a.getAttribute('href');
+    if (!h || h.charAt(0) === '#' || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('data-bs-toggle') || /^(mailto|tel|javascript):/.test(h)) return;
+    if (a.origin && a.origin !== location.origin) return;
+    if (/\/export\/|print=1|\/print$/.test(h)) return;
+    startBar();
+  });
+  doc.addEventListener('submit', function (e) {
+    var f = e.target; if (e.defaultPrevented || !f.matches || !f.matches('form') || f.hasAttribute('data-noload')) return;
+    if ((f.getAttribute('target') || '') === '_blank') return;
+    startBar();
+    var b = e.submitter || f.querySelector('button:not([type=button]),input[type=submit]');
+    if (b && b.tagName === 'BUTTON' && !b.classList.contains('is-loading')) {
+      setTimeout(function () { b.classList.add('is-loading'); b.insertAdjacentHTML('afterbegin', '<span class="btn-spin"></span>'); b.disabled = true; }, 0);
+    }
+  });
+
   /* ---- sidebar ---- */
   var sb = doc.getElementById('sidebar');
   if (sb) {
