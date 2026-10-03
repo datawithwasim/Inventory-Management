@@ -58,6 +58,7 @@ final class StockController extends Controller
                     $itemTotal AS item_total
              $base GROUP BY v.id, i.id, u.id ORDER BY i.name, v.name LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
         $this->attachRacks($rows, $wh);
+        $this->attachReserved($rows, $wh);
         $totalValue = (float)DB::val(
             'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0)
              FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
@@ -84,6 +85,23 @@ final class StockController extends Controller
         $by = [];
         foreach (DB::all($sql, $params) as $p) $by[$p['variant_id']][] = $p;
         foreach ($rows as &$r) $r['racks'] = $by[$r['id']] ?? [];
+    }
+
+    /** Stock promised to confirmed sales orders (and parts of sets), per variant. */
+    private function attachReserved(array &$rows, int $wh): void
+    {
+        if (!$rows) return;
+        $ids = array_map(fn($r) => (int)$r['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $open = "o.tenant_id = ? AND o.status IN ('confirmed','partial') AND i.qty_ordered > i.qty_delivered" . ($wh ? ' AND o.warehouse_id = ?' : '');
+        $base = $wh ? [$this->tid(), $wh] : [$this->tid()];
+        $map = [];
+        foreach (DB::all("SELECT i.variant_id AS v, SUM(i.qty_ordered - i.qty_delivered) AS q FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id
+                          WHERE $open AND i.variant_id IN ($in) GROUP BY i.variant_id", [...$base, ...$ids]) as $r) $map[$r['v']] = ($map[$r['v']] ?? 0) + (float)$r['q'];
+        foreach (DB::all("SELECT bc.component_variant_id AS v, SUM((i.qty_ordered - i.qty_delivered) * bc.qty) AS q FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id
+                          JOIN item_variants bv ON bv.id = i.variant_id JOIN bundle_components bc ON bc.bundle_item_id = bv.item_id
+                          WHERE $open AND bc.component_variant_id IN ($in) GROUP BY bc.component_variant_id", [...$base, ...$ids]) as $r) $map[$r['v']] = ($map[$r['v']] ?? 0) + (float)$r['q'];
+        foreach ($rows as &$r) $r['reserved'] = $map[$r['id']] ?? 0.0;
     }
 
     /* ---------- ledger ---------- */

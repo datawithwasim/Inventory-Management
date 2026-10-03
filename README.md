@@ -10,7 +10,9 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
 - **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
   landed cost, bills with payment status, purchase returns)
-- Next: Phase 4 – Sales
+- **Phase 4 – Sales: done** (customers & groups with price lists, quotations, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
+  invoices with payments and advances, customer returns, set/bundle sales, POS with barcode scanning)
+- Next: Phase 5 – Customization
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
@@ -43,7 +45,8 @@ php -S 127.0.0.1:8099 -t public public/index.php &
 php tests/smoke.php http://127.0.0.1:8099     # phase 1
 php tests/phase2.php http://127.0.0.1:8099    # phase 2
 php tests/racks.php http://127.0.0.1:8099     # racks / locations
-php tests/purchase.php http://127.0.0.1:8099  # phase 3  (run all against a throw-away database)
+php tests/purchase.php http://127.0.0.1:8099  # phase 3
+php tests/sales.php http://127.0.0.1:8099     # phase 4  (run all against a throw-away database)
 ```
 
 ## Layout

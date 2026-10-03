@@ -38,6 +38,7 @@ final class Tenants
             DB::insert('units', ['tenant_id' => $tenantId, 'name' => $n, 'short_name' => $s, 'allow_decimal' => $d]);
         }
         DB::insert('warehouses', ['tenant_id' => $tenantId, 'name' => 'Main Warehouse', 'code' => 'MAIN', 'is_default' => 1]);
+        DB::insert('customers', ['tenant_id' => $tenantId, 'name' => 'Walk-in customer', 'is_walkin' => 1]);
     }
 
     /** Creates company + default roles + owner user. Returns the tenant id. */

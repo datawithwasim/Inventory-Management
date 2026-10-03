@@ -140,3 +140,10 @@ function pay_badge(string $status): string
     [$label, $color] = App\Models\Purchase::PAY_STATUS[$status] ?? [$status, 'secondary'];
     return '<span class="badge text-bg-' . $color . '">' . e($label) . '</span>';
 }
+
+function sale_badge(string $kind, string $status): string
+{
+    $map = $kind === 'quote' ? App\Models\Sales::QUOTE_STATUS : App\Models\Sales::ORDER_STATUS;
+    [$label, $color] = $map[$status] ?? [$status, 'secondary'];
+    return '<span class="badge text-bg-' . $color . '">' . e($label) . '</span>';
+}

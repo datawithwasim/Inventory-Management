@@ -152,6 +152,75 @@ $router->get('/purchase/returns/create', $A . 'PurchaseReturnController@create',
 $router->post('/purchase/returns', $A . 'PurchaseReturnController@store', ['auth', 'perm:purchase.create']);
 $router->get('/purchase/returns/{id}', $A . 'PurchaseReturnController@show', ['auth', 'perm:purchase.view']);
 
+// ---- Sales ----
+$router->get('/lookup/sale-items', $A . 'SalesLookupController@items', ['auth']);
+$router->get('/lookup/sale-item', $A . 'SalesLookupController@one', ['auth']);
+$router->get('/lookup/stock', $A . 'SalesLookupController@stock', ['auth']);
+
+$router->get('/customers', $A . 'CustomerController@index', ['auth', 'perm:customers.view']);
+$router->get('/customers/create', $A . 'CustomerController@create', ['auth', 'perm:customers.create']);
+$router->post('/customers', $A . 'CustomerController@store', ['auth', 'perm:customers.create']);
+$router->get('/customers/groups', $A . 'CustomerGroupController@index', ['auth', 'perm:customers.view']);
+$router->get('/customers/groups/create', $A . 'CustomerGroupController@create', ['auth', 'perm:customers.create']);
+$router->post('/customers/groups', $A . 'CustomerGroupController@store', ['auth', 'perm:customers.create']);
+$router->get('/customers/groups/{id}/edit', $A . 'CustomerGroupController@edit', ['auth', 'perm:customers.edit']);
+$router->post('/customers/groups/{id}', $A . 'CustomerGroupController@update', ['auth', 'perm:customers.edit']);
+$router->post('/customers/groups/{id}/prices', $A . 'CustomerGroupController@setPrice', ['auth', 'perm:customers.edit']);
+$router->post('/customers/groups/{id}/prices/{priceId}/delete', $A . 'CustomerGroupController@deletePrice', ['auth', 'perm:customers.edit']);
+$router->post('/customers/groups/{id}/delete', $A . 'CustomerGroupController@destroy', ['auth', 'perm:customers.delete']);
+$router->get('/customers/{id}', $A . 'CustomerController@show', ['auth', 'perm:customers.view']);
+$router->get('/customers/{id}/edit', $A . 'CustomerController@edit', ['auth', 'perm:customers.edit']);
+$router->post('/customers/{id}', $A . 'CustomerController@update', ['auth', 'perm:customers.edit']);
+$router->post('/customers/{id}/delete', $A . 'CustomerController@destroy', ['auth', 'perm:customers.delete']);
+
+$router->get('/sales/quotations', $A . 'QuotationController@index', ['auth', 'perm:sales.view']);
+$router->get('/sales/quotations/create', $A . 'QuotationController@create', ['auth', 'perm:sales.create']);
+$router->post('/sales/quotations', $A . 'QuotationController@store', ['auth', 'perm:sales.create']);
+$router->get('/sales/quotations/{id}', $A . 'QuotationController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/quotations/{id}/edit', $A . 'QuotationController@edit', ['auth', 'perm:sales.edit']);
+$router->post('/sales/quotations/{id}', $A . 'QuotationController@update', ['auth', 'perm:sales.edit']);
+$router->post('/sales/quotations/{id}/send', $A . 'QuotationController@send', ['auth', 'perm:sales.edit']);
+$router->post('/sales/quotations/{id}/accept', $A . 'QuotationController@accept', ['auth', 'perm:sales.edit']);
+$router->post('/sales/quotations/{id}/reject', $A . 'QuotationController@reject', ['auth', 'perm:sales.edit']);
+$router->post('/sales/quotations/{id}/convert', $A . 'QuotationController@convert', ['auth', 'perm:sales.create']);
+$router->post('/sales/quotations/{id}/delete', $A . 'QuotationController@destroy', ['auth', 'perm:sales.delete']);
+
+$router->get('/sales/orders', $A . 'SalesOrderController@index', ['auth', 'perm:sales.view']);
+$router->get('/sales/orders/create', $A . 'SalesOrderController@create', ['auth', 'perm:sales.create']);
+$router->post('/sales/orders', $A . 'SalesOrderController@store', ['auth', 'perm:sales.create']);
+$router->get('/sales/orders/{id}', $A . 'SalesOrderController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/orders/{id}/edit', $A . 'SalesOrderController@edit', ['auth', 'perm:sales.edit']);
+$router->post('/sales/orders/{id}', $A . 'SalesOrderController@update', ['auth', 'perm:sales.edit']);
+$router->post('/sales/orders/{id}/confirm', $A . 'SalesOrderController@confirm', ['auth', 'perm:sales.create']);
+$router->post('/sales/orders/{id}/cancel', $A . 'SalesOrderController@cancel', ['auth', 'perm:sales.edit']);
+$router->post('/sales/orders/{id}/close', $A . 'SalesOrderController@close', ['auth', 'perm:sales.edit']);
+$router->post('/sales/orders/{id}/delete', $A . 'SalesOrderController@destroy', ['auth', 'perm:sales.delete']);
+$router->post('/sales/orders/{id}/advance', $A . 'SalesOrderController@advance', ['auth', 'perm:sales.create']);
+$router->post('/sales/orders/{id}/advance/{payId}/refund', $A . 'SalesOrderController@refundAdvance', ['auth', 'perm:sales.edit']);
+$router->get('/sales/orders/{id}/deliver', $A . 'DeliveryController@createFromOrder', ['auth', 'perm:sales.create']);
+
+$router->get('/sales/deliveries', $A . 'DeliveryController@index', ['auth', 'perm:sales.view']);
+$router->get('/sales/deliveries/create', $A . 'DeliveryController@create', ['auth', 'perm:sales.create']);
+$router->post('/sales/deliveries', $A . 'DeliveryController@store', ['auth', 'perm:sales.create']);
+$router->get('/sales/deliveries/{id}', $A . 'DeliveryController@show', ['auth', 'perm:sales.view']);
+$router->post('/sales/deliveries/{id}/invoice', $A . 'DeliveryController@invoice', ['auth', 'perm:sales.create']);
+
+$router->get('/sales/invoices', $A . 'InvoiceController@index', ['auth', 'perm:sales.view']);
+$router->get('/sales/invoices/{id}', $A . 'InvoiceController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/invoices/{id}/print', $A . 'InvoiceController@print', ['auth', 'perm:sales.view']);
+$router->get('/sales/invoices/{id}/edit', $A . 'InvoiceController@edit', ['auth', 'perm:sales.edit']);
+$router->post('/sales/invoices/{id}', $A . 'InvoiceController@update', ['auth', 'perm:sales.edit']);
+$router->post('/sales/invoices/{id}/payments', $A . 'InvoiceController@pay', ['auth', 'perm:sales.create']);
+$router->post('/sales/invoices/{id}/payments/{payId}/delete', $A . 'InvoiceController@deletePayment', ['auth', 'perm:sales.delete']);
+
+$router->get('/sales/returns', $A . 'SalesReturnController@index', ['auth', 'perm:sales.view']);
+$router->get('/sales/returns/create', $A . 'SalesReturnController@create', ['auth', 'perm:sales.create']);
+$router->post('/sales/returns', $A . 'SalesReturnController@store', ['auth', 'perm:sales.create']);
+$router->get('/sales/returns/{id}', $A . 'SalesReturnController@show', ['auth', 'perm:sales.view']);
+
+$router->get('/pos', $A . 'PosController@index', ['auth', 'perm:pos.use']);
+$router->post('/pos/checkout', $A . 'PosController@checkout', ['auth', 'perm:pos.use']);
+
 $router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
 
 // ---- Super Admin panel ----

@@ -42,7 +42,17 @@ $active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
       <?php endif; ?>
     <?php endif; ?>
     <li class="nav-heading">Sales</li>
-    <li><span class="nav-link disabled"><i class="bi bi-receipt me-2"></i>Sales <small>(soon)</small></span></li>
+    <?php if (can('sales.view') || can('customers.view') || can('pos.use')): ?>
+      <?php if (can('pos.use')): ?><li><a class="nav-link <?= $active('/pos') ?>" href="<?= url('pos') ?>"><i class="bi bi-upc-scan me-2"></i>POS (counter)</a></li><?php endif; ?>
+      <?php if (can('customers.view')): ?><li><a class="nav-link <?= $active('/customers') ?>" href="<?= url('customers') ?>"><i class="bi bi-person-lines-fill me-2"></i>Customers</a></li><?php endif; ?>
+      <?php if (can('sales.view')): ?>
+        <li><a class="nav-link <?= $active('/sales/quotations') ?>" href="<?= url('sales/quotations') ?>"><i class="bi bi-file-earmark-text me-2"></i>Quotations</a></li>
+        <li><a class="nav-link <?= $active('/sales/orders') ?>" href="<?= url('sales/orders') ?>"><i class="bi bi-bag-check me-2"></i>Sales orders</a></li>
+        <li><a class="nav-link <?= $active('/sales/deliveries') ?>" href="<?= url('sales/deliveries') ?>"><i class="bi bi-truck me-2"></i>Deliveries</a></li>
+        <li><a class="nav-link <?= $active('/sales/invoices') ?>" href="<?= url('sales/invoices') ?>"><i class="bi bi-receipt me-2"></i>Invoices &amp; payments</a></li>
+        <li><a class="nav-link <?= $active('/sales/returns') ?>" href="<?= url('sales/returns') ?>"><i class="bi bi-arrow-counterclockwise me-2"></i>Sales returns</a></li>
+      <?php endif; ?>
+    <?php endif; ?>
     <li class="nav-heading">Administration</li>
     <?php if (can('users.view')): ?>
       <li><a class="nav-link <?= $active('/users') ?>" href="<?= url('users') ?>"><i class="bi bi-people me-2"></i>Users</a></li>

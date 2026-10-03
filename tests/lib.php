@@ -40,7 +40,8 @@ final class Client
     public function post(string $p, array $data, string $tokenPage): array
     {
         $page = $this->get($tokenPage)['body'];
-        preg_match('/name="_csrf" value="([a-f0-9]+)"/', $page, $m);
+        preg_match('/name="_csrf" value="([a-f0-9]+)"|name="csrf" content="([a-f0-9]+)"/', $page, $m);
+        $m[1] = ($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? '');
         return $this->req('POST', $p, $data + ['_csrf' => $m[1] ?? '']);
     }
 

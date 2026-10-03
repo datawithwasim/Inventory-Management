@@ -30,7 +30,12 @@ $limit = fn($n) => (int)$n === 0 ? 'Unlimited' : $n;
   <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">We owe suppliers</div><div class="fs-3 <?= $stats['owed'] > 0.004 ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('purchase/bills?status=unpaid') ?>"><?= e(money($stats['owed'])) ?></a></div></div></div></div>
   <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Overdue bills</div><div class="fs-3 <?= $stats['overdue'] ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('purchase/bills?status=overdue') ?>"><?= (int)$stats['overdue'] ?></a></div></div></div></div>
 </div>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Sales today</div><div class="fs-3"><a class="text-decoration-none text-reset" href="<?= url('sales/invoices') ?>"><?= e(money($stats['sales_today'])) ?></a></div></div></div></div>
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Orders to deliver</div><div class="fs-3"><a class="text-decoration-none" href="<?= url('sales/orders?status=open') ?>"><?= (int)$stats['orders_open'] ?></a></div></div></div></div>
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Customers owe us</div><div class="fs-3 <?= $stats['receivable'] > 0.004 ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('sales/invoices?status=unpaid') ?>"><?= e(money($stats['receivable'])) ?></a></div></div></div></div>
+</div>
 <div class="card"><div class="card-body">
   <h2 class="h5">Welcome, <?= e($u['name']) ?> 👋</h2>
-  <p class="text-muted mb-0">Start by adding <strong>Items</strong>, then enter opening stock under <strong>Stock → Adjustments</strong>. Then buy with <strong>Purchase → Purchase orders</strong> and receive goods onto racks. Sales is coming next.</p>
+  <p class="text-muted mb-0">Start by adding <strong>Items</strong>, then enter opening stock under <strong>Stock → Adjustments</strong>. Then buy with <strong>Purchase → Purchase orders</strong> and receive goods onto racks. Sell from <strong>POS</strong> at the counter or through <strong>Quotation → Order → Delivery → Invoice</strong>.</p>
 </div></div>
