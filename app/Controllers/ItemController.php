@@ -65,8 +65,8 @@ final class ItemController extends Controller
         $params = [$t];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (i.name LIKE ? OR EXISTS (SELECT 1 FROM item_variants v WHERE v.item_id = i.id AND (v.sku LIKE ? OR v.name LIKE ? OR v.barcode = ?)))';
-            array_push($params, $like, $like, $like, $q);
+            $where .= ' AND (i.name LIKE ? OR i.design_no LIKE ? OR EXISTS (SELECT 1 FROM item_variants v WHERE v.item_id = i.id AND (v.sku LIKE ? OR v.name LIKE ? OR v.colour LIKE ? OR v.barcode = ?)))';
+            array_push($params, $like, $like, $like, $like, $like, $q);
         }
         if ($cat) {
             $where .= ' AND i.category_id = ?';
@@ -137,6 +137,7 @@ final class ItemController extends Controller
         $this->view('app/items/show', [
             'title' => $item['name'], 'item' => $item, 'meta' => $meta, 'variants' => $variants, 'components' => $components,
             'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::values('item', (int)$item['id']),
+            'rates' => \App\Models\Purchase::ratesForItem((int)$item['id']),
             'history' => $history, 'bundleAvailable' => $item['is_bundle'] ? Stock::bundleAvailable((int)$item['id']) : null,
         ]);
     }
@@ -203,8 +204,16 @@ final class ItemController extends Controller
         foreach (['reorder_level', 'reorder_qty'] as $f) {
             if (($d[$f] ?? '') !== '' && (!is_numeric($d[$f]) || (float)$d[$f] < 0)) $bounce('Reorder values must be zero or more.');
         }
-        $fields = [
-            'name' => $name,
+        $type = trim((string)($d['item_type'] ?? 'other'));
+        if (!isset(\App\Models\ItemTypes::LABELS[$type])) $bounce('Choose a valid product type.');
+        $attr = [];
+        foreach (['hsn_code' => 20, 'design_no' => 60, 'composition' => 120, 'width' => 40, 'gsm' => 40, 'pattern' => 80, 'finish' => 80] as $k => $max) {
+            $val = trim((string)($d[$k] ?? ''));
+            if (mb_strlen($val) > $max) $bounce('A product detail is too long (' . $k . ', max ' . $max . ' characters).');
+            $attr[$k] = $val !== '' ? $val : null;
+        }
+        $fields = $attr + [
+            'name' => $name, 'item_type' => $type,
             'category_id' => $own('categories', $d['category_id'] ?? 0),
             'brand_id' => $own('brands', $d['brand_id'] ?? 0),
             'unit_id' => (int)$unit['id'],
@@ -232,7 +241,7 @@ final class ItemController extends Controller
             foreach (['cost_price', 'sale_price'] as $f) {
                 if (($v[$f] ?? '') !== '' && (!is_numeric($v[$f]) || (float)$v[$f] < 0)) $bounce("Variant $n: prices must be zero or more.");
             }
-            if (mb_strlen($sku) > 60 || mb_strlen($bar) > 60 || mb_strlen((string)($v['name'] ?? '')) > 150) $bounce("Variant $n: a value is too long.");
+            if (mb_strlen($sku) > 60 || mb_strlen($bar) > 60 || mb_strlen((string)($v['name'] ?? '')) > 150 || mb_strlen((string)($v['colour'] ?? '')) > 60 || mb_strlen((string)($v['size'] ?? '')) > 60) $bounce("Variant $n: a value is too long.");
             if ($sku !== '') {
                 if (isset($seenSku[strtolower($sku)])) $bounce("SKU $sku is used twice in this form.");
                 $seenSku[strtolower($sku)] = 1;
@@ -244,6 +253,7 @@ final class ItemController extends Controller
                 if (DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND barcode = ? AND id <> ?', [$t, $bar, $vid])) $bounce("Barcode $bar already exists.");
             }
             $variants[] = ['id' => $vid, 'name' => trim((string)($v['name'] ?? '')) ?: null, 'sku' => $sku, 'barcode' => $bar ?: null,
+                'colour' => trim((string)($v['colour'] ?? '')) ?: null, 'size' => trim((string)($v['size'] ?? '')) ?: null,
                 'cost_price' => (float)($v['cost_price'] ?? 0), 'sale_price' => (float)($v['sale_price'] ?? 0)];
         }
 
@@ -274,7 +284,7 @@ final class ItemController extends Controller
         $keep = [];
         foreach ($variants as $v) {
             $sku = $v['sku'] !== '' ? $v['sku'] : Numbering::next($t, 'SKU');
-            $data = ['name' => $v['name'], 'sku' => $sku, 'barcode' => $v['barcode'], 'cost_price' => $v['cost_price'], 'sale_price' => $v['sale_price'], 'is_active' => 1];
+            $data = ['name' => $v['name'], 'sku' => $sku, 'barcode' => $v['barcode'], 'colour' => $v['colour'], 'size' => $v['size'], 'cost_price' => $v['cost_price'], 'sale_price' => $v['sale_price'], 'is_active' => 1];
             if ($v['id']) {
                 $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
                 DB::run("UPDATE item_variants SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), $t, $v['id']]);

@@ -5,6 +5,9 @@
     <?= $item['track_batch'] ? '<span class="badge text-bg-secondary">Batch tracked</span>' : '' ?>
     <?= $item['is_active'] ? '' : '<span class="badge text-bg-dark">Inactive</span>' ?>
     <div class="text-muted mt-1"><?= e(implode(' · ', array_filter([$meta['category'], $meta['brand'], 'Unit: ' . $item['unit_name'], $meta['tax'] ? $meta['tax'] . ' ' . $meta['rate'] . '%' : null]))) ?></div>
+    <?php $attrs = array_filter(['Type' => App\Models\ItemTypes::LABELS[$item['item_type']] ?? null, 'HSN' => $item['hsn_code'], 'Design no.' => $item['design_no'], 'Composition' => $item['composition'], 'Width' => $item['width'],
+        'GSM / weight' => $item['gsm'], 'Pattern' => $item['pattern'], 'Finish' => $item['finish']]); ?>
+    <?php if ($attrs): ?><div class="d-flex flex-wrap gap-1 mt-2"><?php foreach ($attrs as $l => $val): ?><span class="badge text-bg-light border fw-normal"><span class="text-muted"><?= e($l) ?>:</span> <?= e($val) ?></span><?php endforeach; ?></div><?php endif; ?>
     <?php if ($item['description']): ?><p class="mt-2 mb-0"><?= nl2br(e($item['description'])) ?></p><?php endif; ?>
   </div>
   <div class="text-nowrap">
@@ -22,10 +25,18 @@
 <?php endif; ?>
 
 <?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
+<?php if (!empty($rates)): $bestBy = []; foreach ($rates as $r) if (!isset($bestBy[$r['variant_id']])) $bestBy[$r['variant_id']] = $r['net']; ?>
+<div class="card mb-3"><div class="card-header"><i class="bi bi-tags me-1"></i>Supplier rates — current, cheapest first</div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th><?= e(term('supplier')) ?></th><th>Variant</th><th class="text-end">Rate</th><th class="text-end">Disc.</th><th class="text-end">Net</th><th class="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
+  <?php foreach ($rates as $r): ?><tr><td><a href="<?= url("suppliers/{$r['supplier_id']}#rates") ?>"><?= e($r['supplier_name']) ?></a><?= abs($r['net'] - $bestBy[$r['variant_id']]) < 0.005 ? ' <span class="badge text-bg-success">Lowest</span>' : '' ?></td>
+    <td class="small"><?= e($r['vname'] ?: $r['sku']) ?></td><td class="text-end"><?= e(money($r['rate'])) ?></td><td class="text-end"><?= (float)$r['discount_pct'] > 0 ? e((float)$r['discount_pct']) . '%' : '—' ?></td>
+    <td class="text-end fw-semibold"><?= e(money($r['net'])) ?></td><td class="text-end"><?= (float)$r['min_qty'] > 0 ? e(qty($r['min_qty'])) : '—' ?></td><td><?= $r['lead_time_days'] !== null ? (int)$r['lead_time_days'] . ' days' : '—' ?></td></tr><?php endforeach; ?>
+  </tbody></table></div></div>
+<?php endif; ?>
 <?php foreach ($variants as $v): ?>
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between">
-      <span><strong><?= e($v['name'] ?: 'Default') ?></strong> <span class="text-muted">SKU <?= e($v['sku']) ?><?= $v['barcode'] ? ' · Barcode ' . e($v['barcode']) : '' ?></span> <?= $v['is_active'] ? '' : '<span class="badge text-bg-dark">Hidden</span>' ?></span>
+      <span><strong><?= e($v['name'] ?: 'Default') ?></strong><?= ($v['colour'] || $v['size']) ? ' <span class="badge text-bg-light border fw-normal">' . e(implode(' · ', array_filter([$v['colour'], $v['size']]))) . '</span>' : '' ?> <span class="text-muted">SKU <?= e($v['sku']) ?><?= $v['barcode'] ? ' · Barcode ' . e($v['barcode']) : '' ?></span> <?= $v['is_active'] ? '' : '<span class="badge text-bg-dark">Hidden</span>' ?></span>
       <span class="text-muted">Cost <?= e(money($v['cost_price'])) ?> · Sale <?= e(money($v['sale_price'])) ?></span>
     </div>
     <div class="card-body">
@@ -42,7 +53,7 @@
               <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e(fdate($b['received_date'])) ?></td>
                 <td class="text-end"><?= e(qty($b['received_qty'])) ?></td><td class="text-end"><?= e(qty($b['balance'])) ?></td><td><?= e($st) ?></td></tr>
             <?php endforeach; ?>
-            <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No <?= e(term('batches', true)) ?> yet.</td></tr><?php endif; ?>
+            <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No <?= e(term('rolls', true)) ?> yet.</td></tr><?php endif; ?>
           </tbody></table>
         <?php endif; ?>
       <?php endif; ?>

@@ -8,11 +8,14 @@ final class FormFields
 {
     /** entity => [column => label]. Only fields that are safe to hide are listed. */
     public const REGISTRY = [
-        'item' => ['brand_id' => 'Brand', 'tax_id' => 'Tax rate', 'description' => 'Description'],
+        'item' => ['item_type' => 'Product type', 'brand_id' => 'Brand', 'tax_id' => 'Tax rate', 'hsn_code' => 'HSN code', 'design_no' => 'Design / quality no.', 'composition' => 'Composition',
+            'width' => 'Width', 'gsm' => 'GSM / weight', 'pattern' => 'Pattern', 'finish' => 'Finish', 'description' => 'Description'],
         'customer' => ['contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Billing address', 'ship_address' => 'Delivery address',
             'tax_no' => 'Tax number', 'credit_days' => 'Credit days', 'notes' => 'Notes', 'group_id' => 'Group'],
-        'supplier' => ['contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Address', 'tax_no' => 'Tax number',
-            'payment_terms_days' => 'Payment terms', 'notes' => 'Notes'],
+        'supplier' => ['supplier_type' => 'Supplier type', 'contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Address', 'tax_no' => 'Tax number',
+            'pan' => 'PAN', 'city' => 'City', 'state' => 'State', 'pincode' => 'Pincode', 'ship_address' => 'Godown / dispatch address', 'payment_terms_days' => 'Payment terms',
+            'credit_limit' => 'Credit limit', 'lead_time_days' => 'Lead time', 'transport' => 'Preferred transport', 'bank_name' => 'Bank name', 'bank_account' => 'Account number',
+            'bank_ifsc' => 'IFSC', 'notes' => 'Notes'],
         'warehouse' => ['address' => 'Address'],
         'location' => ['description' => 'Description'],
         'quotation' => ['valid_until' => 'Valid until', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes / terms'],

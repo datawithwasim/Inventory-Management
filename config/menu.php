@@ -8,7 +8,7 @@ return [
             ['label' => fn() => term('items'), 'icon' => 'tags', 'path' => '/items', 'perm' => ['items.view']],
             ['label' => fn() => 'Stock', 'icon' => 'box-seam', 'path' => '/stock', 'perm' => ['stock.view'], 'exact' => true],
             ['label' => fn() => 'Stock by ' . term('rack', true), 'icon' => 'geo-alt', 'path' => '/stock/racks', 'perm' => ['stock.view']],
-            ['label' => fn() => term('batches') . ' (rolls)', 'icon' => 'layers', 'path' => '/stock/batches', 'perm' => ['stock.view']],
+            ['label' => fn() => term('rolls'), 'icon' => 'layers', 'path' => '/stock/batches', 'perm' => ['stock.view']],
             ['label' => fn() => 'Adjustments', 'icon' => 'sliders', 'path' => '/stock/adjustments', 'perm' => ['stock.view']],
             ['label' => fn() => 'Transfers', 'icon' => 'arrow-left-right', 'path' => '/stock/transfers', 'perm' => ['stock.view'], 'module' => 'transfers'],
             ['label' => fn() => 'Stock-takes', 'icon' => 'clipboard-check', 'path' => '/stock/takes', 'perm' => ['stock.view'], 'module' => 'takes'],

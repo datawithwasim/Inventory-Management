@@ -1,7 +1,7 @@
 <div class="mb-3">
   <div class="btn-group btn-group-sm">
     <a class="btn btn-outline-secondary <?= $type === 'items' ? 'active' : '' ?>" href="?type=items"><?= e(term('items')) ?> (SKU / price)</a>
-    <a class="btn btn-outline-secondary <?= $type === 'rolls' ? 'active' : '' ?>" href="?type=rolls"><?= e(term('batches')) ?> (roll labels)</a>
+    <a class="btn btn-outline-secondary <?= $type === 'rolls' ? 'active' : '' ?>" href="?type=rolls"><?= e(term('rolls')) ?> (roll labels)</a>
   </div>
 </div>
 <form method="get" class="row g-2 mb-3">

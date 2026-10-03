@@ -24,7 +24,7 @@ final class SearchController extends Controller
                      WHERE i.tenant_id = ? AND (i.name LIKE ? OR v.sku LIKE ? OR v.barcode = ? OR v.name LIKE ?) GROUP BY i.id, v.id ORDER BY i.name LIMIT 6', [$t, $like, $like, $q, $like])));
             }
             if (can('stock.view')) {
-                $add(term('batches'), array_map(fn($r) => ['l' => $r['batch_no'] . ' · ' . $r['name'], 's' => 'Roll', 'i' => 'layers', 'u' => url('stock/batches/' . $r['id'])], DB::all(
+                $add(term('rolls'), array_map(fn($r) => ['l' => $r['batch_no'] . ' · ' . $r['name'], 's' => 'Roll', 'i' => 'layers', 'u' => url('stock/batches/' . $r['id'])], DB::all(
                     'SELECT b.id, b.batch_no, i.name FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id
                      WHERE b.tenant_id = ? AND (b.batch_no LIKE ? OR b.supplier_lot LIKE ?) ORDER BY b.id DESC LIMIT 4', [$t, $like, $like])));
             }

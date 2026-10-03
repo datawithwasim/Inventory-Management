@@ -9,6 +9,8 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <div class="ffgrid <?= ffclass('item') ?>">
     <div class="mb-3"<?= ffa('item.name') ?>><label class="form-label"><?= fl('item.name', e(term('item')) . ' name') ?></label><input name="name" class="form-control" value="<?= $v('name') ?>" required maxlength="190"></div>
     <div class="row">
+      <?php if (ff('item.item_type')): $it = old('item_type', $item['item_type'] ?? 'other'); ?><div class="col-md-4 mb-3"<?= ffa('item.item_type') ?>><label class="form-label"><?= fl('item.item_type', 'Product type') ?><?= ffstar('item.item_type') ?></label><select name="item_type" id="itemType" class="form-select"<?= ffreq('item.item_type') ?>>
+        <?php foreach (App\Models\ItemTypes::LABELS as $k => $l): ?><option value="<?= e($k) ?>" <?= $it === $k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></div><?php endif; ?>
       <div class="col-md-4 mb-3"<?= ffa('item.category_id') ?>><label class="form-label"><?= fl('item.category_id', 'Category') ?></label><select name="category_id" class="form-select"><option value="">—</option>
         <?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('category_id', $c['id']) ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
       <?php if (ff('item.brand_id')): ?><div class="col-md-4 mb-3"<?= ffa('item.brand_id') ?>><label class="form-label"><?= fl('item.brand_id', 'Brand') ?><?= ffstar('item.brand_id') ?></label><select name="brand_id" class="form-select"<?= ffreq('item.brand_id') ?>><option value="">—</option>
@@ -20,6 +22,14 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
       <div class="col-md-4 mb-3"<?= ffa('item.tax_id') ?>><label class="form-label"><?= fl('item.tax_id', 'Tax') ?><?= ffstar('item.tax_id') ?></label><select name="tax_id" class="form-select"<?= ffreq('item.tax_id') ?>><option value="">No tax</option>
         <?php foreach ($taxes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('tax_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['rate']) ?>%)</option><?php endforeach; ?></select></div>
     </div><?php endif; ?>
+    <?php if (ff('item.hsn_code')): ?><div class="row"><div class="col-md-4 mb-3"<?= ffa('item.hsn_code') ?>><label class="form-label"><?= fl('item.hsn_code', 'HSN code') ?><?= ffstar('item.hsn_code') ?></label><input name="hsn_code" class="form-control" maxlength="20" value="<?= $v('hsn_code') ?>"<?= ffreq('item.hsn_code') ?>></div></div><?php endif; ?>
+    <div class="row" id="attrRow">
+      <?php foreach (['design_no' => ['Design / quality no.', 60], 'composition' => ['Composition / material', 120], 'width' => ['Width', 40], 'gsm' => ['GSM / weight', 40], 'pattern' => ['Pattern', 80], 'finish' => ['Finish', 80]] as $k => [$lab, $max]):
+        if (!ff("item.$k")) continue; $types = array_keys(array_filter(App\Models\ItemTypes::ATTRS, fn($a) => in_array($k, $a, true))); ?>
+        <div class="col-md-4 mb-3" data-attr="<?= e($k) ?>" data-types="<?= e(implode(' ', $types)) ?>"<?= ffa("item.$k") ?>><label class="form-label" data-label="<?= e($lab) ?>"><?= fl("item.$k", $lab) ?><?= ffstar("item.$k") ?></label>
+          <input name="<?= e($k) ?>" class="form-control" maxlength="<?= (int)$max ?>" value="<?= $v($k) ?>"<?= ffreq("item.$k") ?>></div>
+      <?php endforeach; ?>
+    </div>
     <?php if (ff('item.description')): ?><div class="mb-0"<?= ffa('item.description') ?>><label class="form-label"><?= fl('item.description', 'Description') ?><?= ffstar('item.description') ?></label><textarea name="description" class="form-control" rows="2"<?= ffreq('item.description') ?>><?= $v('description') ?></textarea></div><?php endif; ?>
     <?= ffextras('item', $cfFields, $cfValues) ?>
     </div>
@@ -29,11 +39,13 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <span id="variantsTitle"><?= $isBundle ? 'Bundle SKU & price' : 'Variants' ?></span>
     <button type="button" class="btn btn-sm btn-outline-primary" id="addVariant" <?= $isBundle ? 'hidden' : '' ?>><i class="bi bi-plus-lg"></i> Add variant</button></div>
     <div class="table-responsive"><table class="table mb-0 align-middle" id="variantTable">
-      <thead><tr><th>Variant (e.g. Grey / 3-seater)</th><th>SKU</th><th>Barcode</th><th>Cost</th><th>Sale price</th><th></th></tr></thead>
+      <thead><tr><th>Variant name</th><th>Colour</th><th>Size</th><th>SKU</th><th>Barcode</th><th>Cost</th><th>Sale price</th><th></th></tr></thead>
       <tbody>
       <?php foreach ($variants as $i => $r): ?>
         <tr>
           <td><input type="hidden" name="variants[<?= $i ?>][id]" value="<?= e($r['id'] ?? '') ?>"><input name="variants[<?= $i ?>][name]" class="form-control form-control-sm" value="<?= e($r['name'] ?? '') ?>"></td>
+          <td><input name="variants[<?= $i ?>][colour]" class="form-control form-control-sm" maxlength="60" value="<?= e($r['colour'] ?? '') ?>"></td>
+          <td><input name="variants[<?= $i ?>][size]" class="form-control form-control-sm" maxlength="60" placeholder="e.g. 54 in / King" value="<?= e($r['size'] ?? '') ?>"></td>
           <td><input name="variants[<?= $i ?>][sku]" class="form-control form-control-sm" placeholder="auto" value="<?= e($r['sku'] ?? '') ?>"></td>
           <td><input name="variants[<?= $i ?>][barcode]" class="form-control form-control-sm" value="<?= e($r['barcode'] ?? '') ?>"></td>
           <td><input name="variants[<?= $i ?>][cost_price]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="<?= e($r['cost_price'] ?? '') ?>"></td>
@@ -63,7 +75,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <?php else: ?><input type="hidden" id="isBundle" value="<?= (int)$isBundle ?>"><?php endif; ?>
     <div id="batchBox" <?= $isBundle ? 'hidden' : '' ?>>
       <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="track_batch" value="1" id="trk" <?= old('track_batch', $item['track_batch'] ?? 0) ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>>
-        <label class="form-check-label" for="trk">Track by <?= e(term('batch', true)) ?> (roll / thaan)
+        <label class="form-check-label" for="trk">Track by <?= e(term('batch', true)) ?> (one roll = one batch)
           <small class="text-muted d-block">Each purchased roll becomes its own <?= e(term('batch', true)) ?>, and every sale is traced to it. Use for fabric.</small></label></div>
       <?php if ($locked): ?><input type="hidden" name="track_batch" value="<?= (int)$item['track_batch'] ?>"><small class="text-muted">Locked: stock has already moved.</small><?php endif; ?>
     </div>
@@ -84,6 +96,8 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
   function addVariant() {
     var i = vn++;
     vt.appendChild(el('<tr><td><input type="hidden" name="variants[' + i + '][id]"><input name="variants[' + i + '][name]" class="form-control form-control-sm"></td>' +
+      '<td><input name="variants[' + i + '][colour]" class="form-control form-control-sm" maxlength="60"></td>' +
+      '<td><input name="variants[' + i + '][size]" class="form-control form-control-sm" maxlength="60"></td>' +
       '<td><input name="variants[' + i + '][sku]" class="form-control form-control-sm" placeholder="auto"></td>' +
       '<td><input name="variants[' + i + '][barcode]" class="form-control form-control-sm"></td>' +
       '<td><input name="variants[' + i + '][cost_price]" type="number" step="0.01" min="0" class="form-control form-control-sm"></td>' +
@@ -118,5 +132,18 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     if (on && !ct.rows.length) addComp();
   }
   bundle.addEventListener('change', sync); sync();
+  var typ = document.getElementById('itemType'), trk = document.getElementById('trk'), rollTypes = <?= json_encode(App\Models\ItemTypes::ROLL_TYPES) ?>;
+  var wording = <?= json_encode(App\Models\ItemTypes::WORDING) ?>;
+  document.querySelectorAll('[data-attr] label').forEach(function (l) { var t = l.firstChild; l._ok = !!t && t.nodeType === 3 && t.nodeValue === l.dataset.label; });
+  function syncType(user) {
+    if (!typ) return;
+    document.querySelectorAll('[data-attr]').forEach(function (w) {
+      w.hidden = w.dataset.types.split(' ').indexOf(typ.value) < 0;
+      var l = w.querySelector('label');
+      if (l && l._ok) l.firstChild.nodeValue = (wording[typ.value] || {})[w.dataset.attr] || l.dataset.label;
+    });
+    if (user && trk && !trk.disabled && !bundle.checked && rollTypes.indexOf(typ.value) > -1) trk.checked = true;
+  }
+  if (typ) { typ.addEventListener('change', function () { syncType(true); }); syncType(false); }
 })();
 </script>

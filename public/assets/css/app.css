@@ -472,3 +472,6 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 .dz-pop button { display: flex; align-items: center; gap: .55rem; width: 100%; background: transparent; border: 0; text-align: left; padding: .5rem .65rem; font-size: .84rem; border-radius: 7px; color: inherit; } .dz-pop button:hover, .dz-pop button.on { background: rgba(var(--brand-rgb), .12); } .dz-pop button.danger { color: #e11d48; }
 @media (max-width: 1100px) { .dz-left { width: 220px; } .dz-types { grid-template-columns: 1fr; } .dz-right { position: fixed; right: 0; top: 56px; bottom: 0; z-index: 50; box-shadow: -10px 0 30px rgba(0,0,0,.35); } }
 @media (max-width: 760px) { .dz-main { flex-direction: column; overflow-y: auto; } .dz-left { width: 100%; max-height: 260px; } .dz-center { overflow: visible; padding: 1rem .7rem 5rem; } .dz-tile { grid-column: span 12 !important; } .dz-right { width: 100%; } .dz-top .dz-btn span { display: none; } }
+
+/* item variants: roomy inputs (the table scrolls sideways on small screens) */
+#variantTable input.form-control { min-width: 96px; } #variantTable th, #variantTable td { white-space: nowrap; }

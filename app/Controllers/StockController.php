@@ -144,7 +144,7 @@ final class StockController extends Controller
         ]);
     }
 
-    /* ---------- batches (1 batch = 1 roll / thaan) ---------- */
+    /* ---------- batches (1 batch = 1 roll) ---------- */
 
     public function batches(): void
     {
@@ -173,7 +173,7 @@ final class StockController extends Controller
              $base ORDER BY b.id DESC LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
 
         $this->view('app/stock/batches', [
-            'title' => term('batches') . ' (rolls)', 'rows' => $rows, 'q' => $q, 'status' => $status,
+            'title' => term('rolls') . ' (rolls)', 'rows' => $rows, 'q' => $q, 'status' => $status,
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)),
         ]);
     }

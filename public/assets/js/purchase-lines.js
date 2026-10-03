@@ -6,6 +6,8 @@
   var body = document.querySelector('#lineTable tbody');
   var racks = JSON.parse((document.getElementById('rackData') || { textContent: '{}' }).textContent || '{}');
   var wh = document.getElementById('warehouse_id');
+  var supSel = document.querySelector('select[name="supplier_id"]');
+  function supQ() { return supSel && supSel.value ? '&supplier=' + encodeURIComponent(supSel.value) : ''; }
   var totalEl = document.getElementById('grandTotal');
   var n = 0, timer = null;
 
@@ -65,6 +67,7 @@
     var price = num(p + '[unit_price]', d.unit_price, '0.01', 100);
     var tax = num(p + '[tax_rate]', d.tax_rate, '0.01', 80);
     tax.max = '100';
+    var hint = mk('div', { class: 'form-text small' });
     var note = mk('input', { name: p + '[note]', class: 'form-control form-control-sm', placeholder: 'Note (optional)', maxlength: '150' }); note.value = d.note || '';
     var rack, lot, lotWrap;
 
@@ -80,7 +83,7 @@
       if (linked) {
         price.readOnly = tax.readOnly = true; price.classList.add('bg-light'); tax.classList.add('bg-light');
       }
-      cells.push(mk('td', {}, [price]), mk('td', {}, [tax]));
+      cells.push(mk('td', {}, [price, hint]), mk('td', {}, [tax]));
     }
     if (mode === 'po') cells.push(mk('td', { class: 'text-end line-total', text: '0.00' }));
     if (mode === 'req') cells.push(mk('td', {}, [note]));
@@ -107,10 +110,27 @@
       qty.step = dec ? '0.001' : '1'; unit.textContent = vUnit.value;
       if (lotWrap) lotWrap.style.visibility = tb ? 'visible' : 'hidden';
     }
+    function showHint(v) {
+      var parts = [];
+      if (v.rate_note) parts.push(v.rate_note); else if (supSel && supSel.value) parts.push('No rate listed for this supplier — using item cost');
+      if (v.last_note) parts.push(v.last_note);
+      var cur = parseFloat(price.value);
+      if (v.last_paid && cur && v.last_paid > 0) { var ch = (cur - v.last_paid) / v.last_paid * 100; if (Math.abs(ch) >= 0.5) parts.push((ch > 0 ? '▲ ' : '▼ ') + Math.abs(ch).toFixed(1) + '% vs last'); }
+      hint.textContent = parts.join(' · ');
+    }
+    tr.reprice = function () {
+      if (!vId.value || price.dataset.auto !== '1' || linked) return;
+      fetch(lookupUrl + '?variant=' + encodeURIComponent(vId.value) + supQ(), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
+        if (!rows[0] || price.dataset.auto !== '1') return;
+        var v = rows[0]; price.value = (v.rate != null ? parseFloat(v.rate) : parseFloat(v.cost_price)) || ''; showHint(v); recalc();
+      });
+    };
+    price.addEventListener('input', function () { price.dataset.auto = ''; });
     function choose(v) {
       vId.value = v.id; vLabel.value = search.value = v.item_name + (v.name ? ' — ' + v.name : '') + ' (' + v.sku + ')';
       vTb.value = v.track_batch ? '1' : '0'; vUnit.value = v.unit; vDec.value = v.allow_decimal ? '1' : '0';
-      if (price && !price.value) price.value = parseFloat(v.cost_price) || '';
+      if (price && !price.value) { price.value = (v.rate != null ? parseFloat(v.rate) : parseFloat(v.cost_price)) || ''; price.dataset.auto = '1'; }
+      showHint(v);
       if (tax && !tax.value) tax.value = parseFloat(v.tax_rate) || '';
       list.hidden = true; apply(); recalc(); qty.focus();
     }
@@ -120,7 +140,7 @@
         var q = search.value.trim();
         if (!q) { list.hidden = true; return; }
         timer = setTimeout(function () {
-          fetch(lookupUrl + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
+          fetch(lookupUrl + '?q=' + encodeURIComponent(q) + supQ(), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
             list.innerHTML = '';
             rows.forEach(function (v) {
               var a = mk('button', { type: 'button', class: 'list-group-item list-group-item-action py-1 small',
@@ -143,6 +163,7 @@
   }
 
   document.getElementById('addLine').onclick = function () { addLine(); };
+  if (supSel) supSel.addEventListener('change', function () { Array.prototype.forEach.call(body.rows, function (r) { r.reprice && r.reprice(); }); });
   if (wh) wh.onchange = function () { Array.prototype.forEach.call(body.rows, function (r) { r.refillRack && r.refillRack(); }); };
   var init = JSON.parse(document.getElementById('initialLines').textContent || '[]');
   if (init.length) init.forEach(addLine); else if (mode !== 'grn' || !document.getElementById('hasPo')) addLine();

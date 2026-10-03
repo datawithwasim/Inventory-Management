@@ -233,7 +233,7 @@ $lab = fn(array $l) => $a->post('/settings/labels', ['label' => $l], '/settings/
 $a->post('/suppliers', ['name' => 'Supplier Nation Ltd'], '/suppliers/create');
 $lab(['supplier' => ['Vendor', 'Vendors'], 'rack' => ['Bin', ''], 'customer' => ['Client', 'Clients'], 'batch' => ['Roll', 'Rolls']]);
 $dash = $a->get('/dashboard')['body'];
-check('the menu uses the new words', str_contains($dash, '>Vendors<') && str_contains($dash, 'Clients') && str_contains($dash, 'Bins / locations') && str_contains($dash, 'Rolls (rolls)') && !str_contains($dash, '>Suppliers<'));
+check('the menu uses the new words', str_contains($dash, '>Vendors<') && str_contains($dash, 'Clients') && str_contains($dash, 'Bins / locations') && str_contains($dash, '>Rolls<') && !str_contains($dash, '>Suppliers<'));
 $sp = $a->get('/suppliers')['body'];
 check('titles, headings and buttons follow', str_contains($sp, 'Add vendor') && str_contains($sp, '<title>Vendors'));
 check('the plural is guessed when you only give one word (Bin → Bins)', str_contains($a->get('/stock/racks')['body'], 'Bins') || str_contains($dash, 'Bins'));

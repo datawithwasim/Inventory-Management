@@ -11,7 +11,7 @@
 <div class="card mb-3"><div class="card-body py-2"><span class="text-muted">Stock value<?= $wh ? ' (selected warehouse)' : '' ?>:</span> <strong><?= e(money($totalValue)) ?></strong>
   <span class="text-muted small ms-2">quantity × <?= e(term('batch', true)) ?> cost (or <?= e(term('item', true)) ?> cost)</span></div></div>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-  <thead><tr><th><?= e(term('item')) ?></th><th>SKU</th><th class="text-end">On hand</th><th class="text-end">Reserved</th><th>Where (<?= e(term('rack', true)) ?>)</th><th class="text-end"><?= e(term('batches')) ?></th><th class="text-end">Value</th><th>Reorder</th></tr></thead>
+  <thead><tr><th><?= e(term('item')) ?></th><th>SKU</th><th class="text-end">On hand</th><th class="text-end">Reserved</th><th>Where (<?= e(term('rack', true)) ?>)</th><th class="text-end"><?= e(term('rolls')) ?></th><th class="text-end">Value</th><th>Reorder</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $isLow = $r['reorder_level'] > 0 && $r['item_total'] <= $r['reorder_level']; ?>
     <tr>

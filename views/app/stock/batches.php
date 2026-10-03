@@ -13,6 +13,6 @@
       <td class="text-end"><?= e(qty($r['received_qty'])) ?> <?= e($r['unit']) ?></td><td class="text-end"><?= e(qty($r['balance'])) ?> <?= e($r['unit']) ?></td>
       <td><span class="badge text-bg-<?= $st === 'Finished' ? 'secondary' : ($st === 'Available' ? 'success' : 'info') ?>"><?= e($st) ?></span></td></tr>
   <?php endforeach; ?>
-  <?php if (!$rows): ?><tr><td colspan="7" class="text-muted">No <?= e(term('batches', true)) ?> found. <?= e(term('batches')) ?> are created when stock is added to an <?= e(term('item', true)) ?> that has "Track by <?= e(term('batch', true)) ?>" turned on.</td></tr><?php endif; ?>
+  <?php if (!$rows): ?><tr><td colspan="7" class="text-muted">No <?= e(term('rolls', true)) ?> found. <?= e(term('rolls')) ?> are created when stock is added to an <?= e(term('item', true)) ?> that has "Track by <?= e(term('batch', true)) ?>" turned on.</td></tr><?php endif; ?>
   </tbody></table></div></div>
 <?= pager($page, $pages) ?>

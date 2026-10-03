@@ -135,7 +135,7 @@ function fdate(?string $v): string
 
 const TERMS = [
     'supplier' => ['Supplier', 'Suppliers'], 'customer' => ['Customer', 'Customers'], 'item' => ['Item', 'Items'],
-    'warehouse' => ['Warehouse', 'Warehouses'], 'rack' => ['Rack', 'Racks'], 'batch' => ['Batch', 'Batches'],
+    'warehouse' => ['Warehouse', 'Warehouses'], 'rack' => ['Rack', 'Racks'], 'batch' => ['Roll', 'Rolls'],
 ];
 
 /** The company's own word for something (Settings → Labels). term('supplier'), term('suppliers'), term('supplier', true) for lower case. */

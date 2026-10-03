@@ -78,7 +78,7 @@ final class Stock
         return $code !== null && $code !== '' ? $code : 'No rack';
     }
 
-    /** Creates a roll/thaan batch with an auto number like SKU-B0001. */
+    /** Creates a roll batch with an auto number like SKU-B0001. */
     public static function newBatch(int $variantId, float $qty, ?string $lot = null, float $cost = 0, ?string $date = null, ?string $note = null): int
     {
         $v = self::variant($variantId) ?? throw new StockException('Item not found.');

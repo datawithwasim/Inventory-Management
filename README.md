@@ -6,7 +6,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 ## Status
 - **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
 - **Phase 2 – Items, stock & batches: done** (masters, warehouses, items with variants and bundles, stock ledger,
-  batches where 1 batch = 1 roll/thaan, adjustments / opening stock, transfers, stock-takes, CSV import/export)
+  batches where 1 batch = 1 roll, adjustments / opening stock, transfers, stock-takes, CSV import/export)
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
 - **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
   landed cost, bills with payment status, purchase returns)
@@ -23,6 +23,10 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   Bootstrap/icons/fonts now bundled locally (no CDN needed). Companies can customise: Appearance (brand colour, menu style, spacing, default theme),
   Modules & menu (switch parts off), Form designer (Zoho-style full-screen builder for all forms: sections with 1–3 columns, drag fields, create new custom fields from a 13-type palette, hide/require, widths, hints, labels left/top, line-item columns, preview, undo; needs migration 008 — Super Admin → System → Run updates), Custom fields (now created inside the Form designer — 15 types incl. multi-select, date & time, "Unique"; migration 009; the separate Settings page is gone) on items, customers, suppliers, quotations, sales orders and
   purchase orders), Names, Print templates. Each user can customise their Dashboard widgets and list columns.
+
+- **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),
+  Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type-aware attributes, HSN, colour & size per variant), and a **supplier-wise rate list**
+  (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price. Needs migration 010.
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
