@@ -1,47 +1,57 @@
-<div class="card mb-3"><div class="card-body">
-  <p class="text-muted mb-0">Design every form your way: move fields up or down, make a field half or full width, give it your own name, and add a short hint under it. Changes show on the real form as soon as you save. <strong>Reset</strong> brings a form back to the standard design. Which fields are shown or required is in <a href="<?= url('settings/formfields') ?>">Form fields</a>.</p>
-</div></div>
-<form method="post" action="<?= url('settings/formdesign') ?>"><?= csrf_field() ?>
-  <ul class="nav nav-tabs ff-tabs mb-3" role="tablist">
-    <?php $first = true; foreach ($sections as $heading => $entities): ?>
-      <li class="nav-item" role="presentation"><button class="nav-link <?= $first ? 'active' : '' ?>" type="button" data-bs-toggle="tab" data-bs-target="#fd-<?= e(md5($heading)) ?>" role="tab"><?= e($heading) ?></button></li>
-    <?php $first = false; endforeach; ?>
-  </ul>
-  <div class="tab-content">
-    <?php $first = true; foreach ($sections as $heading => $entities): ?>
-      <div class="tab-pane fade <?= $first ? 'show active' : '' ?>" id="fd-<?= e(md5($heading)) ?>" role="tabpanel">
-        <?php foreach ($entities as $entity): if (!isset($fields[$entity])): continue; endif; ?>
-          <div class="card mb-3 fd-card" data-entity="<?= e($entity) ?>">
-            <div class="card-header d-flex justify-content-between align-items-center"><span><?= e($entityLabels[$entity]) ?><?php if (Core\FormDesign::customised($entity)): ?> <span class="badge text-bg-primary ms-1">customised</span><?php endif; ?></span>
-              <label class="small text-muted fw-normal m-0"><input type="checkbox" class="form-check-input me-1" name="reset[<?= e($entity) ?>]" value="1">Reset to standard on save</label></div>
-            <div class="fd-row fd-head"><span></span><span>Field</span><span>Your label</span><span>Width</span><span>Hint under the field</span></div>
-            <div class="fd-list">
-              <?php foreach (Core\FormDesign::order($entity) as $col): $f = Core\FormDesign::field($entity, $col); $def = $fields[$entity][$col]; ?>
-                <div class="fd-row" data-col="<?= e($col) ?>">
-                  <input type="hidden" name="order[<?= e($entity) ?>][]" value="<?= e($col) ?>">
-                  <span class="fd-arrows"><button type="button" class="fd-up" aria-label="Move up"><i class="bi bi-caret-up-fill"></i></button><button type="button" class="fd-down" aria-label="Move down"><i class="bi bi-caret-down-fill"></i></button></span>
-                  <span class="fd-name"><?= e($def) ?></span>
-                  <input class="form-control form-control-sm" maxlength="60" name="design[<?= e($entity) ?>][<?= e($col) ?>][label]" value="<?= e($f['label']) ?>" placeholder="<?= e($def) ?>">
-                  <select class="form-select form-select-sm" name="design[<?= e($entity) ?>][<?= e($col) ?>][w]"><?php foreach ($widths as $k => $l): ?><option value="<?= e((string)$k) ?>" <?= $f['w'] === (string)$k ? 'selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
-                  <input class="form-control form-control-sm fd-help" maxlength="140" name="design[<?= e($entity) ?>][<?= e($col) ?>][help]" value="<?= e($f['help']) ?>" placeholder="Optional hint, e.g. “as printed on the GST certificate”">
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
-        <?php endforeach; ?>
-      </div>
-    <?php $first = false; endforeach; ?>
+<div class="fdz" id="fdz">
+  <div class="fdz-bar">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <label class="small text-muted m-0" for="fdzForm">Form</label>
+      <select id="fdzForm" class="form-select form-select-sm" style="width:auto;min-width:230px"></select>
+      <span class="badge text-bg-primary d-none" id="fdzCustom">customised</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-warning-emphasis d-none" id="fdzDirty"><i class="bi bi-circle-fill me-1" style="font-size:.5rem"></i>Unsaved changes</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="fdzUndo" disabled><i class="bi bi-arrow-counterclockwise"></i> Undo</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="fdzReset"><i class="bi bi-eraser"></i> Reset this form</button>
+      <form method="post" action="<?= url('settings/formdesign') ?>" id="fdzSave" class="m-0" data-noload><?= csrf_field() ?><input type="hidden" name="payload" id="fdzPayload">
+        <button class="btn btn-sm btn-primary"><i class="bi bi-check2"></i> Save all forms</button></form>
+    </div>
   </div>
-  <button class="btn btn-primary">Save form design</button>
-</form>
-<script>
-document.querySelectorAll('.fd-list').forEach(function (list) {
-  list.addEventListener('click', function (e) {
-    var b = e.target.closest('.fd-up, .fd-down'); if (!b) return;
-    var row = b.closest('.fd-row');
-    if (b.classList.contains('fd-up') && row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
-    if (b.classList.contains('fd-down') && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
-    row.classList.remove('moved'); void row.offsetWidth; row.classList.add('moved');
-  });
-});
-</script>
+
+  <div class="fdz-body">
+    <div class="fdz-stage">
+      <div class="fdz-hint"><i class="bi bi-info-circle me-1"></i>Drag a field to move it. Click a field to edit it. Use the width buttons to make it narrower or wider.</div>
+      <div class="fdz-paper">
+        <div class="fdz-paper-title" id="fdzTitle"></div>
+        <div class="fdz-canvas" id="fdzCanvas" aria-label="Form layout"></div>
+        <div class="fdz-fake-actions"><span class="btn btn-primary btn-sm disabled">Save</span> <span class="text-muted small ms-2">Cancel</span></div>
+      </div>
+      <div class="fdz-tray" id="fdzTrayWrap" hidden>
+        <div class="fdz-tray-title"><i class="bi bi-eye-slash me-1"></i>Hidden fields <span class="text-muted fw-normal">— not shown on the form. Click + to bring one back.</span></div>
+        <div id="fdzTray" class="d-flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
+    <aside class="fdz-panel" id="fdzPanel">
+      <div class="fdz-empty" id="fdzEmpty"><i class="bi bi-hand-index-thumb"></i><div>Select a field on the form to change its name, width, hint or whether it is required.</div></div>
+      <div id="fdzProps" hidden>
+        <div class="fdz-props-head"><i class="bi" id="pIcon"></i><div><div class="fw-semibold" id="pName"></div><div class="small text-muted" id="pType"></div></div></div>
+        <label class="form-label mt-3" for="pLabel">Label on the form</label>
+        <input class="form-control form-control-sm" id="pLabel" maxlength="60">
+        <label class="form-label mt-3" for="pHelp">Hint under the field</label>
+        <input class="form-control form-control-sm" id="pHelp" maxlength="140" placeholder="Optional, e.g. as printed on the GST certificate">
+        <div class="form-label mt-3">Width</div>
+        <div class="fdz-seg" id="pWidth" role="group">
+          <?php foreach ($widths as $k => $l): ?><button type="button" data-w="<?= e((string)$k) ?>"><?= e($k === '' ? 'Auto' : ($k === '100' ? 'Full' : $k . '%')) ?></button><?php endforeach; ?>
+        </div>
+        <div id="pOptional">
+          <div class="fdz-switch mt-3"><span>Show on the form</span><span class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="pShow"></span></div>
+          <div class="fdz-switch"><span>Must be filled in</span><span class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="pReq"></span></div>
+        </div>
+        <div class="small text-muted mt-3" id="pCore" hidden><i class="bi bi-lock me-1"></i>This is an essential field: it always shows and cannot be removed.</div>
+        <div class="d-flex gap-2 mt-4" id="pMove">
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" id="pUp"><i class="bi bi-arrow-up"></i> Earlier</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" id="pDown"><i class="bi bi-arrow-down"></i> Later</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+<script type="application/json" id="fdzData"><?= json_encode($model, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?></script>
+<script src="<?= asset('js/form-designer.js') ?>"></script>

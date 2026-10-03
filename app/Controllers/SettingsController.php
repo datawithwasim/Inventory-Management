@@ -48,6 +48,7 @@ final class SettingsController extends Controller
     public function show(string $tab): void
     {
         if ($tab === 'fields') redirect('settings/custom-fields');
+        if ($tab === 'formfields') redirect('settings/formdesign');
         if (!SettingsNav::valid($tab)) $this->notFound();
         $data = ['title' => 'Settings'];
         switch ($tab) {
@@ -76,7 +77,8 @@ final class SettingsController extends Controller
                 $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
                 break;
             case 'formdesign':
-                $data += ['fields' => FormDesign::FIELDS, 'widths' => FormDesign::WIDTHS, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
+                $data['model'] = FormDesign::model();
+                $data['widths'] = FormDesign::WIDTHS;
                 break;
             case 'labels':
                 $data['terms'] = TERMS;
@@ -164,8 +166,10 @@ final class SettingsController extends Controller
                 FormFields::save($hidden, $required);
                 $this->done($tab, 'Form fields saved. The forms now follow your choices.');
             case 'formdesign':
-                FormDesign::save((array)($d['design'] ?? []), (array)($d['order'] ?? []), array_filter((array)($d['reset'] ?? [])));
-                $this->done($tab, 'Form design saved. Your forms now look the way you set them.');
+                $payload = json_decode((string)($d['payload'] ?? ''), true);
+                if (!is_array($payload)) $this->bounce('Nothing to save — please try again.', $tab);
+                FormDesign::savePayload($payload);
+                $this->done($tab, 'Forms saved. They now look the way you designed them.');
             case 'workflow':
                 Settings::set('po_approval', empty($d['po_approval']) ? '0' : '1');
                 Settings::set('negative_stock', empty($d['negative_stock']) ? '0' : '1');
