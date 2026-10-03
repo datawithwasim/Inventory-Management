@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Admin;
 
 use Core\Audit;
+use Core\Backup;
 use Core\Controller;
 use Core\DB;
 use Core\Migrator;
@@ -35,5 +36,20 @@ final class SystemController extends Controller
         if ($done) Audit::log('db_migrate', 'system', null, implode(', ', $done));
         flash('success', $done ? 'Database updated: ' . implode(', ', $done) : 'Already up to date.');
         redirect('admin/system');
+    }
+
+    /** Full database backup as a download (POST so it needs the CSRF token and cannot be triggered by a link). */
+    public function backup(): void
+    {
+        @set_time_limit(0);
+        $name = 'inventory-backup-' . date('Ymd-His') . '.sql';
+        header('Content-Type: application/sql; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Cache-Control: no-store');
+        $rows = Backup::stream(function (string $chunk) {
+            echo $chunk;
+            if (PHP_SAPI !== 'cli') { @ob_flush(); flush(); }
+        });
+        Audit::log('db_backup', 'system', null, "$rows rows");
     }
 }

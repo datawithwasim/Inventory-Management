@@ -17,6 +17,8 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   delivery note, purchase order and quotation)
 - **Phase 6 – Reports & dashboard: done** (dashboard with period filter, net sales hero, trend chart, top items, stock value, ageing, low-stock lists;
   14 reports with filters, Excel / CSV export and print-to-PDF; low-stock → draft purchase orders)
+- **Phase 8 – Extras: done** (barcode labels for items and rolls, one-click database backup, security hardening). REST API, 2FA, notifications and
+  multi-language/currency were intentionally left out.
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
@@ -53,7 +55,8 @@ php tests/racks.php http://127.0.0.1:8099     # racks / locations
 php tests/purchase.php http://127.0.0.1:8099  # phase 3
 php tests/sales.php http://127.0.0.1:8099     # phase 4
 php tests/settings.php http://127.0.0.1:8099  # phase 5
-php tests/reports.php http://127.0.0.1:8099   # phase 6  (run all against a throw-away database)
+php tests/reports.php http://127.0.0.1:8099   # phase 6
+php tests/extras.php http://127.0.0.1:8099    # phase 8 (needs local `mysql -uroot` for the restore check)  (run all against a throw-away database)
 ```
 
 ## Layout

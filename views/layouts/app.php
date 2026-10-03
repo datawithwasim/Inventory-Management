@@ -23,6 +23,7 @@ $active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
       <li><a class="nav-link <?= $active('/stock/adjustments') ?>" href="<?= url('stock/adjustments') ?>"><i class="bi bi-sliders me-2"></i>Adjustments</a></li>
       <li><a class="nav-link <?= $active('/stock/transfers') ?>" href="<?= url('stock/transfers') ?>"><i class="bi bi-arrow-left-right me-2"></i>Transfers</a></li>
       <li><a class="nav-link <?= $active('/stock/takes') ?>" href="<?= url('stock/takes') ?>"><i class="bi bi-clipboard-check me-2"></i>Stock-takes</a></li>
+      <li><a class="nav-link <?= $active('/labels') ?>" href="<?= url('labels') ?>"><i class="bi bi-upc me-2"></i>Barcode labels</a></li>
       <li><a class="nav-link <?= $active('/stock/ledger') ?>" href="<?= url('stock/ledger') ?>"><i class="bi bi-journal-text me-2"></i>Stock ledger</a></li>
     <?php endif; ?>
     <?php if (can('warehouses.view')): ?>

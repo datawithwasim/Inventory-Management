@@ -263,9 +263,14 @@ $router->get('/admin/audit', $S . 'DashboardController@audit', ['admin']);
 
 $router->get('/admin/system', $S . 'SystemController@index', ['admin']);
 $router->post('/admin/system/migrate', $S . 'SystemController@migrate', ['admin']);
+$router->post('/admin/system/backup', $S . 'SystemController@backup', ['admin']);
 
 // ---- Reports ----
 $router->get('/reports', $A . 'ReportController@index', ['auth', 'perm:reports.view']);
 $router->post('/reports/low-stock/create-pos', $A . 'ReportController@createPos', ['auth', 'perm:reports.view', 'perm:purchase.create']);
 $router->get('/reports/{slug}/export/{format}', $A . 'ReportController@export', ['auth', 'perm:reports.export']);
 $router->get('/reports/{slug}', $A . 'ReportController@show', ['auth', 'perm:reports.view']);
+
+// ---- Barcode labels ----
+$router->get('/labels', $A . 'LabelController@index', ['auth', 'perm:stock.view']);
+$router->get('/labels/print', $A . 'LabelController@print', ['auth', 'perm:stock.view']);

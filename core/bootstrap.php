@@ -25,7 +25,20 @@ require __DIR__ . '/helpers.php';
 date_default_timezone_set('UTC');
 
 if (PHP_SAPI !== 'cli') {
+    // Hardening: headers that stop framing/sniffing, strict cookie-only sessions, and a 4-hour idle timeout.
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    if (!empty($_SERVER['HTTPS'])) header('Strict-Transport-Security: max-age=15552000');
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
     session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS'])]);
     session_name('inv_session');
     session_start();
+    if (!empty($_SESSION['_last']) && time() - (int)$_SESSION['_last'] > 14400) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+    }
+    $_SESSION['_last'] = time();
 }
