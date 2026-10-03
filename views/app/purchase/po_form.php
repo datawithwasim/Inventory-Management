@@ -13,5 +13,6 @@ $pre = (int)($_GET['supplier'] ?? 0);
   <div class="col-12"><label class="form-label">Notes (optional)</label><input name="notes" class="form-control" maxlength="255" value="<?= $v('notes') ?>"></div>
 </div></div></div>
 <?php $mode = 'po'; require __DIR__ . '/_lines.php'; ?>
+<?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
 <button class="btn btn-primary">Save draft</button> <a class="btn btn-link" href="<?= $po ? url("purchase/orders/{$po['id']}") : url('purchase/orders') ?>">Cancel</a>
 </form>

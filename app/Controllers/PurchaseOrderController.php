@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\PrintTemplate;
 use App\Models\Purchase;
+use App\Models\CustomFields;
 use Core\Audit;
 use Core\Auth;
 use Core\DB;
@@ -68,6 +69,7 @@ final class PurchaseOrderController extends PurchaseBase
     {
         $this->view('app/purchase/po_form', [
             'title' => $title, 'po' => $po, 'suppliers' => $this->suppliers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines,
+            'cfFields' => CustomFields::fields('purchase_order'), 'cfValues' => CustomFields::formValues('purchase_order', $po ? (int)$po['id'] : null),
         ]);
     }
 
@@ -110,11 +112,14 @@ final class PurchaseOrderController extends PurchaseBase
         $back = 'purchase/orders/create';
         $head = $this->header($back);
         $lines = $this->collectLines($this->postedLines($back), $back);
-        $id = DB::transaction(function () use ($head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        $id = DB::transaction(function () use ($head, $lines, $cf) {
             $t = $this->tid();
             $id = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'status' => 'draft',
                 'created_by' => Auth::user()['id']] + $head);
             $this->saveLines($id, $lines);
+            CustomFields::save('purchase_order', $id, $cf);
             return $id;
         });
         Audit::log('po_create', 'purchase_order', $id);
@@ -153,10 +158,13 @@ final class PurchaseOrderController extends PurchaseBase
         if ($po['status'] !== 'draft') $this->bounce('Only draft purchase orders can be edited.', "purchase/orders/{$po['id']}");
         $head = $this->header($back);
         $lines = $this->collectLines($this->postedLines($back), $back);
-        DB::transaction(function () use ($po, $head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        DB::transaction(function () use ($po, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
             DB::run("UPDATE purchase_orders SET $set WHERE tenant_id = ? AND id = ?", [...array_values($head), $this->tid(), $po['id']]);
             $this->saveLines((int)$po['id'], $lines);
+            CustomFields::save('purchase_order', (int)$po['id'], $cf);
         });
         Audit::log('po_update', 'purchase_order', (int)$po['id']);
         flash('success', 'Purchase order updated.');
@@ -173,6 +181,7 @@ final class PurchaseOrderController extends PurchaseBase
         $remaining = array_sum(array_map(fn($l) => max(0, (float)$l['qty_ordered'] - (float)$l['qty_received']), $items));
         $this->view('app/purchase/po_show', [
             'title' => $po['po_no'], 'po' => $po, 'items' => $items, 'remaining' => $remaining, 'approval' => Settings::bool('po_approval'),
+            'cfFields' => CustomFields::fields('purchase_order'), 'cfValues' => CustomFields::values('purchase_order', (int)$po['id']),
             'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND po_id = ? ORDER BY id', [$t, $po['id']]),
         ]);
     }

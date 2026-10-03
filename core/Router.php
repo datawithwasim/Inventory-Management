@@ -36,6 +36,11 @@ final class Router
             foreach ($mw as $name) {
                 if (!$this->middleware($name)) return;
             }
+            if (Auth::user() && Modules::blocked($path) !== null) {
+                http_response_code(404);
+                View::render('errors/404', [], null);
+                return;
+            }
             $params = array_filter($match, 'is_string', ARRAY_FILTER_USE_KEY);
             [$class, $action] = explode('@', $handler);
             (new $class())->$action(...array_values($params));

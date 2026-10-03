@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php'; ?>
+<?php  ?>
 <p class="text-muted">Use your own words. For example call suppliers "Vendors" or racks "Bins". Screens, menus and headings follow; leave a box empty to use the standard word.</p>
 <div class="card" style="max-width:640px"><div class="card-body">
 <form method="post" action="<?= url('settings/labels') ?>"><?= csrf_field() ?>

@@ -1,95 +1,115 @@
 <?php
+use Core\Menu;
+use Core\Theme;
+
 $me = Core\Auth::user();
 $path = '/' . trim(substr(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), strlen(base_path())), '/');
-$active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
+$menu = Menu::sidebar();
+$quick = Menu::quick();
+[$crumbGroup, $crumbItem] = Menu::current($menu, $path);
+$logo = Core\Settings::get('company.logo') !== '' ? company_logo_url() : null;
+$initial = mb_strtoupper(mb_substr($me['name'], 0, 1));
+$expiry = $me['tenant_status'] === 'trial' ? $me['trial_ends_at'] : $me['subscription_ends_at'];
+$sbStyle = Theme::get('appearance.sidebar');
+$dashActive = $path === '/dashboard';
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <?php require __DIR__ . '/head.php'; ?>
+  <meta name="csrf" content="<?= e(csrf_token()) ?>">
+  <meta name="base" content="<?= e(url('')) ?>">
   <title><?= e(($title ?? '') . ' · ' . $me['tenant_name']) ?></title>
 </head>
-<body>
-<nav class="sidebar">
-  <a class="brand" href="<?= url('dashboard') ?>"><i class="bi bi-box-seam me-2"></i><?= e($me['tenant_name']) ?></a>
-  <ul class="nav flex-column">
-    <li><a class="nav-link <?= $active('/dashboard') ?>" href="<?= url('dashboard') ?>"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
-    <li class="nav-heading">Inventory</li>
-    <?php if (can('items.view')): ?><li><a class="nav-link <?= $active('/items') ?>" href="<?= url('items') ?>"><i class="bi bi-tags me-2"></i><?= e(term('items')) ?></a></li><?php endif; ?>
-    <?php if (can('stock.view')): ?>
-      <li><a class="nav-link <?= $path === '/stock' ? 'active' : '' ?>" href="<?= url('stock') ?>"><i class="bi bi-boxes me-2"></i>Stock</a></li>
-      <li><a class="nav-link <?= $active('/stock/racks') ?>" href="<?= url('stock/racks') ?>"><i class="bi bi-geo-alt me-2"></i>Stock by <?= e(term('rack', true)) ?></a></li>
-      <li><a class="nav-link <?= $active('/stock/batches') ?>" href="<?= url('stock/batches') ?>"><i class="bi bi-layers me-2"></i><?= e(term('batches')) ?> (rolls)</a></li>
-      <li><a class="nav-link <?= $active('/stock/adjustments') ?>" href="<?= url('stock/adjustments') ?>"><i class="bi bi-sliders me-2"></i>Adjustments</a></li>
-      <li><a class="nav-link <?= $active('/stock/transfers') ?>" href="<?= url('stock/transfers') ?>"><i class="bi bi-arrow-left-right me-2"></i>Transfers</a></li>
-      <li><a class="nav-link <?= $active('/stock/takes') ?>" href="<?= url('stock/takes') ?>"><i class="bi bi-clipboard-check me-2"></i>Stock-takes</a></li>
-      <li><a class="nav-link <?= $active('/labels') ?>" href="<?= url('labels') ?>"><i class="bi bi-upc me-2"></i>Barcode labels</a></li>
-      <li><a class="nav-link <?= $active('/stock/ledger') ?>" href="<?= url('stock/ledger') ?>"><i class="bi bi-journal-text me-2"></i>Stock ledger</a></li>
-    <?php endif; ?>
-    <?php if (can('warehouses.view')): ?>
-      <li><a class="nav-link <?= $active('/warehouses') ?>" href="<?= url('warehouses') ?>"><i class="bi bi-building me-2"></i><?= e(term('warehouses')) ?></a></li>
-      <li><a class="nav-link <?= $active('/locations') ?>" href="<?= url('locations') ?>"><i class="bi bi-grid-3x3-gap me-2"></i><?= e(term('racks')) ?> / locations</a></li>
-    <?php endif; ?>
-    <?php if (can('masters.view')): ?><li><a class="nav-link <?= $active('/masters') ?>" href="<?= url('masters/categories') ?>"><i class="bi bi-list-check me-2"></i>Masters</a></li><?php endif; ?>
-    <?php if (can('purchase.view') || can('suppliers.view')): ?>
-      <li class="nav-heading">Purchase</li>
-      <?php if (can('suppliers.view')): ?><li><a class="nav-link <?= $active('/suppliers') ?>" href="<?= url('suppliers') ?>"><i class="bi bi-truck me-2"></i><?= e(term('suppliers')) ?></a></li><?php endif; ?>
-      <?php if (can('purchase.view')): ?>
-        <li><a class="nav-link <?= $active('/purchase/requisitions') ?>" href="<?= url('purchase/requisitions') ?>"><i class="bi bi-card-checklist me-2"></i>Requisitions</a></li>
-        <li><a class="nav-link <?= $active('/purchase/orders') ?>" href="<?= url('purchase/orders') ?>"><i class="bi bi-cart-plus me-2"></i>Purchase orders</a></li>
-        <li><a class="nav-link <?= $active('/purchase/grns') ?>" href="<?= url('purchase/grns') ?>"><i class="bi bi-box-arrow-in-down me-2"></i>Goods receipts</a></li>
-        <li><a class="nav-link <?= $active('/purchase/bills') ?>" href="<?= url('purchase/bills') ?>"><i class="bi bi-receipt-cutoff me-2"></i>Bills &amp; payments</a></li>
-        <li><a class="nav-link <?= $active('/purchase/returns') ?>" href="<?= url('purchase/returns') ?>"><i class="bi bi-arrow-return-left me-2"></i>Returns</a></li>
-      <?php endif; ?>
-    <?php endif; ?>
-    <li class="nav-heading">Sales</li>
-    <?php if (can('sales.view') || can('customers.view') || can('pos.use')): ?>
-      <?php if (can('pos.use')): ?><li><a class="nav-link <?= $active('/pos') ?>" href="<?= url('pos') ?>"><i class="bi bi-upc-scan me-2"></i>POS (counter)</a></li><?php endif; ?>
-      <?php if (can('customers.view')): ?><li><a class="nav-link <?= $active('/customers') ?>" href="<?= url('customers') ?>"><i class="bi bi-person-lines-fill me-2"></i><?= e(term('customers')) ?></a></li><?php endif; ?>
-      <?php if (can('sales.view')): ?>
-        <li><a class="nav-link <?= $active('/sales/quotations') ?>" href="<?= url('sales/quotations') ?>"><i class="bi bi-file-earmark-text me-2"></i>Quotations</a></li>
-        <li><a class="nav-link <?= $active('/sales/orders') ?>" href="<?= url('sales/orders') ?>"><i class="bi bi-bag-check me-2"></i>Sales orders</a></li>
-        <li><a class="nav-link <?= $active('/sales/deliveries') ?>" href="<?= url('sales/deliveries') ?>"><i class="bi bi-truck me-2"></i>Deliveries</a></li>
-        <li><a class="nav-link <?= $active('/sales/invoices') ?>" href="<?= url('sales/invoices') ?>"><i class="bi bi-receipt me-2"></i>Invoices &amp; payments</a></li>
-        <li><a class="nav-link <?= $active('/sales/returns') ?>" href="<?= url('sales/returns') ?>"><i class="bi bi-arrow-counterclockwise me-2"></i>Sales returns</a></li>
-      <?php endif; ?>
-    <?php endif; ?>
-    <?php if (can('reports.view')): ?>
-      <li class="nav-heading">Insights</li>
-      <li><a class="nav-link <?= $active('/reports') ?>" href="<?= url('reports') ?>"><i class="bi bi-bar-chart-line me-2"></i>Reports</a></li>
-    <?php endif; ?>
-    <li class="nav-heading">Administration</li>
-    <?php if (can('users.view')): ?>
-      <li><a class="nav-link <?= $active('/users') ?>" href="<?= url('users') ?>"><i class="bi bi-people me-2"></i>Users</a></li>
-    <?php endif; ?>
-    <?php if (can('roles.view')): ?>
-      <li><a class="nav-link <?= $active('/roles') ?>" href="<?= url('roles') ?>"><i class="bi bi-shield-lock me-2"></i>Roles</a></li>
-    <?php endif; ?>
-    <?php if (can('settings.view')): ?><li><a class="nav-link <?= $active('/settings') ?>" href="<?= url('settings') ?>"><i class="bi bi-sliders2 me-2"></i>Settings</a></li><?php endif; ?>
-    <li><a class="nav-link <?= $active('/profile') ?>" href="<?= url('profile') ?>"><i class="bi bi-person-circle me-2"></i>My profile</a></li>
-  </ul>
-</nav>
-<div class="main">
+<body class="app sbs-<?= e($sbStyle) ?> density-<?= e(Theme::get('appearance.density')) ?>">
+<aside class="sb" id="sidebar" aria-label="Main menu">
+  <a class="sb-brand" href="<?= url('dashboard') ?>">
+    <?php if ($logo): ?><img src="<?= e($logo) ?>" alt="" class="sb-logo"><?php else: ?><span class="sb-mark"><?= e(mb_strtoupper(mb_substr($me['tenant_name'], 0, 1))) ?></span><?php endif; ?>
+    <span class="sb-name"><?= e($me['tenant_name']) ?></span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-link <?= $dashActive ? 'active' : '' ?>" href="<?= url('dashboard') ?>" title="Dashboard"><i class="bi bi-<?= e($menu['dashboard']['icon']) ?>"></i><span>Dashboard</span></a>
+    <?php foreach ($menu['groups'] as $key => $g):
+        $open = false;
+        foreach ($g['items'] as $it) if (Menu::isActive($it, $path)) $open = true; ?>
+      <div class="sb-group <?= $open ? 'open' : '' ?>" data-group="<?= e($key) ?>">
+        <button type="button" class="sb-group-head" aria-expanded="<?= $open ? 'true' : 'false' ?>" title="<?= e($g['label']) ?>"><i class="bi bi-<?= e($g['icon']) ?> sb-gicon"></i><span><?= e($g['label']) ?></span><i class="bi bi-chevron-down sb-caret"></i></button>
+        <div class="sb-items">
+          <?php foreach ($g['items'] as $it): $on = $crumbItem === $it; ?>
+            <a class="sb-link <?= $on ? 'active' : '' ?>" href="<?= url(ltrim($it['href'], '/')) ?>" title="<?= e($it['label']) ?>"><i class="bi bi-<?= e($it['icon']) ?>"></i><span><?= e($it['label']) ?></span></a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endforeach; ?>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-plan"><span class="badge rounded-pill"><?= e($me['plan_name']) ?></span>
+      <span class="small"><?= $me['tenant_status'] === 'trial' ? 'Trial' : 'Valid' ?><?= $expiry ? ' until ' . e(fdate($expiry)) : '' ?></span></div>
+    <button type="button" class="sb-collapse" id="sbCollapse" title="Collapse menu"><i class="bi bi-chevron-bar-left"></i><span>Collapse</span></button>
+  </div>
+</aside>
+<div class="sb-backdrop" id="sbBackdrop"></div>
+
+<div class="shell">
   <?php if (Core\Auth::impersonating()): ?>
-    <div class="bg-warning px-3 py-2 d-flex justify-content-between align-items-center">
+    <div class="support-bar d-flex justify-content-between align-items-center">
       <span><i class="bi bi-eye me-1"></i>Super Admin support mode: you are viewing <strong><?= e($me['tenant_name']) ?></strong>.</span>
-      <form method="post" action="<?= url('impersonate/stop') ?>"><?= csrf_field() ?>
-        <button class="btn btn-sm btn-dark">Back to admin</button></form>
+      <form method="post" action="<?= url('impersonate/stop') ?>"><?= csrf_field() ?><button class="btn btn-sm btn-dark">Back to admin</button></form>
     </div>
   <?php endif; ?>
-  <div class="topbar px-4 py-2 d-flex justify-content-between align-items-center">
-    <h1 class="h5 mb-0"><?= e($title ?? '') ?></h1>
-    <div class="d-flex align-items-center gap-3">
-      <span class="text-muted small"><?= e($me['name']) ?> · <?= e($me['role_name']) ?></span>
-      <form method="post" action="<?= url('logout') ?>"><?= csrf_field() ?>
-        <button class="btn btn-sm btn-outline-secondary">Sign out</button></form>
+  <header class="topbar">
+    <button type="button" class="icon-btn d-lg-none" id="menuBtn" aria-label="Open menu"><i class="bi bi-list fs-4"></i></button>
+    <button type="button" class="search-trigger" data-palette aria-label="Search">
+      <i class="bi bi-search"></i><span class="d-none d-sm-inline">Search or jump to…</span><kbd class="d-none d-md-inline">Ctrl K</kbd>
+    </button>
+    <div class="topbar-actions">
+      <?php if ($quick): ?>
+        <div class="dropdown">
+          <button class="btn btn-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline">New</span></button>
+          <ul class="dropdown-menu dropdown-menu-end shadow">
+            <?php foreach ($quick as $q): ?><li><a class="dropdown-item" href="<?= url(ltrim($q['href'], '/')) ?>"><i class="bi bi-<?= e($q['icon']) ?> me-2 text-muted"></i><?= e($q['label']) ?></a></li><?php endforeach; ?>
+          </ul>
+        </div>
+      <?php endif; ?>
+      <button type="button" class="icon-btn" id="modeBtn" aria-label="Switch light / dark" title="Light / dark"><i class="bi bi-moon-stars"></i></button>
+      <div class="dropdown">
+        <button class="user-btn" data-bs-toggle="dropdown" aria-expanded="false"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end shadow">
+          <li><a class="dropdown-item" href="<?= url('profile') ?>"><i class="bi bi-person-circle me-2 text-muted"></i>My profile</a></li>
+          <?php if (can('settings.view')): ?><li><a class="dropdown-item" href="<?= url('settings') ?>"><i class="bi bi-sliders2 me-2 text-muted"></i>Settings</a></li><?php endif; ?>
+          <li><hr class="dropdown-divider"></li>
+          <li><form method="post" action="<?= url('logout') ?>"><?= csrf_field() ?><button class="dropdown-item"><i class="bi bi-box-arrow-right me-2 text-muted"></i>Sign out</button></form></li>
+        </ul>
+      </div>
     </div>
-  </div>
-  <main class="p-4">
+  </header>
+  <main class="content" id="main">
     <?php require __DIR__ . '/flash.php'; ?>
+    <div class="page-head">
+      <div>
+        <?php if ($crumbItem && $path !== '/dashboard'): ?>
+          <nav class="crumbs" aria-label="Breadcrumb"><a href="<?= url('dashboard') ?>">Home</a><i class="bi bi-chevron-right"></i><span><?= e($crumbGroup) ?></span><i class="bi bi-chevron-right"></i><a href="<?= url(ltrim($crumbItem['href'], '/')) ?>"><?= e($crumbItem['label']) ?></a></nav>
+        <?php endif; ?>
+        <h1><?= e($title ?? '') ?></h1>
+      </div>
+    </div>
     <?= $content ?>
+    <?= $GLOBALS['foot_html'] ?? '' ?>
   </main>
 </div>
+
+<div class="palette" id="palette" hidden>
+  <div class="palette-box" role="dialog" aria-label="Search">
+    <div class="palette-input"><i class="bi bi-search"></i><input id="paletteInput" type="search" placeholder="Search items, customers, documents — or type a page name" autocomplete="off"><kbd>Esc</kbd></div>
+    <div class="palette-list" id="paletteList"></div>
+    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span></div>
+  </div>
+</div>
+<script id="paletteData" type="application/json"><?= json_encode(array_merge(
+    [['t' => 'Page', 'l' => 'Dashboard', 'i' => $menu['dashboard']['icon'], 'u' => url('dashboard')]],
+    array_merge(...array_map(fn($g) => array_map(fn($it) => ['t' => 'Go to', 'l' => $it['label'], 'i' => $it['icon'], 'u' => url(ltrim($it['href'], '/')), 's' => $g['label']], $g['items']), array_values($menu['groups']) ?: [[]])),
+    array_map(fn($q) => ['t' => 'Create', 'l' => $q['label'], 'i' => $q['icon'], 'u' => url(ltrim($q['href'], '/'))], $quick)
+), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?></script>
 <?php require __DIR__ . '/foot.php'; ?>
 </body>
 </html>

@@ -207,3 +207,23 @@ function report_cell(array $col, mixed $v): string
         default => (string)$v,
     };
 }
+
+/** Is this optional standard field switched on for the company? e.g. ff('customer.email') */
+function ff(string $key): bool
+{
+    [$e, $c] = explode('.', $key, 2);
+    return Core\FormFields::shown($e, $c);
+}
+
+/** ' required' attribute + star helper for mandatory fields. */
+function ffreq(string $key): string
+{
+    [$e, $c] = explode('.', $key, 2);
+    return Core\FormFields::required($e, $c) ? ' required' : '';
+}
+
+function ffstar(string $key): string
+{
+    [$e, $c] = explode('.', $key, 2);
+    return Core\FormFields::required($e, $c) ? ' <span class="text-danger">*</span>' : '';
+}

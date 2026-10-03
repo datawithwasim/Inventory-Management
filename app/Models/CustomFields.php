@@ -9,7 +9,7 @@ use Core\DB;
 /** Extra fields a company adds to items, customers and suppliers (Settings → Custom fields). */
 final class CustomFields
 {
-    public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers'];
+    public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'quotation' => 'Quotations', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders'];
     public const TYPES = ['text' => 'Text', 'number' => 'Number', 'date' => 'Date', 'dropdown' => 'Dropdown (choose one)', 'checkbox' => 'Yes / No'];
 
     private static function tid(): int
@@ -99,9 +99,11 @@ final class CustomFields
     }
 
     /** Adds ['cf' => [field_id => text]] to list rows for the fields marked "show in list". Returns those fields. */
-    public static function attachList(string $entity, array &$rows): array
+    public static function attachList(string $entity, array &$rows, ?array $ids = null): array
     {
-        $fields = array_slice(array_values(array_filter(self::fields($entity), fn($f) => $f['show_in_list'])), 0, 3);
+        $fields = $ids === null
+            ? array_slice(array_values(array_filter(self::fields($entity), fn($f) => $f['show_in_list'])), 0, 3)
+            : array_values(array_filter(self::fields($entity), fn($f) => in_array((int)$f['id'], $ids, true)));
         if (!$fields || !$rows) return [];
         $ids = array_map(fn($r) => (int)$r['id'], $rows);
         $in = implode(',', array_fill(0, count($ids), '?'));

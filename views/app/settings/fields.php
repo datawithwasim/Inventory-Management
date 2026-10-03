@@ -1,5 +1,5 @@
-<?php require __DIR__ . '/_tabs.php'; ?>
-<div class="d-flex justify-content-between mb-3"><div class="text-muted">Add your own fields to items, customers and suppliers. They appear on the forms and detail pages.</div>
+<?php  ?>
+<div class="d-flex justify-content-between mb-3"><div class="text-muted">Add your own fields to items, customers, suppliers, quotations, sales orders and purchase orders. They appear on the forms and detail pages.</div>
   <a class="btn btn-primary" href="<?= url('settings/custom-fields/create') ?>"><i class="bi bi-plus-lg"></i> New field</a></div>
 <?php foreach (App\Models\CustomFields::ENTITIES as $e => $title): ?>
   <div class="card mb-3"><div class="card-header"><?= e($title) ?></div><div class="table-responsive"><table class="table table-sm mb-0 align-middle">

@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php';
+<?php 
 $sym = old('symbol', Core\Settings::get('currency.symbol')); $pos = old('position', Core\Settings::get('currency.position')); $dec = old('decimals', Core\Settings::get('currency.decimals'));
 $grp = old('grouping', Core\Settings::get('number.grouping')); $fmt = old('date_format', Core\Settings::get('date.format')); ?>
 <div class="card" style="max-width:720px"><div class="card-body">

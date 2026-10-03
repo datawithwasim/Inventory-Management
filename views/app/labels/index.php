@@ -9,7 +9,7 @@
   <div class="col-md-4"><input name="q" class="form-control" placeholder="Search name, SKU or batch" value="<?= e($q) ?>"></div>
   <div class="col-auto"><button class="btn btn-outline-secondary">Search</button></div>
 </form>
-<form method="get" action="<?= url('labels/print') ?>" target="_blank">
+<form method="get" data-noauto action="<?= url('labels/print') ?>" target="_blank">
   <input type="hidden" name="type" value="<?= e($type) ?>">
   <div class="card mb-3"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
     <thead><tr><th><?= e(term('item')) ?></th><th>Barcode</th><?= $type === 'rolls' ? '<th class="text-end">Balance</th>' : '<th class="text-end">Price</th>' ?><th style="width:110px">Copies</th></tr></thead>

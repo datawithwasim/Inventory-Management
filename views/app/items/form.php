@@ -10,16 +10,16 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     <div class="row">
       <div class="col-md-4 mb-3"><label class="form-label">Category</label><select name="category_id" class="form-select"><option value="">—</option>
         <?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('category_id', $c['id']) ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
-      <div class="col-md-4 mb-3"><label class="form-label">Brand</label><select name="brand_id" class="form-select"><option value="">—</option>
-        <?php foreach ($brands as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('brand_id', $c['id']) ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
+      <?php if (ff('item.brand_id')): ?><div class="col-md-4 mb-3"><label class="form-label">Brand<?= ffstar('item.brand_id') ?></label><select name="brand_id" class="form-select"<?= ffreq('item.brand_id') ?>><option value="">—</option>
+        <?php foreach ($brands as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('brand_id', $c['id']) ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div><?php endif; ?>
       <div class="col-md-4 mb-3"><label class="form-label">Unit</label><select name="unit_id" class="form-select" required>
         <?php foreach ($units as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('unit_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['short_name']) ?>)</option><?php endforeach; ?></select></div>
     </div>
-    <div class="row">
-      <div class="col-md-4 mb-3"><label class="form-label">Tax</label><select name="tax_id" class="form-select"><option value="">No tax</option>
+    <?php if (ff('item.tax_id')): ?><div class="row">
+      <div class="col-md-4 mb-3"><label class="form-label">Tax<?= ffstar('item.tax_id') ?></label><select name="tax_id" class="form-select"<?= ffreq('item.tax_id') ?>><option value="">No tax</option>
         <?php foreach ($taxes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('tax_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['rate']) ?>%)</option><?php endforeach; ?></select></div>
-    </div>
-    <div class="mb-0"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"><?= $v('description') ?></textarea></div>
+    </div><?php endif; ?>
+    <?php if (ff('item.description')): ?><div class="mb-0"><label class="form-label">Description<?= ffstar('item.description') ?></label><textarea name="description" class="form-control" rows="2"<?= ffreq('item.description') ?>><?= $v('description') ?></textarea></div><?php endif; ?>
   </div></div>
 
   <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center">

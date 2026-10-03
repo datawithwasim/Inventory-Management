@@ -87,10 +87,11 @@ final class ItemController extends Controller
             if ($r['is_bundle']) $r['stock'] = Stock::bundleAvailable((int)$r['id']);
         }
         unset($r);
-        $cfList = CustomFields::attachList('item', $rows);
+        $cols = \Core\Columns::visible('items');
+        $cfList = CustomFields::attachList('item', $rows, \Core\Columns::cfIds($cols));
 
         $this->view('app/items/index', [
-            'title' => term('items'), 'rows' => $rows, 'q' => $q, 'cat' => $cat, 'low' => $low,
+            'title' => term('items'), 'cols' => $cols, 'rows' => $rows, 'q' => $q, 'cat' => $cat, 'low' => $low,
             'categories' => DB::all('SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY name', [$t]),
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'total' => $total,
             'limitReached' => $this->limitReached(), 'cfList' => $cfList,
@@ -176,7 +177,7 @@ final class ItemController extends Controller
     /** Validates the posted form; returns [itemFields, variants, components] or bounces back. */
     private function collect(?array $item, string $back): array
     {
-        $d = $this->input();
+        $d = \Core\FormFields::strip('item', $this->input());
         $t = $this->tid();
         $bounce = function (string $msg) use ($d, $back): never {
             flash('danger', $msg);
@@ -213,6 +214,8 @@ final class ItemController extends Controller
             'reorder_level' => (float)($d['reorder_level'] ?? 0), 'reorder_qty' => (float)($d['reorder_qty'] ?? 0),
             'is_active' => empty($d['is_active']) && $item ? 0 : 1,
         ];
+        [$fields, $ffErr] = \Core\FormFields::apply('item', $fields);
+        if ($ffErr) $bounce(implode(' ', $ffErr));
 
         // Variants
         $rows = array_values(array_filter((array)($d['variants'] ?? []), fn($v) => is_array($v) && implode('', array_map('trim', array_map('strval', $v))) !== ''));

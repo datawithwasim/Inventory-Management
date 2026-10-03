@@ -10,5 +10,6 @@
   <div class="col-md-6"><label class="form-label">Notes / terms</label><input name="notes" class="form-control" maxlength="255" value="<?= $v('notes') ?>"></div>
 </div></div></div>
 <?php require __DIR__ . '/_lines.php'; ?>
+<?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
 <button class="btn btn-primary">Save quotation</button> <a class="btn btn-link" href="<?= $q ? url("sales/quotations/{$q['id']}") : url('sales/quotations') ?>">Cancel</a>
 </form>

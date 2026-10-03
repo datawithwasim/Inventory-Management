@@ -15,5 +15,6 @@
     <label class="form-check-label" for="bo">Take the order even if stock is short <small class="text-muted d-block">(made-to-order / back-order)</small></label></div></div>
 </div><p class="text-muted small mt-3 mb-0">Confirming the order <strong>reserves</strong> the stock, so it cannot be sold to someone else before this <?= e(term('customer', true)) ?>'s delivery.</p></div></div>
 <?php require __DIR__ . '/_lines.php'; ?>
+<?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
 <button class="btn btn-primary">Save draft</button> <a class="btn btn-link" href="<?= $o ? url("sales/orders/{$o['id']}") : url('sales/orders') ?>">Cancel</a>
 </form>

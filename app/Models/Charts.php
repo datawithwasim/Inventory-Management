@@ -40,7 +40,7 @@ final class Charts
     {
         $n = count($labels);
         if ($n < 1 || !$series) return '<p class="text-muted small mb-0">No data for this period.</p>';
-        $W = 720; $H = 240; $L = 46; $R = 64; $T = 12; $B = 26;
+        $W = 720; $H = 250; $L = 46; $R = 70; $T = 12; $B = 34;
         $max = 0.0;
         foreach ($series as $vals) foreach ($vals as $v) $max = max($max, (float)$v);
         [$top, $step] = self::scale($max);
@@ -55,7 +55,7 @@ final class Charts
         }
         $every = max(1, (int)ceil($n / 7));
         for ($i = 0; $i < $n; $i += $every) {
-            $o .= '<text class="axis" x="' . round($x($i), 1) . '" y="' . ($H - 6) . '" text-anchor="' . ($i === 0 ? 'start' : 'middle') . '">' . e($labels[$i]) . '</text>';
+            $o .= '<text class="axis" x="' . round($x($i), 1) . '" y="' . ($H - 10) . '" text-anchor="' . ($i === 0 ? 'start' : 'middle') . '">' . e($labels[$i]) . '</text>';
         }
         $k = 0;
         $ends = [];
@@ -71,10 +71,12 @@ final class Charts
         }
         // direct labels at the line ends, pushed apart so they never overlap
         uasort($ends, fn($a, $b) => $a[1] <=> $b[1]);
+        $pos = [];
         $prev = -99.0;
-        foreach ($ends as [$name, $ty]) {
-            $ty = max($ty, $prev + 13);
-            $prev = $ty;
+        foreach ($ends as $k2 => [$name, $ty]) { $ty = max($ty, $prev + 13); $prev = $ty; $pos[] = [$name, $ty]; }
+        $over = $prev - ($H - $B - 4);
+        foreach ($pos as [$name, $ty]) {
+            $ty = $over > 0 ? $ty - $over : $ty;
             $o .= '<text class="dlabel" x="' . round($x($n - 1) + 9, 1) . '" y="' . round($ty, 1) . '">' . e($name) . '</text>';
         }
         // hover layer: one column per x position

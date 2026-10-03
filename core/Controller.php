@@ -11,6 +11,15 @@ abstract class Controller
         clear_old();
     }
 
+    /** Renders a Settings page inside the Settings frame (grouped menu on the left). */
+    protected function settingsView(string $view, array $data, string $tab): void
+    {
+        ob_start();
+        View::render($view, $data + ['tab' => $tab], null);
+        $inner = (string)ob_get_clean();
+        $this->view('app/settings/_frame', ['title' => $data['title'] ?? 'Settings', 'tab' => $tab, 'inner' => $inner]);
+    }
+
     protected function input(): array
     {
         return $_POST;

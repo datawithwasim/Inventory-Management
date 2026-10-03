@@ -4,6 +4,10 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\PrintTemplate;
+use App\Models\SettingsNav;
+use Core\FormFields;
+use Core\Modules;
+use Core\Theme;
 use Core\Audit;
 use Core\Auth;
 use Core\Controller;
@@ -14,8 +18,6 @@ use Core\Settings;
 /** Company settings: profile, preferences, numbering, workflow rules, labels and print templates. */
 final class SettingsController extends Controller
 {
-    private const TABS = ['company' => 'Company profile', 'preferences' => 'Currency & dates', 'numbering' => 'Document numbers', 'workflow' => 'Rules & workflow',
-        'labels' => 'Names (labels)', 'templates' => 'Print templates', 'fields' => 'Custom fields'];
     private const DATE_FORMATS = ['Y-m-d' => 'YYYY-MM-DD', 'd-m-Y' => 'DD-MM-YYYY', 'd/m/Y' => 'DD/MM/YYYY', 'm/d/Y' => 'MM/DD/YYYY', 'd M Y' => 'DD Mon YYYY'];
 
     private function tid(): int
@@ -45,8 +47,8 @@ final class SettingsController extends Controller
     public function show(string $tab): void
     {
         if ($tab === 'fields') redirect('settings/custom-fields');
-        if (!isset(self::TABS[$tab])) $this->notFound();
-        $data = ['title' => 'Settings', 'tab' => $tab, 'tabs' => self::TABS];
+        if (!SettingsNav::valid($tab)) $this->notFound();
+        $data = ['title' => 'Settings'];
         switch ($tab) {
             case 'company':
                 $data['tenantName'] = Auth::user()['tenant_name'];
@@ -62,6 +64,16 @@ final class SettingsController extends Controller
                     $data['docs'][$code] = ['label' => $label, 'cfg' => $cfg, 'next' => $next];
                 }
                 break;
+            case 'appearance':
+                $data += ['brands' => Theme::BRANDS, 'sidebars' => Theme::SIDEBARS, 'densities' => Theme::DENSITY, 'modes' => Theme::MODES];
+                break;
+            case 'modules':
+                $data['modules'] = Modules::ALL;
+                $data['off'] = Modules::off();
+                break;
+            case 'formfields':
+                $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS];
+                break;
             case 'labels':
                 $data['terms'] = TERMS;
                 $data['saved'] = Settings::json('labels', []);
@@ -72,7 +84,7 @@ final class SettingsController extends Controller
                 $data += ['docs' => PrintTemplate::DOCS, 'doc' => $doc, 'fields' => PrintTemplate::fields($doc), 'values' => PrintTemplate::get($doc), 'previewUrl' => $this->previewUrl($doc)];
                 break;
         }
-        $this->view('app/settings/' . $tab, $data);
+        $this->settingsView('app/settings/' . $tab, $data, $tab);
     }
 
     private function previewUrl(string $doc): ?string
@@ -120,6 +132,33 @@ final class SettingsController extends Controller
                     Settings::setJson('numbering.' . $code, ['prefix' => $prefix, 'pad' => $pad, 'year' => empty($row['year']) ? 0 : 1]);
                 }
                 $this->done($tab, 'Document numbers saved. New documents use them from now on; old documents keep their numbers.');
+            case 'appearance':
+                $brand = strtolower(trim((string)($d['brand_custom'] ?? '')) ?: trim((string)($d['brand'] ?? '')));
+                if (!preg_match('/^#[0-9a-f]{6}$/', $brand)) $this->bounce('Choose a colour from the list, or enter a colour like #0d9488.', $tab);
+                $sb = (string)($d['sidebar'] ?? '');
+                $den = (string)($d['density'] ?? '');
+                $mode = (string)($d['mode'] ?? '');
+                if (!isset(Theme::SIDEBARS[$sb]) || !isset(Theme::DENSITY[$den]) || !isset(Theme::MODES[$mode])) $this->bounce('Please choose one option in each group.', $tab);
+                Settings::set('appearance.brand', $brand);
+                Settings::set('appearance.sidebar', $sb);
+                Settings::set('appearance.density', $den);
+                Settings::set('appearance.mode', $mode);
+                $this->done($tab, 'Appearance saved.');
+            case 'modules':
+                $on = array_map('strval', (array)($d['on'] ?? []));
+                $off = array_values(array_diff(array_keys(Modules::ALL), $on));
+                Modules::save($off);
+                $this->done($tab, $off ? 'Saved. Switched-off parts are hidden from the menu.' : 'Saved. Everything is switched on.');
+            case 'formfields':
+                $hidden = $required = [];
+                foreach (FormFields::REGISTRY as $entity => $cols) {
+                    foreach ($cols as $col => $label) {
+                        if (empty($d['show'][$entity][$col])) $hidden[] = "$entity.$col";
+                        elseif (!empty($d['req'][$entity][$col])) $required[] = "$entity.$col";
+                    }
+                }
+                FormFields::save($hidden, $required);
+                $this->done($tab, 'Form fields saved. The forms now follow your choices.');
             case 'workflow':
                 Settings::set('po_approval', empty($d['po_approval']) ? '0' : '1');
                 Settings::set('negative_stock', empty($d['negative_stock']) ? '0' : '1');

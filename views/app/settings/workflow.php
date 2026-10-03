@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php'; $S = fn($k) => Core\Settings::get($k); ?>
+<?php  $S = fn($k) => Core\Settings::get($k); ?>
 <div class="card" style="max-width:820px"><div class="card-body">
 <form method="post" action="<?= url('settings/workflow') ?>"><?= csrf_field() ?>
   <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" name="po_approval" value="1" id="a1" <?= $S('po_approval') === '1' ? 'checked' : '' ?>>

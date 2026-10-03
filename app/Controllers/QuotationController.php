@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\PrintTemplate;
 use App\Models\Sales;
+use App\Models\CustomFields;
 use Core\Audit;
 use Core\Auth;
 use Core\DB;
@@ -42,7 +43,8 @@ final class QuotationController extends SalesBase
 
     private function form(string $title, ?array $q, array $lines): void
     {
-        $this->view('app/sales/quote_form', ['title' => $title, 'q' => $q, 'customers' => $this->customers(), 'oldLines' => $lines, 'mode' => 'quote']);
+        $this->view('app/sales/quote_form', ['title' => $title, 'q' => $q, 'customers' => $this->customers(), 'oldLines' => $lines, 'mode' => 'quote',
+            'cfFields' => CustomFields::fields('quotation'), 'cfValues' => CustomFields::formValues('quotation', $q ? (int)$q['id'] : null)]);
     }
 
     public function create(): void
@@ -76,10 +78,13 @@ final class QuotationController extends SalesBase
         $back = 'sales/quotations/create';
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        $id = DB::transaction(function () use ($head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('quotation', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        $id = DB::transaction(function () use ($head, $lines, $cf) {
             $t = $this->tid();
             $id = DB::insert('sales_quotations', ['tenant_id' => $t, 'quote_no' => Numbering::next($t, 'QT'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $head);
             $this->saveLines($id, $lines);
+            CustomFields::save('quotation', $id, $cf);
             return $id;
         });
         Audit::log('quotation_create', 'quotation', $id);
@@ -90,7 +95,8 @@ final class QuotationController extends SalesBase
     public function show(string $id): void
     {
         $q = $this->load($id);
-        $this->view('app/sales/quote_show', ['title' => $q['quote_no'], 'q' => $q, 'items' => $this->items((int)$q['id']), 'warehouses' => $this->warehouses()]);
+        $this->view('app/sales/quote_show', ['title' => $q['quote_no'], 'q' => $q, 'items' => $this->items((int)$q['id']), 'warehouses' => $this->warehouses(),
+            'cfFields' => CustomFields::fields('quotation'), 'cfValues' => CustomFields::values('quotation', (int)$q['id'])]);
     }
 
     public function print(string $id): void
@@ -121,10 +127,13 @@ final class QuotationController extends SalesBase
         if (!in_array($q['status'], ['draft', 'sent'], true)) $this->bounce('This quotation can no longer be edited.', "sales/quotations/{$q['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        DB::transaction(function () use ($q, $head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('quotation', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        DB::transaction(function () use ($q, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
             DB::run("UPDATE sales_quotations SET $set WHERE tenant_id = ? AND id = ?", [...array_values($head), $this->tid(), $q['id']]);
             $this->saveLines((int)$q['id'], $lines);
+            CustomFields::save('quotation', (int)$q['id'], $cf);
         });
         Audit::log('quotation_update', 'quotation', (int)$q['id']);
         flash('success', 'Quotation updated.');

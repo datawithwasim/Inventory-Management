@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php'; ?>
+<?php  ?>
 <p class="text-muted">Choose how your document numbers look. The number keeps counting; changing the prefix only changes how new documents are named.</p>
 <form method="post" action="<?= url('settings/numbering') ?>"><?= csrf_field() ?>
 <div class="card"><div class="table-responsive"><table class="table mb-0 align-middle">

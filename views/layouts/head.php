@@ -1,7 +1,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<?= Core\Theme::bootScript() ?>
+<link href="<?= asset('vendor/inter/inter.css') ?>" rel="stylesheet">
+<link href="<?= asset('vendor/bootstrap/bootstrap.min.css') ?>" rel="stylesheet">
+<link href="<?= asset('vendor/icons/bootstrap-icons.min.css') ?>" rel="stylesheet">
 <link href="<?= asset('css/app.css') ?>" rel="stylesheet">
 <link href="<?= asset('css/charts.css') ?>" rel="stylesheet">
-<link rel="icon" href="data:,">
+<?= Core\Theme::css() ?>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234f46e5'/%3E%3Cpath d='M3 6l5-3 5 3v5l-5 3-5-3z' fill='none' stroke='white' stroke-width='1.2'/%3E%3C/svg%3E">

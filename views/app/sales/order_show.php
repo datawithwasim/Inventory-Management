@@ -32,3 +32,5 @@
       <div class="col-2"><button class="btn btn-outline-success w-100">Add</button></div>
       <div class="col-12"><input name="reference" class="form-control" placeholder="Reference (optional)" maxlength="80"></div></form></div><?php endif; ?></div></div>
 </div>
+
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>

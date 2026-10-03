@@ -20,3 +20,5 @@
       <div class="col-5"><button class="btn btn-success w-100">Create sales order</button></div></form><?php endif; ?>
 </div></div>
 <?php $doc = $q; $qtyKey = 'qty'; require __DIR__ . '/_doc_lines.php'; ?>
+
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>

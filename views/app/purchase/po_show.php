@@ -33,3 +33,5 @@
     <tr><th colspan="6" class="text-end">Total</th><th class="text-end"><?= e(money($po['total'])) ?></th></tr></tfoot></table></div></div>
 <?php if ($grns): ?><div class="card"><div class="card-header">Goods received against this order</div><ul class="list-group list-group-flush">
   <?php foreach ($grns as $g): ?><li class="list-group-item"><a href="<?= url("purchase/grns/{$g['id']}") ?>"><?= e($g['grn_no']) ?></a> <span class="text-muted">· <?= e(fdate($g['received_date'])) ?></span></li><?php endforeach; ?></ul></div><?php endif; ?>
+
+<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>

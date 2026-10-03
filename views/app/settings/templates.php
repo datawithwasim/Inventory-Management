@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php'; ?>
+<?php  ?>
 <div class="row g-3"><div class="col-lg-3"><div class="list-group">
   <?php foreach ($docs as $k => $l): ?><a class="list-group-item list-group-item-action <?= $k === $doc ? 'active' : '' ?>" href="<?= url("settings/templates?doc=$k") ?>"><?= e($l) ?></a><?php endforeach; ?></div></div>
 <div class="col-lg-9"><div class="card"><div class="card-header d-flex justify-content-between align-items-center"><span><?= e($docs[$doc]) ?> layout</span>

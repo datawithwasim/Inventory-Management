@@ -19,6 +19,7 @@ $router->get('/reset-password/{token}', $A . 'AuthController@showReset', ['guest
 $router->post('/reset-password/{token}', $A . 'AuthController@reset', ['guest']);
 
 $router->get('/dashboard', $A . 'DashboardController@index', ['auth']);
+$router->post('/dashboard/layout', $A . 'DashboardController@saveLayout', ['auth']);
 
 $router->get('/profile', $A . 'ProfileController@show', ['auth']);
 $router->post('/profile', $A . 'ProfileController@update', ['auth']);
@@ -274,3 +275,8 @@ $router->get('/reports/{slug}', $A . 'ReportController@show', ['auth', 'perm:rep
 // ---- Barcode labels ----
 $router->get('/labels', $A . 'LabelController@index', ['auth', 'perm:stock.view']);
 $router->get('/labels/print', $A . 'LabelController@print', ['auth', 'perm:stock.view']);
+
+$router->post('/prefs/columns', $A . 'PrefsController@columns', ['auth']);
+
+// ---- Global search ----
+$router->get('/search', $A . 'SearchController@index', ['auth']);

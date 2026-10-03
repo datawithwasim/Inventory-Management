@@ -30,7 +30,7 @@
 .hlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--viz-ink2); }
 .hlabel a { color: inherit; text-decoration: none; } .hlabel a:hover { text-decoration: underline; }
 .htrack { display: flex; align-items: center; gap: 8px; min-height: 18px; }
-.hfill { height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; flex: none; }
+.hfill { max-width: calc(100% - 7rem); height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; flex: none; }
 .hfill.o1 { background: var(--o1); } .hfill.o2 { background: var(--o2); } .hfill.o3 { background: var(--o3); }
 .hfill.o4 { background: var(--o4); } .hfill.o5 { background: var(--o5); }
 .hval { color: var(--viz-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }

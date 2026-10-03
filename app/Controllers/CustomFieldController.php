@@ -28,18 +28,12 @@ final class CustomFieldController extends Controller
             $by[$e] = CustomFields::fields($e, false);
             foreach ($by[$e] as &$f) $f['used'] = (int)DB::val('SELECT COUNT(*) FROM custom_field_values WHERE field_id = ?', [$f['id']]);
         }
-        $this->view('app/settings/fields', ['title' => 'Settings', 'tab' => 'fields', 'tabs' => $this->tabs(), 'by' => $by]);
-    }
-
-    private function tabs(): array
-    {
-        return ['company' => 'Company profile', 'preferences' => 'Currency & dates', 'numbering' => 'Document numbers', 'workflow' => 'Rules & workflow',
-            'labels' => 'Names (labels)', 'templates' => 'Print templates', 'fields' => 'Custom fields'];
+        $this->settingsView('app/settings/fields', ['title' => 'Settings', 'by' => $by], 'fields');
     }
 
     public function create(): void
     {
-        $this->view('app/settings/field_form', ['title' => 'New custom field', 'row' => null, 'entity' => (string)($_GET['entity'] ?? 'item')]);
+        $this->settingsView('app/settings/field_form', ['title' => 'New custom field', 'row' => null, 'entity' => (string)($_GET['entity'] ?? 'item')], 'fields');
     }
 
     private function collect(?array $row, string $back): array
@@ -82,7 +76,7 @@ final class CustomFieldController extends Controller
 
     public function edit(string $id): void
     {
-        $this->view('app/settings/field_form', ['title' => 'Edit custom field', 'row' => $this->load($id), 'entity' => '']);
+        $this->settingsView('app/settings/field_form', ['title' => 'Edit custom field', 'row' => $this->load($id), 'entity' => ''], 'fields');
     }
 
     public function update(string $id): void

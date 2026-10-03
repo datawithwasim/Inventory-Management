@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Models\Purchase;
 use App\Models\Sales;
 use App\Models\StockException;
+use App\Models\CustomFields;
 use Core\Audit;
 use Core\Auth;
 use Core\DB;
@@ -50,7 +51,8 @@ final class SalesOrderController extends SalesBase
 
     private function form(string $title, ?array $o, array $lines): void
     {
-        $this->view('app/sales/order_form', ['title' => $title, 'o' => $o, 'customers' => $this->customers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines, 'mode' => 'order']);
+        $this->view('app/sales/order_form', ['title' => $title, 'o' => $o, 'customers' => $this->customers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines, 'mode' => 'order',
+            'cfFields' => CustomFields::fields('sales_order'), 'cfValues' => CustomFields::formValues('sales_order', $o ? (int)$o['id'] : null)]);
     }
 
     public function create(): void
@@ -87,10 +89,13 @@ final class SalesOrderController extends SalesBase
         $back = 'sales/orders/create';
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        $id = DB::transaction(function () use ($head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        $id = DB::transaction(function () use ($head, $lines, $cf) {
             $t = $this->tid();
             $id = DB::insert('sales_orders', ['tenant_id' => $t, 'order_no' => Numbering::next($t, 'SO'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $head);
             $this->saveLines($id, $lines);
+            CustomFields::save('sales_order', $id, $cf);
             return $id;
         });
         Audit::log('order_create', 'sales_order', $id);
@@ -117,10 +122,13 @@ final class SalesOrderController extends SalesBase
         if ($o['status'] !== 'draft') $this->bounce('Only draft orders can be edited.', "sales/orders/{$o['id']}");
         $head = $this->header($back);
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
-        DB::transaction(function () use ($o, $head, $lines) {
+        [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
+        if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
+        DB::transaction(function () use ($o, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
             DB::run("UPDATE sales_orders SET $set WHERE tenant_id = ? AND id = ?", [...array_values($head), $this->tid(), $o['id']]);
             $this->saveLines((int)$o['id'], $lines);
+            CustomFields::save('sales_order', (int)$o['id'], $cf);
         });
         Audit::log('order_update', 'sales_order', (int)$o['id']);
         flash('success', 'Sales order updated.');
@@ -139,6 +147,7 @@ final class SalesOrderController extends SalesBase
         $remaining = array_sum(array_map(fn($l) => max(0, (float)$l['qty_ordered'] - (float)$l['qty_delivered']), $items));
         $this->view('app/sales/order_show', [
             'title' => $o['order_no'], 'o' => $o, 'items' => $items, 'remaining' => $remaining,
+            'cfFields' => CustomFields::fields('sales_order'), 'cfValues' => CustomFields::values('sales_order', (int)$o['id']),
             'deliveries' => DB::all('SELECT d.id, d.delivery_no, d.delivery_date, i.id AS invoice_id, i.invoice_no FROM deliveries d LEFT JOIN sales_invoices i ON i.delivery_id = d.id WHERE d.tenant_id = ? AND d.order_id = ? ORDER BY d.id', [$t, $o['id']]),
             'advances' => DB::all('SELECT * FROM customer_payments WHERE tenant_id = ? AND order_id = ? AND invoice_id IS NULL ORDER BY id', [$t, $o['id']]),
         ]);
@@ -204,7 +213,11 @@ final class SalesOrderController extends SalesBase
             flash('danger', 'Only draft orders can be deleted. Cancel the order instead.');
             redirect("sales/orders/{$o['id']}");
         }
-        DB::run('DELETE FROM sales_orders WHERE tenant_id = ? AND id = ?', [$this->tid(), $o['id']]);
+        DB::transaction(function () use ($o) {
+            // a quotation that was converted into this draft goes back to "accepted" so it can be converted again
+            DB::run("UPDATE sales_quotations SET order_id = NULL, status = 'accepted' WHERE tenant_id = ? AND order_id = ?", [$this->tid(), $o['id']]);
+            DB::run('DELETE FROM sales_orders WHERE tenant_id = ? AND id = ?', [$this->tid(), $o['id']]);
+        });
         Audit::log('order_delete', 'sales_order', (int)$o['id'], $o['order_no']);
         flash('success', 'Draft deleted.');
         redirect('sales/orders');

@@ -31,4 +31,5 @@ return [
     ],
     'permissions' => require __DIR__ . '/permissions.php',
     'masters' => require __DIR__ . '/masters.php',
+    'menu' => require __DIR__ . '/menu.php',
 ];

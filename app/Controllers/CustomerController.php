@@ -32,8 +32,9 @@ final class CustomerController extends SalesBase
         $rows = DB::all(
             "SELECT c.*, g.name AS group_name, COALESCE((SELECT SUM(i.total - i.returned_amount - i.paid_amount) FROM sales_invoices i WHERE i.customer_id = c.id), 0) AS outstanding
              FROM customers c LEFT JOIN customer_groups g ON g.id = c.group_id WHERE $where ORDER BY c.is_walkin DESC, c.name LIMIT 500", $params);
-        $cfList = CustomFields::attachList('customer', $rows);
-        $this->view('app/customers/index', ['title' => term('customers'), 'cfList' => $cfList, 'rows' => $rows, 'q' => $q, 'group' => $group, 'groups' => $this->groups()]);
+        $cols = \Core\Columns::visible('customers');
+        $cfList = CustomFields::attachList('customer', $rows, \Core\Columns::cfIds($cols));
+        $this->view('app/customers/index', ['title' => term('customers'), 'cols' => $cols, 'cfList' => $cfList, 'rows' => $rows, 'q' => $q, 'group' => $group, 'groups' => $this->groups()]);
     }
 
     public function create(): void
@@ -43,7 +44,7 @@ final class CustomerController extends SalesBase
 
     private function fields(string $back, ?int $exceptId): array
     {
-        $d = $this->input();
+        $d = \Core\FormFields::strip('customer', $this->input());
         $name = trim((string)($d['name'] ?? ''));
         if ($name === '') $this->bounce('Customer name is required.', $back);
         if (mb_strlen($name) > 150) $this->bounce('Customer name is too long.', $back);
@@ -54,10 +55,13 @@ final class CustomerController extends SalesBase
         if ($days !== '' && (!ctype_digit($days) || (int)$days > 365)) $this->bounce('Credit days must be 0 to 365.', $back);
         $group = (int)($d['group_id'] ?? 0);
         if ($group && !DB::val('SELECT 1 FROM customer_groups WHERE tenant_id = ? AND id = ?', [$this->tid(), $group])) $this->bounce('Choose a valid customer group.', $back);
-        return ['name' => $name, 'group_id' => $group ?: null, 'contact_person' => $this->text($d['contact_person'] ?? '', 100, 'Contact person', $back),
+        $row = ['name' => $name, 'group_id' => $group ?: null, 'contact_person' => $this->text($d['contact_person'] ?? '', 100, 'Contact person', $back),
             'phone' => $this->text($d['phone'] ?? '', 40, 'Phone', $back), 'email' => $email, 'address' => $this->text($d['address'] ?? '', 255, 'Address', $back),
             'ship_address' => $this->text($d['ship_address'] ?? '', 255, 'Delivery address', $back), 'tax_no' => $this->text($d['tax_no'] ?? '', 40, 'Tax number', $back),
             'credit_days' => (int)$days, 'notes' => $this->text($d['notes'] ?? '', 255, 'Notes', $back)];
+        [$row, $errs] = \Core\FormFields::apply('customer', $row);
+        if ($errs) $this->bounce(implode(' ', $errs), $back);
+        return $row;
     }
 
     public function store(): void

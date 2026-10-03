@@ -1,4 +1,4 @@
-<?php require __DIR__ . '/_tabs.php'; $v = fn($k, $d = '') => e(old($k, Core\Settings::get('company.' . $k, $d))); $logo = company_logo_url(); ?>
+<?php  $v = fn($k, $d = '') => e(old($k, Core\Settings::get('company.' . $k, $d))); $logo = company_logo_url(); ?>
 <div class="card" style="max-width:820px"><div class="card-body">
 <form method="post" action="<?= url('settings/company') ?>" enctype="multipart/form-data"><?= csrf_field() ?>
   <div class="row g-3">

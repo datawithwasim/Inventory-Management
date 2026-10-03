@@ -28,8 +28,9 @@ final class SupplierController extends PurchaseBase
         $rows = DB::all(
             "SELECT s.*, COALESCE((SELECT SUM(b.total - b.returned_amount - b.paid_amount) FROM purchase_bills b WHERE b.supplier_id = s.id), 0) AS outstanding
              FROM suppliers s WHERE $where ORDER BY s.name LIMIT 500", $params);
-        $cfList = CustomFields::attachList('supplier', $rows);
-        $this->view('app/suppliers/index', ['title' => term('suppliers'), 'cfList' => $cfList, 'rows' => $rows, 'q' => $q]);
+        $cols = \Core\Columns::visible('suppliers');
+        $cfList = CustomFields::attachList('supplier', $rows, \Core\Columns::cfIds($cols));
+        $this->view('app/suppliers/index', ['title' => term('suppliers'), 'cols' => $cols, 'cfList' => $cfList, 'rows' => $rows, 'q' => $q]);
     }
 
     public function create(): void
@@ -39,7 +40,7 @@ final class SupplierController extends PurchaseBase
 
     private function fields(string $back, ?int $exceptId): array
     {
-        $d = $this->input();
+        $d = \Core\FormFields::strip('supplier', $this->input());
         $name = trim((string)($d['name'] ?? ''));
         if ($name === '') $this->bounce('Supplier name is required.', $back);
         if (mb_strlen($name) > 150) $this->bounce('Supplier name is too long.', $back);
@@ -50,12 +51,15 @@ final class SupplierController extends PurchaseBase
         if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) $this->bounce('Email is not valid.', $back);
         $days = trim((string)($d['payment_terms_days'] ?? '0'));
         if ($days !== '' && (!ctype_digit($days) || (int)$days > 365)) $this->bounce('Payment terms must be 0 to 365 days.', $back);
-        return [
+        $row = [
             'name' => $name, 'contact_person' => $this->text($d['contact_person'] ?? '', 100, 'Contact person', $back),
             'phone' => $this->text($d['phone'] ?? '', 40, 'Phone', $back), 'email' => $email,
             'address' => $this->text($d['address'] ?? '', 255, 'Address', $back), 'tax_no' => $this->text($d['tax_no'] ?? '', 40, 'Tax number', $back),
             'payment_terms_days' => (int)$days, 'notes' => $this->text($d['notes'] ?? '', 255, 'Notes', $back),
         ];
+        [$row, $errs] = \Core\FormFields::apply('supplier', $row);
+        if ($errs) $this->bounce(implode(' ', $errs), $back);
+        return $row;
     }
 
     public function store(): void
