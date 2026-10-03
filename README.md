@@ -21,7 +21,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   multi-language/currency were intentionally left out.
 - **Modern look & make-it-yours: done** — new app shell (grouped collapsible menu, global search with Ctrl+K, quick-create, light/dark mode, phone drawer),
   Bootstrap/icons/fonts now bundled locally (no CDN needed). Companies can customise: Appearance (brand colour, menu style, spacing, default theme),
-  Modules & menu (switch parts off), Form fields (hide / require optional fields), Custom fields (now also on quotations, sales orders and
+  Modules & menu (switch parts off), Form designer (Zoho-style full-screen builder for all forms: sections with 1–3 columns, drag fields, create new custom fields from a 13-type palette, hide/require, widths, hints, labels left/top, line-item columns, preview, undo; needs migration 008 — Super Admin → System → Run updates), Custom fields (also on quotations, sales orders and
   purchase orders), Names, Print templates. Each user can customise their Dashboard widgets and list columns.
 
 ### Updating an installed copy (cPanel)

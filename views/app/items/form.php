@@ -6,7 +6,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
 <form method="post" action="<?= $item ? url("items/{$item['id']}") : url('items') ?>"><?= csrf_field() ?>
 <div class="row g-3">
   <div class="col-lg-8"><div class="card mb-3"><div class="card-body">
-    <div class="ffgrid">
+    <div class="ffgrid <?= ffclass('item') ?>">
     <div class="mb-3"<?= ffa('item.name') ?>><label class="form-label"><?= fl('item.name', e(term('item')) . ' name') ?></label><input name="name" class="form-control" value="<?= $v('name') ?>" required maxlength="190"></div>
     <div class="row">
       <div class="col-md-4 mb-3"<?= ffa('item.category_id') ?>><label class="form-label"><?= fl('item.category_id', 'Category') ?></label><select name="category_id" class="form-select"><option value="">—</option>
@@ -21,6 +21,7 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
         <?php foreach ($taxes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('tax_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['rate']) ?>%)</option><?php endforeach; ?></select></div>
     </div><?php endif; ?>
     <?php if (ff('item.description')): ?><div class="mb-0"<?= ffa('item.description') ?>><label class="form-label"><?= fl('item.description', 'Description') ?><?= ffstar('item.description') ?></label><textarea name="description" class="form-control" rows="2"<?= ffreq('item.description') ?>><?= $v('description') ?></textarea></div><?php endif; ?>
+    <?= ffextras('item', $cfFields, $cfValues) ?>
     </div>
   </div></div>
 
@@ -53,7 +54,6 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
           <td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td>
         </tr>
       <?php endforeach; ?></tbody></table></div></div>
-  <?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
   </div>
 
   <div class="col-lg-4"><div class="card mb-3"><div class="card-body">

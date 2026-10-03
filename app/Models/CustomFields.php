@@ -10,7 +10,10 @@ use Core\DB;
 final class CustomFields
 {
     public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'quotation' => 'Quotations', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders'];
-    public const TYPES = ['text' => 'Text', 'number' => 'Number', 'date' => 'Date', 'dropdown' => 'Dropdown (choose one)', 'checkbox' => 'Yes / No'];
+    public const TYPES = ['text' => 'Single line', 'textarea' => 'Multi-line', 'email' => 'Email', 'phone' => 'Phone', 'url' => 'URL', 'number' => 'Number', 'decimal' => 'Decimal',
+        'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'checkbox' => 'Yes / No'];
+    /** Types that need a list of choices. */
+    public const CHOICE_TYPES = ['dropdown', 'radio'];
 
     private static function tid(): int
     {
@@ -21,7 +24,7 @@ final class CustomFields
     public static function fields(string $entity, bool $onlyActive = true): array
     {
         $rows = DB::all('SELECT * FROM custom_fields WHERE tenant_id = ? AND entity = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id', [self::tid(), $entity]);
-        foreach ($rows as &$r) $r['choices'] = $r['type'] === 'dropdown' ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$r['options'])))) : [];
+        foreach ($rows as &$r) $r['choices'] = in_array($r['type'], self::CHOICE_TYPES, true) ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$r['options'])))) : [];
         return $rows;
     }
 
@@ -57,14 +60,22 @@ final class CustomFields
                 if ($f['is_required'] && $v !== '1') $errors[] = "$label must be ticked.";
             } elseif ($v === '') {
                 if ($f['is_required']) $errors[] = "$label is required.";
-            } elseif ($f['type'] === 'number') {
+            } elseif (in_array($f['type'], ['number', 'decimal', 'currency', 'percent'], true)) {
                 if (!is_numeric($v)) $errors[] = "$label must be a number.";
+                elseif ($f['type'] === 'percent' && ((float)$v < 0 || (float)$v > 100)) $errors[] = "$label must be between 0 and 100.";
+                elseif ($f['type'] === 'number' && !preg_match('/^-?\d+$/', $v)) $errors[] = "$label must be a whole number.";
+            } elseif ($f['type'] === 'email') {
+                if (!filter_var($v, FILTER_VALIDATE_EMAIL)) $errors[] = "$label must be a valid email address.";
+            } elseif ($f['type'] === 'url') {
+                if (!preg_match('~^https?://[^\s]+$~i', $v)) $errors[] = "$label must be a web address starting with http:// or https://.";
+            } elseif ($f['type'] === 'phone') {
+                if (!preg_match('/^[0-9+()\-.\s]{5,25}$/', $v)) $errors[] = "$label must be a valid phone number.";
             } elseif ($f['type'] === 'date') {
                 if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m) || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) $errors[] = "$label must be a valid date.";
-            } elseif ($f['type'] === 'dropdown') {
+            } elseif (in_array($f['type'], self::CHOICE_TYPES, true)) {
                 if (!in_array($v, $f['choices'], true)) $errors[] = "$label: choose one of the listed options.";
-            } elseif (mb_strlen($v) > 255) {
-                $errors[] = "$label is too long (max 255 characters).";
+            } elseif (mb_strlen($v) > ($f['type'] === 'textarea' ? 1000 : 255)) {
+                $errors[] = "$label is too long (max " . ($f['type'] === 'textarea' ? 1000 : 255) . " characters).";
             }
             $values[$id] = $v;
         }
@@ -94,6 +105,8 @@ final class CustomFields
         return match ($f['type']) {
             'checkbox' => $value === '1' ? 'Yes' : 'No',
             'date' => fdate($value),
+            'currency' => money($value),
+            'percent' => rtrim(rtrim(number_format((float)$value, 2, '.', ''), '0'), '.') . '%',
             default => $value,
         };
     }
@@ -113,5 +126,36 @@ final class CustomFields
             [self::tid(), ...$ids, ...array_map(fn($f) => (int)$f['id'], $fields)]) as $v) $map[$v['entity_id']][$v['field_id']] = $v['value'];
         foreach ($rows as &$r) $r['cf'] = $map[$r['id']] ?? [];
         return $fields;
+    }
+
+    /** One input for a custom field, for use inside a form grid. */
+    public static function inputHtml(array $f, string $val): string
+    {
+        $name = 'cf[' . (int)$f['id'] . ']';
+        $req = $f['is_required'] ? ' required' : '';
+        $e = fn($x) => htmlspecialchars((string)$x, ENT_QUOTES);
+        switch ($f['type']) {
+            case 'checkbox':
+                return '<div class="form-check"><input type="hidden" name="' . $name . '" value="0"><input class="form-check-input" type="checkbox" name="' . $name . '" value="1"' . ($val === '1' ? ' checked' : '') . '><label class="form-check-label">Yes</label></div>';
+            case 'dropdown':
+                $o = '<select name="' . $name . '" class="form-select"' . $req . '><option value="">—</option>';
+                foreach ($f['choices'] as $c) $o .= '<option' . ($val === $c ? ' selected' : '') . '>' . $e($c) . '</option>';
+                return $o . '</select>';
+            case 'radio':
+                $o = '<div class="d-flex flex-wrap gap-3 pt-1">';
+                foreach ($f['choices'] as $i => $c) $o .= '<div class="form-check"><input class="form-check-input" type="radio" name="' . $name . '" id="' . $name . $i . '" value="' . $e($c) . '"' . ($val === $c ? ' checked' : '') . '><label class="form-check-label" for="' . $name . $i . '">' . $e($c) . '</label></div>';
+                return $o . '</div>';
+            case 'textarea':
+                return '<textarea name="' . $name . '" class="form-control" rows="2" maxlength="1000"' . $req . '>' . $e($val) . '</textarea>';
+            case 'date': $t = 'date'; $x = ''; break;
+            case 'number': $t = 'number'; $x = ' step="1"'; break;
+            case 'decimal': case 'currency': $t = 'number'; $x = ' step="0.01"'; break;
+            case 'percent': $t = 'number'; $x = ' step="0.01" min="0" max="100"'; break;
+            case 'email': $t = 'email'; $x = ' maxlength="255"'; break;
+            case 'phone': $t = 'tel'; $x = ' maxlength="25"'; break;
+            case 'url': $t = 'url'; $x = ' maxlength="255" placeholder="https://"'; break;
+            default: $t = 'text'; $x = ' maxlength="255"';
+        }
+        return '<input name="' . $name . '" class="form-control" type="' . $t . '"' . $x . ' value="' . $e($val) . '"' . $req . '>';
     }
 }

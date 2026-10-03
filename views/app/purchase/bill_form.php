@@ -1,6 +1,6 @@
 <div class="card" style="max-width:560px"><div class="card-body">
 <form method="post" action="<?= url("purchase/bills/{$b['id']}") ?>"><?= csrf_field() ?>
-  <div class="ffgrid">
+  <div class="ffgrid <?= ffclass('bill') ?>"><?= ffextras('bill', [], []) ?>
 <?php if (ff('bill.supplier_bill_no')): ?>  <div class="mb-3"<?= ffa('bill.supplier_bill_no') ?>><label class="form-label"><?= fl('bill.supplier_bill_no', e(term('supplier')) . '\'s bill number') ?><?= ffstar('bill.supplier_bill_no') ?></label><input name="supplier_bill_no"<?= ffreq('bill.supplier_bill_no') ?> class="form-control" maxlength="60" value="<?= e(old('supplier_bill_no', $b['supplier_bill_no'] ?? '')) ?>"></div><?php else: ?><?= ffh('bill.supplier_bill_no', e(old('supplier_bill_no', $b['supplier_bill_no'] ?? ''))) ?><?php endif; ?>
   <div class="row"><div class="col-md-6 mb-3"<?= ffa('bill.bill_date') ?>><label class="form-label"><?= fl('bill.bill_date', 'Bill date') ?></label><input type="date" name="bill_date" class="form-control" value="<?= e(old('bill_date', $b['bill_date'])) ?>" required></div>
     <?php if (ff('bill.due_date')): ?><div class="col-md-6 mb-3"<?= ffa('bill.due_date') ?>><label class="form-label"><?= fl('bill.due_date', 'Due date') ?><?= ffstar('bill.due_date') ?></label><input type="date" name="due_date"<?= ffreq('bill.due_date') ?> class="form-control" value="<?= e(old('due_date', $b['due_date'] ?? '')) ?>"></div><?php else: ?><?= ffh('bill.due_date', old('due_date', $b['due_date'] ?? '')) ?><?php endif; ?></div>

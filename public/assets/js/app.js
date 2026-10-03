@@ -86,7 +86,18 @@
   var lt = doc.getElementById('lineTable');
   if (lt && window.MutationObserver) {
     var heads = Array.prototype.map.call(lt.querySelectorAll('thead th'), function (th) { return th.textContent.trim(); });
-    var label = function () { lt.querySelectorAll('tbody tr').forEach(function (tr) { Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] && !td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i]); }); }); };
+    var off = (lt.getAttribute('data-hide-cols') || '').split(',').map(function (x) { return { disc: 'Disc %', tax: 'Tax %' }[x]; }).filter(Boolean);
+    var hideIdx = heads.map(function (h, i) { return off.indexOf(h) > -1 ? i : -1; }).filter(function (i) { return i > -1; });
+    var label = function () {
+      lt.querySelectorAll('thead th, tbody tr').forEach(function (r) {
+        var cells = r.tagName === 'TH' ? [r] : r.children;
+        Array.prototype.forEach.call(r.tagName === 'TH' ? [] : r.children, function (td, i) {
+          if (heads[i] && !td.hasAttribute('data-label')) td.setAttribute('data-label', heads[i]);
+          if (hideIdx.indexOf(i) > -1) td.classList.add('col-off');
+        });
+      });
+      hideIdx.forEach(function (i) { var th = lt.querySelectorAll('thead th')[i]; if (th) th.classList.add('col-off'); });
+    };
     new MutationObserver(label).observe(lt.querySelector('tbody'), { childList: true }); label();
   }
 

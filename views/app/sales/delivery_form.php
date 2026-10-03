@@ -1,6 +1,6 @@
 <form method="post" action="<?= url('sales/deliveries') ?>"><?= csrf_field() ?>
 <?php if ($order): ?><input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>"><?php endif; ?>
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('delivery') ?>"><?= ffextras('delivery', [], []) ?>
   <div class="col-md-4"><label class="form-label"><?= e(term('customer')) ?></label>
     <?php if ($order): ?><input class="form-control" value="<?= e($order['customer']) ?>" disabled><input type="hidden" id="customer_id" value="<?= (int)$order['customer_id'] ?>">
     <?php else: ?><select name="customer_id" id="customer_id" class="form-select" required><?php foreach ($customers as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)old('customer_id') === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?></select><?php endif; ?></div>

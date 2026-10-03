@@ -249,3 +249,22 @@ function fl(string $key, string $default): string
     $custom = Core\FormDesign::label($e, $c);
     return $custom !== '' ? e($custom) : $default;
 }
+
+/** Extra class for a form grid (label position chosen in the form designer). */
+function ffclass(string $entity): string
+{
+    return Core\FormDesign::cls($entity);
+}
+
+/** Section headings and custom fields, echoed inside the form grid. */
+function ffextras(string $entity, array $cfFields, array $cfValues): string
+{
+    return Core\FormDesign::extras($entity, $cfFields, $cfValues);
+}
+
+/** data-hide-cols attribute for a line-items table (columns switched off in the designer). */
+function fflines(string $entity): string
+{
+    $h = Core\FormDesign::hiddenLineCols($entity);
+    return $h === '' ? '' : ' data-hide-cols="' . e($h) . '"';
+}

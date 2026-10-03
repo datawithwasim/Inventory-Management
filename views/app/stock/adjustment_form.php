@@ -1,5 +1,5 @@
 <form method="post" action="<?= url('stock/adjustments') ?>"><?= csrf_field() ?>
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('adjustment') ?>"><?= ffextras('adjustment', [], []) ?>
   <div class="col-md-3"<?= ffa('adjustment.warehouse_id') ?>><label class="form-label"><?= fl('adjustment.warehouse_id', e(term('warehouse'))) ?></label><select name="warehouse_id" id="warehouse_id" class="form-select" required>
     <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('warehouse_id') === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-3"<?= ffa('adjustment.reason') ?>><label class="form-label"><?= fl('adjustment.reason', 'Reason') ?></label><select name="reason" class="form-select" required>

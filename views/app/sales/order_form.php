@@ -1,6 +1,6 @@
 <?php $v = fn($k, $d = '') => e(old($k, $o[$k] ?? $d)); $pre = (int)($_GET['customer'] ?? 0); ?>
 <form method="post" action="<?= $o ? url("sales/orders/{$o['id']}") : url('sales/orders') ?>"><?= csrf_field() ?>
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('sales_order') ?>">
   <div class="col-md-4"<?= ffa('sales_order.customer_id') ?>><label class="form-label"><?= fl('sales_order.customer_id', e(term('customer'))) ?></label><select name="customer_id" id="customer_id" class="form-select" required>
     <?php foreach ($customers as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)old('customer_id', $o['customer_id'] ?? $pre) === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-md-3"<?= ffa('sales_order.warehouse_id') ?>><label class="form-label"><?= fl('sales_order.warehouse_id', 'Ship from') ?></label><select name="warehouse_id" id="warehouse_id" class="form-select" required>
@@ -13,8 +13,8 @@
 <?php if (ff('sales_order.notes')): ?>  <div class="col-md-8"<?= ffa('sales_order.notes') ?>><label class="form-label"><?= fl('sales_order.notes', 'Notes') ?><?= ffstar('sales_order.notes') ?></label><input name="notes"<?= ffreq('sales_order.notes') ?> class="form-control" maxlength="255" value="<?= $v('notes') ?>"></div><?php else: ?><?= ffh('sales_order.notes', $v('notes')) ?><?php endif; ?>
   <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="allow_backorder" value="1" id="bo" <?= old('allow_backorder', $o['allow_backorder'] ?? 0) ? 'checked' : '' ?>>
     <label class="form-check-label" for="bo">Take the order even if stock is short <small class="text-muted d-block">(made-to-order / back-order)</small></label></div></div>
+<?= ffextras('sales_order', $cfFields, $cfValues) ?>
 </div><p class="text-muted small mt-3 mb-0">Confirming the order <strong>reserves</strong> the stock, so it cannot be sold to someone else before this <?= e(term('customer', true)) ?>'s delivery.</p></div></div>
-<?php require __DIR__ . '/_lines.php'; ?>
-<?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
+<?php $lineEntity = 'sales_order'; require __DIR__ . '/_lines.php'; ?>
 <button class="btn btn-primary">Save draft</button> <a class="btn btn-link" href="<?= $o ? url("sales/orders/{$o['id']}") : url('sales/orders') ?>">Cancel</a>
 </form>

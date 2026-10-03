@@ -1,6 +1,6 @@
 <form method="post" action="<?= url('purchase/grns') ?>"><?= csrf_field() ?>
 <?php if ($po): ?><input type="hidden" name="po_id" value="<?= (int)$po['id'] ?>"><span id="hasPo" hidden></span><?php endif; ?>
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('grn') ?>"><?= ffextras('grn', [], []) ?>
   <div class="col-md-4"><label class="form-label"><?= e(term('supplier')) ?></label>
     <?php if ($po): ?><input class="form-control" value="<?= e($po['supplier']) ?>" disabled>
     <?php else: ?><select name="supplier_id" class="form-select" required><option value="">Choose…</option>

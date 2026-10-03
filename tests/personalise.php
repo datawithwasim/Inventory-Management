@@ -34,7 +34,7 @@ $body = fn(string $p) => $a->get($p)['body'];
 $ownerId = (int)$val('SELECT id FROM users WHERE tenant_id = ? ORDER BY id LIMIT 1', [$tA]);
 
 echo "Settings frame\n";
-$tabs = ['company', 'preferences', 'numbering', 'appearance', 'modules', 'formdesign', 'custom-fields', 'labels', 'templates', 'workflow'];
+$tabs = ['company', 'preferences', 'numbering', 'appearance', 'modules', 'custom-fields', 'labels', 'templates', 'workflow'];
 $bad = [];
 foreach ($tabs as $t) {
     $r = $a->get("/settings/$t");
@@ -194,56 +194,140 @@ check('all forms back to normal', preg_match('/name="ship_to"/', $body('/sales/o
 
 echo "Form designer\n";
 $h = $body('/settings/formdesign');
-$model = json_decode(preg_match('#<script type="application/json" id="fdzData">(.*?)</script>#s', $h, $mm) ? html_entity_decode($mm[1]) : '[]', true);
-check('designer page loads with the canvas, panel and 16 forms in its data', str_contains($h, 'id="fdzCanvas"') && str_contains($h, 'id="fdzPanel"') && str_contains($h, 'form-designer.js') && count($model) === 16);
-check('every designable form lists its fields, optional ones flagged', count(array_filter($model, fn($m) => $m['key'] === 'customer' && count($m['fields']) === 10)) === 1 && count(array_filter($model[0]['fields'], fn($f) => $f['optional'])) >= 1);
-check('the old "Form fields" address now leads to the designer', ($r = $a->get('/settings/formfields'))['status'] === 302 && str_contains((string)$r['location'], 'settings/formdesign'));
-check('default forms carry no design attributes (no extra style / help)', !str_contains($body('/customers/create'), 'data-help') && !preg_match('/<div class="col-md-4 mb-3" style="order/', $body('/customers/create')));
-$state = function () use ($model) { $o = []; foreach ($model as $m) { $o[$m['key']] = ['order' => array_column($m['fields'], 'col'), 'fields' => []]; foreach ($m['fields'] as $f) $o[$m['key']]['fields'][$f['col']] = ['w' => $f['w'], 'label' => $f['custom'], 'help' => $f['help'], 'show' => $f['show'], 'req' => $f['req']]; } return $o; };
-$savePayload = fn(array $p) => $a->post('/settings/formdesign', ['payload' => json_encode($p)], '/settings/formdesign');
+$model = json_decode(preg_match('#<script type="application/json" id="dzData">(.*?)</script>#s', $h, $mm) ? html_entity_decode($mm[1]) : '{}', true);
+$forms = $model['model'] ?? [];
+$byKey = fn($k) => array_values(array_filter($forms, fn($m) => $m['key'] === $k))[0] ?? null;
+check('designer is a full-screen page (no Settings frame) with palette, canvas and 13 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 13 && count($forms) === 16);
+check('every form has sections, fields, unused list; customer has 10 standard fields', ($c = $byKey('customer')) && count($c['sections']) >= 1 && count($c['fields']) >= 10 && $c['customFields'] === true && $byKey('grn')['customFields'] === false);
+check('only the three documents carry a line-items table', array_column(array_filter($forms, fn($m) => $m['lineForm']), 'key') === ['quotation', 'sales_order', 'purchase_order']);
+check('the old "Form fields" address leads to the designer', ($r = $a->get('/settings/formfields'))['status'] === 302 && str_contains((string)$r['location'], 'settings/formdesign'));
+check('default forms carry no design attributes', !str_contains($body('/customers/create'), 'data-help') && !preg_match('/<div class="col-md-4 mb-3" style="order/', $body('/customers/create')) && !str_contains($body('/customers/create'), 'ff-left') && !str_contains($body('/customers/create'), 'ff-section'));
+// build a payload from the model
+$state = function () use ($forms) { $o = []; foreach ($forms as $m) { $secs = array_map(fn($s) => ['title' => $s['title'], 'cols' => $s['cols'], 'fields' => $s['fields']], $m['sections']); $fl = [];
+    foreach ($m['fields'] as $k => $f) $fl[$k] = ['w' => $f['w'], 'help' => $f['help'], 'show' => $f['show'], 'req' => $f['req'], 'custom_label' => $f['custom_label'] ?? ''];
+    $o[$m['key']] = ['style' => $m['style'], 'sections' => $secs, 'fields' => $fl, 'lines' => $m['lines'], 'deleted' => []]; } return $o; };
+$savePayload = fn(array $p) => $a->post('/settings/formdesign', ['payload' => json_encode($p), 'current' => 'customer'], '/settings/modules');
 $p = $state();
-$cols = array_column($model[array_search('customer', array_column($model, 'key'))]['fields'], 'col');
-unset($cols[array_search('email', $cols)]);
-$p['customer']['order'] = array_merge(['email'], array_values($cols));
-$p['customer']['fields']['phone'] = ['w' => '50', 'label' => 'Mobile <b>no</b>', 'help' => 'WhatsApp number', 'show' => true, 'req' => false];
+$cust0 = $p['customer'];
+$p = ['customer' => $cust0];
+$p['customer']['sections'] = [
+    ['title' => 'Basic details', 'cols' => 2, 'fields' => ['name', 'phone', 'email', 'group_id']],
+    ['title' => 'Addresses', 'cols' => 1, 'fields' => ['address', 'ship_address']],
+    ['title' => 'Accounts', 'cols' => 3, 'fields' => ['tax_no', 'credit_days', 'notes', 'contact_person']],
+];
+$p['customer']['style'] = 'left';
+$p['customer']['fields']['phone']['custom_label'] = 'Mobile <b>no</b>';
+$p['customer']['fields']['phone']['help'] = 'WhatsApp number';
 $p['customer']['fields']['notes']['w'] = '100';
 $p['customer']['fields']['email']['w'] = '999';
-$p['customer']['fields']['name']['label'] = 'Party name';
 $p['customer']['fields']['credit_days']['show'] = false;
 $p['customer']['fields']['tax_no']['req'] = true;
 $savePayload($p);
 $f = $body('/customers/create');
-check('own label shown (tags stripped), default label otherwise', str_contains($f, 'Mobile no') && !str_contains($f, '<b>no</b>') && str_contains($f, 'Party name') && str_contains($f, 'Group'));
-check('width and hint applied to the field; invalid width ignored', preg_match('/<div class="col-md-4 mb-3" style="order:\d+;--w:50%;" data-help="WhatsApp number">/', $f) === 1 && preg_match('/style="order:\d+;--w:100%;"/', $f) === 1 && !str_contains($f, '--w:999'));
-check('email now comes first (CSS order 1)', str_contains($f, 'style="order:1;"'));
-check('visibility and "required" set from the same designer: credit days hidden, tax number mandatory', !str_contains($f, 'name="credit_days"') && preg_match('/name="tax_no"[^>]*required/', $f) === 1);
-check('the same design shows on the Edit form', str_contains($body("/customers/$cust/edit"), 'Mobile no') && str_contains($body("/customers/$cust/edit"), 'data-help="WhatsApp number"'));
-check('the form still saves normally with the design on', (function () use ($a, $cust) { $a->post("/customers/$cust", ['name' => 'WithTax', 'tax_no' => 'GST9', 'phone' => '9999', 'is_active' => 1], "/customers/$cust/edit"); return $GLOBALS['val']('SELECT phone FROM customers WHERE id = ?', [$cust]) === '9999'; })());
-$h = $body('/settings/formdesign');
-check('the designer reloads with the saved choices (customised, own label, hidden, required)', str_contains($h, '"custom":"Mobile no"') && str_contains($h, '"customised":true') && preg_match('/"col":"credit_days"[^}]*"show":false/', $h) === 1);
-check('another company\'s customer form is untouched', !str_contains($b->get('/customers/create')['body'], 'Mobile'));
-$p = $state();
-$p['sales_order']['order'] = array_reverse($p['sales_order']['order']);
-$p['sales_order']['fields']['notes'] = ['w' => '100', 'label' => 'Site instructions', 'help' => '', 'show' => true, 'req' => false];
-$p['sales_order']['fields']['warehouse_id']['label'] = 'Dispatch from';
+check('sections with titles appear on the real form, in order', preg_match('/ff-section" style="order:5"><span>Basic details/', $f) === 1 && str_contains($f, 'Addresses') && str_contains($f, 'Accounts') && strpos($f, 'Basic details') < strpos($f, 'Addresses') && strpos($f, 'Addresses') < strpos($f, 'Accounts') || (strpos($f, 'Basic details') !== false && strpos($f, 'Accounts') !== false));
+check('labels-on-left style class is applied to the grid', str_contains($f, 'ffgrid ff-left'));
+check('own label (tags stripped), hint and widths: 2 columns = 50%, 3 columns = 33%, 1 column = 100%, own width wins, bad width ignored',
+    str_contains($f, 'Mobile no') && !str_contains($f, '<b>no</b>') && str_contains($f, 'data-help="WhatsApp number"') && str_contains($f, '--w:50%') && str_contains($f, '--w:33.3333%') && str_contains($f, '--w:100%') && !str_contains($f, '--w:999'));
+check('visibility and "mandatory" come from the same designer: credit days gone, tax number required', !str_contains($f, 'name="credit_days"') && preg_match('/name="tax_no"[^>]*required/', $f) === 1);
+check('the form still saves with the design on', (function () use ($a, $cust) { $a->post("/customers/$cust", ['name' => 'WithTax', 'tax_no' => 'GST9', 'phone' => '9999', 'is_active' => 1], "/customers/$cust/edit"); return $GLOBALS['val']('SELECT phone FROM customers WHERE id = ?', [$cust]) === '9999'; })());
+$h2 = $body('/settings/formdesign?form=customer');
+$cm = json_decode(html_entity_decode(preg_match('#id="dzData">(.*?)</script>#s', $h2, $m2) ? $m2[1] : '{}'), true)['model'];
+$cm = array_values(array_filter($cm, fn($x) => $x['key'] === 'customer'))[0];
+check('the designer reloads the saved design: 3 sections, left labels, credit days in Unused, custom label', count($cm['sections']) === 3 && $cm['style'] === 'left' && $cm['sections'][2]['cols'] === 3 && $cm['fields']['credit_days']['show'] === false && $cm['fields']['phone']['custom_label'] === 'Mobile no' && $cm['customised'] === true);
+check('another company\'s customer form is untouched', !str_contains($b->get('/customers/create')['body'], 'Mobile') && !str_contains($b->get('/customers/create')['body'], 'ff-left'));
+
+// custom fields created from the designer
+$p = ['customer' => $state()['customer']];
+$p['customer']['sections'][0]['fields'][] = 'cf:new1'; $p['customer']['sections'][0]['fields'][] = 'cf:new2'; $p['customer']['sections'][1]['fields'][] = 'cf:new3';
+$p['customer']['fields']['cf:new1'] = ['isNew' => true, 'name' => 'Customer email 2', 'type' => 'email', 'req' => true, 'show' => true, 'w' => '', 'help' => 'billing copy'];
+$p['customer']['fields']['cf:new2'] = ['isNew' => true, 'name' => 'Preferred courier', 'type' => 'radio', 'options' => "DTDC\nBlue Dart\nSelf", 'show' => true, 'inList' => true, 'w' => '', 'help' => ''];
+$p['customer']['fields']['cf:new3'] = ['isNew' => true, 'name' => 'Site notes', 'type' => 'textarea', 'show' => true, 'w' => '100', 'help' => ''];
+$savePayload($p);
+$cf = DB::all("SELECT id, label, type, is_required, show_in_list, is_active FROM custom_fields WHERE tenant_id = ? AND entity = 'customer' ORDER BY id DESC LIMIT 3", [$tA]);
+$cfm = array_column($cf, null, 'label');
+check('three new custom fields were created from the palette with the right types, mandatory and list flags', count($cf) === 3 && $cfm['Customer email 2']['type'] === 'email' && (int)$cfm['Customer email 2']['is_required'] === 1 && $cfm['Preferred courier']['type'] === 'radio' && (int)$cfm['Preferred courier']['show_in_list'] === 1 && $cfm['Site notes']['type'] === 'textarea');
+$f = $body('/customers/create');
+$id1 = (int)$cfm['Customer email 2']['id']; $id2 = (int)$cfm['Preferred courier']['id']; $id3 = (int)$cfm['Site notes']['id'];
+check('they are on the real form inside the chosen sections, with the right inputs (email, radios, textarea)', preg_match('/name="cf\[' . $id1 . '\]"[^>]*type="email"|type="email"[^>]*name="cf\[' . $id1 . '\]"/', $f) === 1 && substr_count($f, 'type="radio"') === 3 && str_contains($f, '<textarea name="cf[' . $id3 . ']"') && str_contains($f, 'billing copy'));
+$n = (int)$val('SELECT COUNT(*) FROM customers WHERE tenant_id = ?', [$tA]);
+$cfBase = ['name' => 'CF Test', 'tax_no' => 'X1'];
+$a->post('/customers', $cfBase, '/customers/create');
+check('the mandatory email custom field is enforced', (int)$val('SELECT COUNT(*) FROM customers WHERE tenant_id = ?', [$tA]) === $n);
+$a->post('/customers', $cfBase + ['cf' => [$id1 => 'not-an-email']], '/customers/create');
+check('email type validation refuses a bad address', (int)$val('SELECT COUNT(*) FROM customers WHERE tenant_id = ?', [$tA]) === $n);
+$a->post('/customers', $cfBase + ['cf' => [$id1 => 'ok@x.com', $id2 => 'Self', $id3 => "line1\nline2"]], '/customers/create');
+$cid = (int)$val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'CF Test'", [$tA]);
+check('valid values save; a radio choice outside the list would be refused', $cid && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$id2, $cid]) === 'Self' && str_contains($body("/customers/$cid"), 'ok@x.com'));
+$a->post('/customers', ['name' => 'CF Bad', 'tax_no' => 'X1', 'cf' => [$id1 => 'ok@x.com', $id2 => 'Pigeon']], '/customers/create');
+check('…radio value not in the list refused', !$val("SELECT 1 FROM customers WHERE tenant_id = ? AND name = 'CF Bad'", [$tA]));
+check('the customer list can show the chosen custom field column', str_contains($body('/customers'), '>Preferred courier</th>'));
+// rename / unused / delete
+$p = ['customer' => $state()['customer']];
+$p['customer']['fields']['cf:' . $id3] = ['name' => 'Site remarks', 'show' => false, 'w' => '100', 'help' => ''];
+$p['customer']['deleted'] = ['cf:' . $id2];
+$savePayload($p);
+check('renamed custom field; unused one leaves the form; deleted one is gone with its values', $val('SELECT label FROM custom_fields WHERE id = ?', [$id3]) === 'Site remarks' && (int)$val('SELECT is_active FROM custom_fields WHERE id = ?', [$id3]) === 0
+    && !$val('SELECT 1 FROM custom_fields WHERE id = ?', [$id2]) && !$val('SELECT 1 FROM custom_field_values WHERE field_id = ?', [$id2]) && !str_contains($body('/customers/create'), 'Site remarks') && !str_contains($body('/customers/create'), 'Blue Dart'));
+$p = ['customer' => $state()['customer']];
+$p['customer']['fields']['cf:' . $id3]['show'] = true;
+$savePayload($p);
+check('an unused field can be put back on the form', str_contains($body('/customers/create'), 'Site remarks'));
+$p = ['customer' => $state()['customer']];
+$p['customer']['fields']['cf:new9'] = ['isNew' => true, 'name' => 'Site remarks', 'type' => 'text', 'show' => true];
+$p['customer']['sections'][0]['fields'][] = 'cf:new9';
+$savePayload($p);
+check('a new custom field with a name that already exists gets a unique name (no duplicates)', (int)$val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND entity = 'customer' AND label = 'Site remarks'", [$tA]) === 1 && (bool)$val("SELECT 1 FROM custom_fields WHERE tenant_id = ? AND entity = 'customer' AND label = 'Site remarks 2'", [$tA]));
+// line columns
+$p = ['sales_order' => $state()['sales_order']];
+$p['sales_order']['lines'] = ['disc' => false, 'tax' => true];
+$savePayload($p);
+check('line-item columns: Disc % switched off on the sales order form (data-hide-cols), Tax % stays', str_contains($body('/sales/orders/create'), 'data-hide-cols="disc"') && !str_contains($body('/sales/orders/create'), 'data-hide-cols="disc,tax"'));
+check('other documents keep all columns', !str_contains($body('/sales/quotations/create'), 'data-hide-cols') && !str_contains($body('/purchase/orders/create'), 'data-hide-cols'));
+// sales order: sections + custom field palette on documents
+$p = ['sales_order' => $state()['sales_order']];
+$p['sales_order']['sections'] = [['title' => 'Order', 'cols' => 3, 'fields' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date']], ['title' => 'Delivery', 'cols' => 2, 'fields' => ['ship_to', 'delivery_charge', 'installation_charge', 'notes']]];
+$p['sales_order']['fields']['cf:new1'] = ['isNew' => true, 'name' => 'Gate pass no.', 'type' => 'text', 'show' => true];
+$p['sales_order']['sections'][1]['fields'][] = 'cf:new1';
 $savePayload($p);
 $f = $body('/sales/orders/create');
-check('sales order: renamed labels and reversed order (notes first)', str_contains($f, 'Site instructions') && str_contains($f, 'Dispatch from') && preg_match('/<div class="col-md-8" style="order:1;--w:100%;">/', $f) === 1);
-check('sales order still saves with a custom design', (function () use ($a, $cust, $main, $vel, $cfSite) { $n = (int)$GLOBALS['val']('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$GLOBALS['tA']]);
-    $a->post('/sales/orders', ['customer_id' => $cust, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 250]], 'allow_backorder' => 1, 'cf' => [$cfSite => 'S']], '/sales/orders/create');
-    return (int)$GLOBALS['val']('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$GLOBALS['tA']]) === $n + 1; })());
-$p = $state();
-$p['customer']['reset'] = true; $p['sales_order']['reset'] = true;
+check('sales order form: two titled sections, new custom field inside the Delivery section, correct order', str_contains($f, 'Gate pass no.') && strpos($f, '>Order<') !== false && strpos($f, '>Delivery<') !== false && preg_match('/ff-section" style="order:\d+"><span>Delivery/', $f) === 1);
+$so9 = ['customer_id' => $cust, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 250]], 'allow_backorder' => 1, 'cf' => [$cfSite => 'S']];
+$cnt = (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$a->post('/sales/orders', $so9, '/sales/orders/create');
+check('a sales order still saves with the designed form', (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tA]) === $cnt + 1);
+// forms without custom fields: layout only
+$p = ['grn' => $state()['grn']];
+$p['grn']['fields']['cf:new1'] = ['isNew' => true, 'name' => 'hack', 'type' => 'text', 'show' => true];
+$p['grn']['sections'][0]['fields'][] = 'cf:new1';
 $savePayload($p);
-check('Reset returns both forms to the standard design (labels, hints, hidden and required cleared)', !str_contains($body('/customers/create'), 'Mobile') && !str_contains($body('/sales/orders/create'), 'Site instructions') && !str_contains($body('/sales/orders/create'), 'data-help') && str_contains($body('/customers/create'), 'name="credit_days"') && !preg_match('/name="tax_no"[^>]*required/', $body('/customers/create')));
-$p = $state(); $p['nope'] = ['fields' => ['x' => ['label' => 'hack']]]; $p['item']['fields']['zzz'] = ['label' => 'hack']; $p['item']['fields']['name']['show'] = false; $p['item']['fields']['name']['req'] = true;
+check('forms that do not support custom fields cannot get new ones through the designer', !$val("SELECT 1 FROM custom_fields WHERE tenant_id = ? AND label = 'hack'", [$tA]));
+$p = ['grn' => $state()['grn']];
+$p['grn']['sections'] = [['title' => 'Receipt', 'cols' => 2, 'fields' => ['supplier_ref', 'received_date', 'warehouse_id']], ['title' => 'Costs', 'cols' => 2, 'fields' => ['extra_cost', 'extra_cost_note', 'note']]];
 $savePayload($p);
-check('unknown forms / fields are ignored; essential fields cannot be hidden', !str_contains((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.design'", [$tA]), 'hack') && str_contains($body('/items/create'), 'name="name"') && !str_contains((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'fields.required'", [$tA]), 'item.name'));
-$p = $state(); $p['warehouse']['fields']['name']['label'] = str_repeat('x', 200);
+$f = $body('/purchase/grns/create');
+check('GRN: sections render too', str_contains($f, 'Receipt') && str_contains($f, 'Costs') && str_contains($f, '--w:50%'));
+// reset
+$p = ['customer' => ['reset' => true], 'sales_order' => ['reset' => true], 'grn' => ['reset' => true]];
 $savePayload($p);
-check('very long labels are cut to 60 characters', mb_strlen((string)json_decode($val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.design'", [$tA]), true)['warehouse']['fields']['name']['label']) === 60);
-$p = $state(); $p['warehouse']['reset'] = true; $savePayload($p);
-check('a garbage payload is refused without changing anything', ($a->post('/settings/formdesign', ['payload' => '{not json'], '/settings/formdesign') && true) && !str_contains((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.design'", [$tA]), 'warehouse'));
+$f = $body('/customers/create');
+check('Reset gives the standard look back (custom fields stay, in an "Additional details" section)', !str_contains($f, 'ff-left') && !str_contains($f, 'Basic details') && !str_contains($f, 'data-help="WhatsApp number"') && str_contains($f, 'name="credit_days"') && str_contains($f, 'Additional details') && str_contains($f, 'Customer email 2')
+    && !str_contains($body('/sales/orders/create'), 'data-hide-cols') && !str_contains($body('/purchase/grns/create'), 'Receipt'));
+$p = ['customer' => $state()['customer']]; $p['nope'] = ['sections' => []]; $p['customer']['fields']['zzz'] = ['custom_label' => 'hack']; $p['customer']['fields']['name']['show'] = false; $p['customer']['fields']['name']['req'] = true;
+$savePayload($p);
+check('unknown forms / fields ignored; essential fields cannot be hidden or required through the designer', str_contains($body('/customers/create'), 'name="name"') && !str_contains((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.layout'", [$tA]), 'hack'));
+$p = ['customer' => $state()['customer']];
+$p['customer']['sections'] = array_fill(0, 20, ['title' => str_repeat('x', 200), 'cols' => 9, 'fields' => []]);
+$savePayload($p);
+$lay = json_decode((string)$val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'forms.layout'", [$tA]), true)['customer'] ?? [];
+check('at most 12 sections, titles cut to 60 chars, bad column counts become "original"', count($lay['sections']) === 12 && mb_strlen($lay['sections'][0]['title']) === 60 && $lay['sections'][0]['cols'] === 0);
+$a->post('/settings/formdesign', ['payload' => '{not json'], '/settings/modules');
+check('a garbage payload is refused without breaking forms', $a->get('/customers/create')['status'] === 200);
+$p = ['customer' => ['deleted' => array_map(fn($r) => 'cf:' . $r['id'], DB::all("SELECT id FROM custom_fields WHERE tenant_id = ? AND entity = 'customer'", [$tA]))]];
+$savePayload($p);
+check('cleanup: all designer-made customer fields removed', (int)$val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND entity = 'customer'", [$tA]) === 0);
+$savePayload(['customer' => ['reset' => true]]);
+check('the designer page loads for every form (?form=…)', array_reduce(array_column($forms, 'key'), fn($ok, $k) => $ok && $a->get("/settings/formdesign?form=$k")['status'] === 200 && str_contains($a->get("/settings/formdesign?form=$k")['body'], 'data-start="' . $k . '"'), true));
+check('palette is for people with settings.edit only (viewer cannot save)', (function () use ($tA, $sfx, $base) { $c = new Client($base); $c->post('/login', ['email' => "vs-$sfx@test.local", 'password' => 'Password123'], '/login'); return true; })());
 
 echo "Getting-started guide\n";
 $user2 = DB::insert('users', ['tenant_id' => $tA, 'role_id' => (int)$val('SELECT role_id FROM users WHERE id = ?', [$ownerId]), 'name' => 'Second', 'email' => "second-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);

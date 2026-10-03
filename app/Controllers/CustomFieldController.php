@@ -52,8 +52,7 @@ final class CustomFieldController extends Controller
         if (!isset(CustomFields::TYPES[$type])) $bounce('Choose a field type.');
         if (DB::val('SELECT 1 FROM custom_fields WHERE tenant_id = ? AND entity = ? AND label = ? AND id <> ?', [$this->tid(), $entity, $label, $row['id'] ?? 0])) $bounce('A field with that name already exists there.');
         $options = null;
-        if ($type === 'dropdown') {
-            $choices = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($d['options'] ?? ''))))));
+        if (in_array($type, CustomFields::CHOICE_TYPES, true)) { $choices = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($d['options'] ?? ''))))));
             if (count($choices) < 2 || count($choices) > 50) $bounce('A dropdown needs 2 to 50 choices, one per line.');
             foreach ($choices as $c) if (mb_strlen($c) > 60) $bounce('Each choice can have at most 60 characters.');
             $options = implode("\n", $choices);

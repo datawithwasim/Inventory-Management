@@ -1,5 +1,5 @@
 <form method="post" action="<?= url('sales/returns') ?>"><?= csrf_field() ?><input type="hidden" name="invoice_id" value="<?= (int)$i['id'] ?>">
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('sales_return') ?>"><?= ffextras('sales_return', [], []) ?>
   <div class="col-md-4"><div class="text-muted small"><?= e(term('customer')) ?></div><?= e($i['customer']) ?><br><small class="text-muted">Invoice <?= e($i['invoice_no']) ?> · stock goes back to <?= e($i['warehouse']) ?></small></div>
   <div class="col-md-3"<?= ffa('sales_return.return_date') ?>><label class="form-label"><?= fl('sales_return.return_date', 'Return date') ?></label><input type="date" name="return_date" class="form-control" value="<?= e(old('return_date', date('Y-m-d'))) ?>" required></div>
 <?php if (ff('sales_return.reason')): ?>  <div class="col-md-5"<?= ffa('sales_return.reason') ?>><label class="form-label"><?= fl('sales_return.reason', 'Reason') ?><?= ffstar('sales_return.reason') ?></label><input name="reason"<?= ffreq('sales_return.reason') ?> class="form-control" maxlength="150" value="<?= e(old('reason')) ?>" placeholder="e.g. wrong colour, damaged"></div><?php else: ?><?= ffh('sales_return.reason', e(old('reason'))) ?><?php endif; ?>

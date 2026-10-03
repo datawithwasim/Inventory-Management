@@ -1,5 +1,5 @@
 <form method="post" action="<?= url('purchase/returns') ?>"><?= csrf_field() ?><input type="hidden" name="grn_id" value="<?= (int)$g['id'] ?>">
-<div class="card mb-3"><div class="card-body"><div class="row g-3">
+<div class="card mb-3"><div class="card-body"><div class="row g-3 <?= ffclass('purchase_return') ?>"><?= ffextras('purchase_return', [], []) ?>
   <div class="col-md-4"><div class="text-muted small"><?= e(term('supplier')) ?></div><?= e($g['supplier']) ?><br><small class="text-muted">Receipt <?= e($g['grn_no']) ?> · <?= e($g['warehouse']) ?></small></div>
   <div class="col-md-3"<?= ffa('purchase_return.return_date') ?>><label class="form-label"><?= fl('purchase_return.return_date', 'Return date') ?></label><input type="date" name="return_date" class="form-control" value="<?= e(old('return_date', date('Y-m-d'))) ?>" required></div>
 <?php if (ff('purchase_return.reason')): ?>  <div class="col-md-5"<?= ffa('purchase_return.reason') ?>><label class="form-label"><?= fl('purchase_return.reason', 'Reason') ?><?= ffstar('purchase_return.reason') ?></label><input name="reason"<?= ffreq('purchase_return.reason') ?> class="form-control" maxlength="150" value="<?= e(old('reason')) ?>" placeholder="e.g. damaged, wrong shade"></div><?php else: ?><?= ffh('purchase_return.reason', e(old('reason'))) ?><?php endif; ?>

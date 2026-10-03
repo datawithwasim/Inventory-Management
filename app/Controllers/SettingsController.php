@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\PrintTemplate;
 use App\Models\SettingsNav;
+use App\Models\CustomFields;
 use Core\FormDesign;
 use Core\FormFields;
 use Core\Modules;
@@ -50,6 +51,11 @@ final class SettingsController extends Controller
         if ($tab === 'fields') redirect('settings/custom-fields');
         if ($tab === 'formfields') redirect('settings/formdesign');
         if (!SettingsNav::valid($tab)) $this->notFound();
+        if ($tab === 'formdesign') {
+            $this->view('app/settings/formdesign', ['title' => 'Form designer', 'model' => FormDesign::model(), 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES,
+                'start' => (string)($_GET['form'] ?? ''), 'colsOpts' => FormDesign::COLS], 'layouts/designer');
+            return;
+        }
         $data = ['title' => 'Settings'];
         switch ($tab) {
             case 'company':
@@ -75,10 +81,6 @@ final class SettingsController extends Controller
                 break;
             case 'formfields':
                 $data += ['registry' => FormFields::REGISTRY, 'entityLabels' => FormFields::ENTITY_LABELS, 'sections' => FormFields::SECTIONS];
-                break;
-            case 'formdesign':
-                $data['model'] = FormDesign::model();
-                $data['widths'] = FormDesign::WIDTHS;
                 break;
             case 'labels':
                 $data['terms'] = TERMS;
@@ -168,8 +170,13 @@ final class SettingsController extends Controller
             case 'formdesign':
                 $payload = json_decode((string)($d['payload'] ?? ''), true);
                 if (!is_array($payload)) $this->bounce('Nothing to save — please try again.', $tab);
-                FormDesign::savePayload($payload);
-                $this->done($tab, 'Forms saved. They now look the way you designed them.');
+                $notes = FormDesign::savePayload($payload);
+                Audit::log('settings_formdesign', 'settings');
+                $msg = 'Forms saved. They now look the way you designed them.';
+                if ($notes['created'] || $notes['deleted']) $msg .= ' (' . $notes['created'] . ' field(s) added, ' . $notes['deleted'] . ' deleted.)';
+                flash('success', $msg);
+                if (!empty($d['close'])) redirect('settings/company');
+                redirect('settings/formdesign?form=' . rawurlencode((string)($d['current'] ?? '')));
             case 'workflow':
                 Settings::set('po_approval', empty($d['po_approval']) ? '0' : '1');
                 Settings::set('negative_stock', empty($d['negative_stock']) ? '0' : '1');

@@ -1,7 +1,7 @@
 <?php $v = fn($k, $d = '') => e(old($k, $row[$k] ?? $d)); ?>
 <div class="card" style="max-width:760px"><div class="card-body">
 <form method="post" action="<?= $row ? url("customers/{$row['id']}") : url('customers') ?>"><?= csrf_field() ?>
-  <div class="ffgrid">
+  <div class="ffgrid <?= ffclass('customer') ?>">
   <div class="row">
     <div class="col-md-8 mb-3"<?= ffa('customer.name') ?>><label class="form-label"><?= fl('customer.name', e(term('customer')) . ' name') ?></label><input name="name" class="form-control" value="<?= $v('name') ?>" required maxlength="150" <?= !empty($row['is_walkin']) ? 'readonly' : '' ?>></div>
     <?php if (ff('customer.group_id')): ?><div class="col-md-4 mb-3"<?= ffa('customer.group_id') ?>><label class="form-label"><?= fl('customer.group_id', 'Group') ?><?= ffstar('customer.group_id') ?></label><select name="group_id" class="form-select"<?= ffreq('customer.group_id') ?>><option value="">None (retail)</option>
@@ -17,8 +17,8 @@
     <?php if (ff('customer.credit_days')): ?><div class="col-md-3 mb-3"<?= ffa('customer.credit_days') ?>><label class="form-label"><?= fl('customer.credit_days', 'Credit days') ?><?= ffstar('customer.credit_days') ?></label><input type="number" min="0" max="365" name="credit_days" class="form-control" value="<?= $v('credit_days', 0) ?>"<?= ffreq('customer.credit_days') ?>></div><?php endif; ?>
     <?php if (ff('customer.notes')): ?><div class="col-md-5 mb-3"<?= ffa('customer.notes') ?>><label class="form-label"><?= fl('customer.notes', 'Notes') ?><?= ffstar('customer.notes') ?></label><input name="notes" class="form-control" value="<?= $v('notes') ?>"<?= ffreq('customer.notes') ?>></div><?php endif; ?>
   </div>
+    <?= ffextras('customer', $cfFields, $cfValues) ?>
   </div>
   <?php if ($row && !$row['is_walkin']): ?><div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_active" value="1" id="act" <?= $row['is_active'] ? 'checked' : '' ?>><label class="form-check-label" for="act">Active</label></div><?php endif; ?>
-  <?php require dirname(__DIR__) . '/settings/_cf_form.php'; ?>
   <button class="btn btn-primary">Save</button> <a class="btn btn-link" href="<?= url('customers') ?>">Cancel</a>
 </form></div></div>
