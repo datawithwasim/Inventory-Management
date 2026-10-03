@@ -128,3 +128,15 @@ function pager(int $page, int $pages): string
         . '<li class="page-item disabled"><span class="page-link">Page ' . $page . ' of ' . $pages . '</span></li>'
         . $link($page + 1, 'Next &raquo;', $page < $pages) . '</ul></nav>';
 }
+
+function po_badge(string $status): string
+{
+    [$label, $color] = App\Models\Purchase::PO_STATUS[$status] ?? [$status, 'secondary'];
+    return '<span class="badge text-bg-' . $color . '">' . e($label) . '</span>';
+}
+
+function pay_badge(string $status): string
+{
+    [$label, $color] = App\Models\Purchase::PAY_STATUS[$status] ?? [$status, 'secondary'];
+    return '<span class="badge text-bg-' . $color . '">' . e($label) . '</span>';
+}

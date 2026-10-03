@@ -30,7 +30,18 @@ $active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
       <li><a class="nav-link <?= $active('/locations') ?>" href="<?= url('locations') ?>"><i class="bi bi-grid-3x3-gap me-2"></i>Racks / locations</a></li>
     <?php endif; ?>
     <?php if (can('masters.view')): ?><li><a class="nav-link <?= $active('/masters') ?>" href="<?= url('masters/categories') ?>"><i class="bi bi-list-check me-2"></i>Masters</a></li><?php endif; ?>
-    <li><span class="nav-link disabled"><i class="bi bi-cart-plus me-2"></i>Purchase <small>(soon)</small></span></li>
+    <?php if (can('purchase.view') || can('suppliers.view')): ?>
+      <li class="nav-heading">Purchase</li>
+      <?php if (can('suppliers.view')): ?><li><a class="nav-link <?= $active('/suppliers') ?>" href="<?= url('suppliers') ?>"><i class="bi bi-truck me-2"></i>Suppliers</a></li><?php endif; ?>
+      <?php if (can('purchase.view')): ?>
+        <li><a class="nav-link <?= $active('/purchase/requisitions') ?>" href="<?= url('purchase/requisitions') ?>"><i class="bi bi-card-checklist me-2"></i>Requisitions</a></li>
+        <li><a class="nav-link <?= $active('/purchase/orders') ?>" href="<?= url('purchase/orders') ?>"><i class="bi bi-cart-plus me-2"></i>Purchase orders</a></li>
+        <li><a class="nav-link <?= $active('/purchase/grns') ?>" href="<?= url('purchase/grns') ?>"><i class="bi bi-box-arrow-in-down me-2"></i>Goods receipts</a></li>
+        <li><a class="nav-link <?= $active('/purchase/bills') ?>" href="<?= url('purchase/bills') ?>"><i class="bi bi-receipt-cutoff me-2"></i>Bills &amp; payments</a></li>
+        <li><a class="nav-link <?= $active('/purchase/returns') ?>" href="<?= url('purchase/returns') ?>"><i class="bi bi-arrow-return-left me-2"></i>Returns</a></li>
+      <?php endif; ?>
+    <?php endif; ?>
+    <li class="nav-heading">Sales</li>
     <li><span class="nav-link disabled"><i class="bi bi-receipt me-2"></i>Sales <small>(soon)</small></span></li>
     <li class="nav-heading">Administration</li>
     <?php if (can('users.view')): ?>

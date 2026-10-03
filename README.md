@@ -8,7 +8,9 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 2 – Items, stock & batches: done** (masters, warehouses, items with variants and bundles, stock ledger,
   batches where 1 batch = 1 roll/thaan, adjustments / opening stock, transfers, stock-takes, CSV import/export)
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
-- Next: Phase 3 – Purchase
+- **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
+  landed cost, bills with payment status, purchase returns)
+- Next: Phase 4 – Sales
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
@@ -40,7 +42,8 @@ php -S 127.0.0.1:8000 -t public public/index.php
 php -S 127.0.0.1:8099 -t public public/index.php &
 php tests/smoke.php http://127.0.0.1:8099     # phase 1
 php tests/phase2.php http://127.0.0.1:8099    # phase 2
-php tests/racks.php http://127.0.0.1:8099     # racks / locations  (run all against a throw-away database)
+php tests/racks.php http://127.0.0.1:8099     # racks / locations
+php tests/purchase.php http://127.0.0.1:8099  # phase 3  (run all against a throw-away database)
 ```
 
 ## Layout

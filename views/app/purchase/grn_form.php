@@ -1,0 +1,20 @@
+<form method="post" action="<?= url('purchase/grns') ?>"><?= csrf_field() ?>
+<?php if ($po): ?><input type="hidden" name="po_id" value="<?= (int)$po['id'] ?>"><span id="hasPo" hidden></span><?php endif; ?>
+<div class="card mb-3"><div class="card-body"><div class="row g-3">
+  <div class="col-md-4"><label class="form-label">Supplier</label>
+    <?php if ($po): ?><input class="form-control" value="<?= e($po['supplier']) ?>" disabled>
+    <?php else: ?><select name="supplier_id" class="form-select" required><option value="">Choose…</option>
+      <?php foreach ($suppliers as $s): ?><option value="<?= (int)$s['id'] ?>" <?= (int)old('supplier_id') === (int)$s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?></option><?php endforeach; ?></select><?php endif; ?></div>
+  <div class="col-md-3"><label class="form-label">Receive into</label><select name="warehouse_id" id="warehouse_id" class="form-select" required>
+    <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('warehouse_id', $po['warehouse_id'] ?? 0) === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select></div>
+  <div class="col-md-2"><label class="form-label">Received on</label><input type="date" name="received_date" class="form-control" value="<?= e(old('received_date', date('Y-m-d'))) ?>" required></div>
+  <div class="col-md-3"><label class="form-label">Supplier challan / invoice no.</label><input name="supplier_ref" class="form-control" maxlength="60" value="<?= e(old('supplier_ref')) ?>"></div>
+  <div class="col-md-3"><label class="form-label">Extra cost (freight, duty…)</label><input type="number" step="0.01" min="0" name="extra_cost" class="form-control" value="<?= e(old('extra_cost')) ?>"></div>
+  <div class="col-md-4"><label class="form-label">Extra cost note</label><input name="extra_cost_note" class="form-control" maxlength="150" value="<?= e(old('extra_cost_note')) ?>"></div>
+  <div class="col-md-5"><label class="form-label">Note</label><input name="note" class="form-control" maxlength="255" value="<?= e(old('note')) ?>"></div>
+</div>
+<p class="text-muted small mt-3 mb-0">Fabric / batch-tracked items: <strong>each line is one roll (thaan)</strong> and becomes its own batch on the rack you choose. If a delivery has 3 rolls of the same fabric, use <em>＋ split</em> to add a line per roll.
+  Extra cost is spread over the items by value and becomes part of their stock cost; it does not change the supplier's bill.</p></div></div>
+<?php $mode = 'grn'; $noAdd = (bool)$po; require __DIR__ . '/_lines.php'; ?>
+<button class="btn btn-success">Receive into stock</button> <a class="btn btn-link" href="<?= $po ? url("purchase/orders/{$po['id']}") : url('purchase/grns') ?>">Cancel</a>
+</form>

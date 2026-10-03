@@ -32,6 +32,9 @@ final class DashboardController extends Controller
             'items' => (int)DB::val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$t]),
             'warehouses' => (int)DB::val('SELECT COUNT(*) FROM warehouses WHERE tenant_id = ? AND is_active = 1', [$t]),
             'low' => $low,
+            'open_pos' => (int)DB::val("SELECT COUNT(*) FROM purchase_orders WHERE tenant_id = ? AND status IN ('pending_approval','approved','partial')", [$t]),
+            'owed' => (float)DB::val('SELECT COALESCE(SUM(total - returned_amount - paid_amount),0) FROM purchase_bills WHERE tenant_id = ?', [$t]),
+            'overdue' => (int)DB::val('SELECT COUNT(*) FROM purchase_bills WHERE tenant_id = ? AND (total - returned_amount - paid_amount) > 0.004 AND due_date IS NOT NULL AND due_date < CURDATE()', [$t]),
             'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE tenant_id = ? AND batch_id > 0 GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', [$t]),
             'value' => (float)DB::val(
                 'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0) FROM stock_balances s

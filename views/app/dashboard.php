@@ -25,7 +25,12 @@ $limit = fn($n) => (int)$n === 0 ? 'Unlimited' : $n;
   <div class="col-6 col-md"><div class="card"><div class="card-body"><div class="text-muted small">Low stock items</div><div class="fs-3 <?= $stats['low'] ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('stock?low=1') ?>"><?= (int)$stats['low'] ?></a></div></div></div></div>
   <div class="col-6 col-md"><div class="card"><div class="card-body"><div class="text-muted small">Stock value</div><div class="fs-3"><?= e(money($stats['value'])) ?></div></div></div></div>
 </div>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Open purchase orders</div><div class="fs-3"><a class="text-decoration-none" href="<?= url('purchase/orders?status=open') ?>"><?= (int)$stats['open_pos'] ?></a></div></div></div></div>
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">We owe suppliers</div><div class="fs-3 <?= $stats['owed'] > 0.004 ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('purchase/bills?status=unpaid') ?>"><?= e(money($stats['owed'])) ?></a></div></div></div></div>
+  <div class="col-6 col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Overdue bills</div><div class="fs-3 <?= $stats['overdue'] ? 'text-danger' : '' ?>"><a class="text-decoration-none text-reset" href="<?= url('purchase/bills?status=overdue') ?>"><?= (int)$stats['overdue'] ?></a></div></div></div></div>
+</div>
 <div class="card"><div class="card-body">
   <h2 class="h5">Welcome, <?= e($u['name']) ?> 👋</h2>
-  <p class="text-muted mb-0">Start by adding <strong>Items</strong>, then enter opening stock under <strong>Stock → Adjustments</strong>. Purchase and Sales are coming next.</p>
+  <p class="text-muted mb-0">Start by adding <strong>Items</strong>, then enter opening stock under <strong>Stock → Adjustments</strong>. Then buy with <strong>Purchase → Purchase orders</strong> and receive goods onto racks. Sales is coming next.</p>
 </div></div>

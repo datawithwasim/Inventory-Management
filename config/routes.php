@@ -101,6 +101,57 @@ $router->get('/stock/takes/{id}', $A . 'StocktakeController@show', ['auth', 'per
 $router->post('/stock/takes/{id}', $A . 'StocktakeController@update', ['auth', 'perm:stock.adjust']);
 $router->post('/stock/takes/{id}/delete', $A . 'StocktakeController@destroy', ['auth', 'perm:stock.adjust']);
 
+// ---- Purchase ----
+$router->get('/lookup/items', $A . 'LookupController@items', ['auth']);
+
+$router->get('/suppliers', $A . 'SupplierController@index', ['auth', 'perm:suppliers.view']);
+$router->get('/suppliers/create', $A . 'SupplierController@create', ['auth', 'perm:suppliers.create']);
+$router->post('/suppliers', $A . 'SupplierController@store', ['auth', 'perm:suppliers.create']);
+$router->get('/suppliers/{id}', $A . 'SupplierController@show', ['auth', 'perm:suppliers.view']);
+$router->get('/suppliers/{id}/edit', $A . 'SupplierController@edit', ['auth', 'perm:suppliers.edit']);
+$router->post('/suppliers/{id}', $A . 'SupplierController@update', ['auth', 'perm:suppliers.edit']);
+$router->post('/suppliers/{id}/delete', $A . 'SupplierController@destroy', ['auth', 'perm:suppliers.delete']);
+
+$router->get('/purchase/requisitions', $A . 'RequisitionController@index', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/requisitions/create', $A . 'RequisitionController@create', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/requisitions', $A . 'RequisitionController@store', ['auth', 'perm:purchase.create']);
+$router->get('/purchase/requisitions/{id}', $A . 'RequisitionController@show', ['auth', 'perm:purchase.view']);
+$router->post('/purchase/requisitions/{id}/convert', $A . 'RequisitionController@convert', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/requisitions/{id}/cancel', $A . 'RequisitionController@cancel', ['auth', 'perm:purchase.edit']);
+
+$router->get('/purchase/orders', $A . 'PurchaseOrderController@index', ['auth', 'perm:purchase.view']);
+$router->post('/purchase/orders/approval-setting', $A . 'PurchaseOrderController@setApproval', ['auth', 'perm:settings.edit']);
+$router->get('/purchase/orders/create', $A . 'PurchaseOrderController@create', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/orders', $A . 'PurchaseOrderController@store', ['auth', 'perm:purchase.create']);
+$router->get('/purchase/orders/{id}', $A . 'PurchaseOrderController@show', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/orders/{id}/edit', $A . 'PurchaseOrderController@edit', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/orders/{id}', $A . 'PurchaseOrderController@update', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/orders/{id}/submit', $A . 'PurchaseOrderController@submit', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/orders/{id}/approve', $A . 'PurchaseOrderController@approve', ['auth', 'perm:purchase.approve']);
+$router->post('/purchase/orders/{id}/reject', $A . 'PurchaseOrderController@reject', ['auth', 'perm:purchase.approve']);
+$router->post('/purchase/orders/{id}/cancel', $A . 'PurchaseOrderController@cancel', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/orders/{id}/close', $A . 'PurchaseOrderController@close', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/orders/{id}/delete', $A . 'PurchaseOrderController@destroy', ['auth', 'perm:purchase.delete']);
+$router->get('/purchase/orders/{id}/receive', $A . 'GrnController@createFromPo', ['auth', 'perm:purchase.create']);
+
+$router->get('/purchase/grns', $A . 'GrnController@index', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/grns/create', $A . 'GrnController@create', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/grns', $A . 'GrnController@store', ['auth', 'perm:purchase.create']);
+$router->get('/purchase/grns/{id}', $A . 'GrnController@show', ['auth', 'perm:purchase.view']);
+$router->post('/purchase/grns/{id}/bill', $A . 'BillController@createFromGrn', ['auth', 'perm:purchase.create']);
+
+$router->get('/purchase/bills', $A . 'BillController@index', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/bills/{id}', $A . 'BillController@show', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/bills/{id}/edit', $A . 'BillController@edit', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/bills/{id}', $A . 'BillController@update', ['auth', 'perm:purchase.edit']);
+$router->post('/purchase/bills/{id}/payments', $A . 'BillController@pay', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/bills/{id}/payments/{payId}/delete', $A . 'BillController@deletePayment', ['auth', 'perm:purchase.delete']);
+
+$router->get('/purchase/returns', $A . 'PurchaseReturnController@index', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/returns/create', $A . 'PurchaseReturnController@create', ['auth', 'perm:purchase.create']);
+$router->post('/purchase/returns', $A . 'PurchaseReturnController@store', ['auth', 'perm:purchase.create']);
+$router->get('/purchase/returns/{id}', $A . 'PurchaseReturnController@show', ['auth', 'perm:purchase.view']);
+
 $router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
 
 // ---- Super Admin panel ----
