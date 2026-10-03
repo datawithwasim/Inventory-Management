@@ -17,7 +17,6 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   delivery note, purchase order and quotation)
 - **Phase 6 – Reports & dashboard: done** (dashboard with period filter, net sales hero, trend chart, top items, stock value, ageing, low-stock lists;
   14 reports with filters, Excel / CSV export and print-to-PDF; low-stock → draft purchase orders)
-- Next: Phase 7 – SaaS layer (plan limits, subscriptions, onboarding)
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
