@@ -14,16 +14,40 @@ use Core\Prefs;
 final class DashboardController extends Controller
 {
     public const WIDGETS = ['kpi' => 'Key numbers', 'trend' => 'Sales vs purchases chart', 'top_items' => 'Top items by sales', 'stock_cat' => 'Stock value by category',
-        'age_rec' => 'Money to collect (ageing)', 'age_pay' => 'Money to pay (ageing)', 'low' => 'Running low', 'overdue' => 'Overdue invoices', 'orders' => 'Orders waiting for delivery'];
+        'setup' => 'Getting started guide', 'age_rec' => 'Money to collect (ageing)', 'age_pay' => 'Money to pay (ageing)', 'low' => 'Running low', 'overdue' => 'Overdue invoices', 'orders' => 'Orders waiting for delivery'];
 
     /** The signed-in user's widget order + hidden list, always complete and valid. */
     private function layout(): array
     {
         $saved = Prefs::get('dashboard.layout', []);
         $order = array_values(array_filter((array)($saved['order'] ?? []), fn($k) => isset(self::WIDGETS[$k])));
-        foreach (array_keys(self::WIDGETS) as $k) if (!in_array($k, $order, true)) $order[] = $k;
+        foreach (array_keys(self::WIDGETS) as $k) if (!in_array($k, $order, true)) $k === 'setup' ? array_unshift($order, $k) : $order[] = $k;
         $hidden = array_values(array_filter((array)($saved['hidden'] ?? []), fn($k) => isset(self::WIDGETS[$k])));
         return ['order' => array_values(array_unique($order)), 'hidden' => $hidden];
+    }
+
+    /** Getting-started checklist: [label, done?, link]. Null once finished or dismissed, or for people who cannot change settings. */
+    private function setupSteps(): ?array
+    {
+        if (!can('settings.view') || Prefs::get('setup.dismissed')) return null;
+        $t = (int)Auth::tenantId();
+        $has = fn(string $table) => (bool)DB::val("SELECT 1 FROM `$table` WHERE tenant_id = ? LIMIT 1", [$t]);
+        $customised = $has('custom_fields') || \Core\Modules::off() !== [] || \Core\Settings::get('fields.hidden', '[]') !== '[]' || \Core\Settings::get('fields.required', '[]') !== '[]';
+        $steps = [
+            ['Add your company details and logo', \Core\Settings::get('company.address') !== '' || \Core\Settings::get('company.phone') !== '' || \Core\Settings::get('company.logo') !== '', url('settings/company')],
+            ['Pick your brand colour and menu style', \Core\Settings::get('appearance.brand', '') !== '' || \Core\Settings::get('appearance.sidebar', '') !== '', url('settings/appearance')],
+            ['Add your first item', $has('items'), url('items/create')],
+            ['Add racks / locations in your warehouse', $has('locations'), url('locations/create')],
+            ['Enter opening stock', $has('stock_ledger'), url('stock/adjustments/create')],
+            ['Make it yours: custom fields, hide what you do not use', $customised, url('settings/modules')],
+        ];
+        return array_filter($steps, fn($s) => true) ?: null;
+    }
+
+    public function dismissSetup(): void
+    {
+        Prefs::set('setup.dismissed', 1);
+        redirect('dashboard');
     }
 
     public function saveLayout(): void
@@ -49,7 +73,7 @@ final class DashboardController extends Controller
         $t = (int)Auth::tenantId();
         $this->view('app/dashboard', [
             'title' => 'Dashboard',
-            'p' => $p, 'layout' => $this->layout(),
+            'p' => $p, 'layout' => $this->layout(), 'setup' => $this->setupSteps(),
             'labels' => $labels, 'salesSeries' => $sales, 'buySeries' => $buys,
             'salesNow' => array_sum($sales), 'salesPrev' => Metrics::sales($p['prev_from'], $p['prev_to']),
             'buyNow' => array_sum($buys), 'buyPrev' => Metrics::purchases($p['prev_from'], $p['prev_to']),

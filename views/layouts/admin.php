@@ -33,8 +33,8 @@ $nav = [['/admin', 'speedometer2', 'Dashboard'], ['/admin/tenants', 'buildings',
     </div>
   </header>
   <main class="content">
-    <?php require __DIR__ . '/flash.php'; ?>
     <div class="page-head"><div><h1><?= e($title ?? '') ?></h1></div></div>
+    <?php require __DIR__ . '/flash.php'; ?>
     <?= $content ?>
   </main>
 </div>

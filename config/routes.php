@@ -19,6 +19,7 @@ $router->get('/reset-password/{token}', $A . 'AuthController@showReset', ['guest
 $router->post('/reset-password/{token}', $A . 'AuthController@reset', ['guest']);
 
 $router->get('/dashboard', $A . 'DashboardController@index', ['auth']);
+$router->post('/dashboard/setup/dismiss', $A . 'DashboardController@dismissSetup', ['auth']);
 $router->post('/dashboard/layout', $A . 'DashboardController@saveLayout', ['auth']);
 
 $router->get('/profile', $A . 'ProfileController@show', ['auth']);

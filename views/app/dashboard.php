@@ -56,6 +56,23 @@ $render['kpi'] = $buf(function () use ($m, $p, $salesNow, $salesPrev, $buyNow, $
 </div>
 <?php });
 
+$render['setup'] = $setup === null ? '' : $buf(function () use ($setup) {
+    $done = count(array_filter($setup, fn($s) => $s[1]));
+    $total = count($setup); ?>
+  <div class="card setup-card"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div><h2 class="h6 mb-1">Getting started <span class="text-muted fw-normal">· <?= $done ?> of <?= $total ?> done</span></h2>
+        <div class="progress mb-2" style="height:6px;width:260px" role="progressbar" aria-valuenow="<?= $done ?>" aria-valuemin="0" aria-valuemax="<?= $total ?>"><div class="progress-bar" style="width:<?= round($done / $total * 100) ?>%"></div></div></div>
+      <form method="post" action="<?= url('dashboard/setup/dismiss') ?>"><?= csrf_field() ?><button class="btn btn-sm btn-link text-muted">Hide this guide</button></form>
+    </div>
+    <div class="row g-2 mt-1">
+      <?php foreach ($setup as [$label, $isDone, $href]): ?>
+        <div class="col-md-6 col-xl-4"><a class="setup-step <?= $isDone ? 'done' : '' ?>" href="<?= e($href) ?>"><i class="bi bi-<?= $isDone ? 'check-circle-fill' : 'circle' ?>"></i><span><?= e($label) ?></span><i class="bi bi-chevron-right ms-auto small"></i></a></div>
+      <?php endforeach; ?>
+    </div>
+  </div></div>
+<?php });
+
 $render['trend'] = $buf(function () use ($m, $p, $labels, $salesSeries, $buySeries, $salesNow, $buyNow) {
     $trendTable = Charts::table(['Date', 'Sales', 'Purchases'], array_map(null, $labels, array_map($m, $salesSeries), array_map($m, $buySeries)));
     echo Charts::card('Sales vs purchases', Charts::line($labels, ['Sales' => $salesSeries, 'Purchases' => $buySeries], $m,
@@ -115,7 +132,7 @@ $render['orders'] = $buf(function () use ($orders) { ?>
     </ul>
   </div></div>
 <?php });
-$spans = ['kpi' => 12, 'trend' => 12, 'top_items' => 6, 'stock_cat' => 6, 'age_rec' => 6, 'age_pay' => 6, 'low' => 4, 'overdue' => 4, 'orders' => 4];
+$spans = ['setup' => 12, 'kpi' => 12, 'trend' => 12, 'top_items' => 6, 'stock_cat' => 6, 'age_rec' => 6, 'age_pay' => 6, 'low' => 4, 'overdue' => 4, 'orders' => 4];
 ?>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div class="btn-group btn-group-sm" role="group" aria-label="Period">
@@ -128,7 +145,7 @@ $spans = ['kpi' => 12, 'trend' => 12, 'top_items' => 6, 'stock_cat' => 6, 'age_r
 </div>
 
 <div class="dash-grid">
-  <?php foreach ($layout['order'] as $key): if (in_array($key, $layout['hidden'], true) || !isset($render[$key])) continue; ?>
+  <?php foreach ($layout['order'] as $key): if (in_array($key, $layout['hidden'], true) || empty($render[$key])) continue; ?>
     <section class="dash-w span-<?= (int)$spans[$key] ?>" data-widget="<?= e($key) ?>"><?= $render[$key] ?></section>
   <?php endforeach; ?>
   <?php if (count($layout['hidden']) >= count($layout['order'])): ?>

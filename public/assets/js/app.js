@@ -93,7 +93,7 @@
     fetch(base + '/search?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
       .then(function (r) { return r.json(); }).then(function (d) { if (my !== seq) return; remote = d.groups || []; draw(); }).catch(function () {});
   }
-  function open() { pal.hidden = false; input.value = ''; remote = []; draw(); setTimeout(function () { input.focus(); }, 0); }
+  function open() { pal.hidden = false; input.value = ''; remote = []; draw(); input.focus(); }
   function close() { pal.hidden = true; }
   doc.querySelectorAll('[data-palette]').forEach(function (b) { b.addEventListener('click', open); });
   pal.addEventListener('click', function (e) { if (e.target === pal) close(); });

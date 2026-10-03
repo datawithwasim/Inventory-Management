@@ -152,16 +152,25 @@ check('deleting an order cleans nothing it should keep (quotation→order link r
 $a->post("/sales/orders/$so/delete", [], '/sales/orders');
 check('draft order deletes fine with custom values attached', !$val('SELECT 1 FROM sales_orders WHERE id = ?', [$so]));
 
+echo "Getting-started guide\n";
+$user2 = DB::insert('users', ['tenant_id' => $tA, 'role_id' => (int)$val('SELECT role_id FROM users WHERE id = ?', [$ownerId]), 'name' => 'Second', 'email' => "second-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
+$s = new Client($base);
+$s->post('/login', ['email' => "second-$sfx@test.local", 'password' => 'Password123'], '/login');
+$h = $body('/dashboard');
+check('a fresh company sees the guide with its steps', str_contains($h, 'Getting started') && substr_count($h, 'class="setup-step') === 6 && str_contains($h, 'of 6 done'));
+check('steps already done are ticked (items, custom fields made above)', substr_count($h, 'setup-step done') >= 2 && str_contains($h, 'Add your first item'));
+$a->post('/dashboard/setup/dismiss', [], '/dashboard');
+check('Hide this guide removes it for this user only', !str_contains($body('/dashboard'), 'class="setup-step') && str_contains($s->get('/dashboard')['body'], 'class="setup-step'));
+check('it stays listed in Customize so it can be switched back on', str_contains($body('/dashboard'), 'Getting started guide'));
+$s->post('/dashboard/setup/dismiss', [], '/dashboard');
+
 echo "Dashboard layout\n";
 $h = $body('/dashboard');
 check('all 9 widgets by default, in order', substr_count($h, 'data-widget="') === 9 && strpos($h, 'data-widget="kpi"') < strpos($h, 'data-widget="trend"'));
 $a->post('/dashboard/layout', ['order' => ['orders', 'low', 'kpi', 'trend', 'top_items', 'stock_cat', 'age_rec', 'age_pay', 'overdue', 'bogus'], 'show' => ['orders', 'low', 'kpi', 'trend']], '/dashboard');
 $h = $body('/dashboard');
 check('reordered: orders first; hidden widgets gone; bogus key ignored', strpos($h, 'data-widget="orders"') < strpos($h, 'data-widget="low"') && strpos($h, 'data-widget="low"') < strpos($h, 'data-widget="kpi"') && substr_count($h, '<section class="dash-w') === 4 && !str_contains($h, 'data-widget="bogus"'));
-check('the customise panel lists every widget with the right switches', substr_count($h, 'name="show[]"') === 9 && substr_count($h, 'checked') >= 4);
-$user2 = DB::insert('users', ['tenant_id' => $tA, 'role_id' => (int)$val('SELECT role_id FROM users WHERE id = ?', [$ownerId]), 'name' => 'Second', 'email' => "second-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
-$s = new Client($base);
-$s->post('/login', ['email' => "second-$sfx@test.local", 'password' => 'Password123'], '/login');
+check('the customise panel lists every widget with the right switches', substr_count($h, 'name="show[]"') === 10 && substr_count($h, 'checked') >= 4);
 check('layouts are personal: a colleague still sees all 9 in the default order', substr_count($s->get('/dashboard')['body'], '<section class="dash-w') === 9);
 $a->post('/dashboard/layout', ['reset' => 1], '/dashboard');
 check('Reset brings back the default', substr_count($body('/dashboard'), '<section class="dash-w') === 9);

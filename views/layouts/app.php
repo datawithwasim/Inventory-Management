@@ -84,7 +84,6 @@ $dashActive = $path === '/dashboard';
     </div>
   </header>
   <main class="content" id="main">
-    <?php require __DIR__ . '/flash.php'; ?>
     <div class="page-head">
       <div>
         <?php if ($crumbItem && $path !== '/dashboard'): ?>
@@ -93,6 +92,7 @@ $dashActive = $path === '/dashboard';
         <h1><?= e($title ?? '') ?></h1>
       </div>
     </div>
+    <?php require __DIR__ . '/flash.php'; ?>
     <?= $content ?>
     <?= $GLOBALS['foot_html'] ?? '' ?>
   </main>
