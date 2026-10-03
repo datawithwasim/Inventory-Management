@@ -15,7 +15,7 @@
 <p class="text-muted small mt-3 mb-0">Fabric: pick the <strong>roll</strong> each length is cut from. The oldest roll that can cover the quantity is suggested; if the quantity needs more than one roll you will see a shade warning. Set the quantity to 0 on lines you are not delivering now.</p></div></div>
 <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span><?= e(term('items')) ?></span>
   <?php if (!$order): ?><button type="button" class="btn btn-sm btn-outline-primary" id="addLine"><i class="bi bi-plus-lg"></i> Add <?= e(term('item', true)) ?></button><?php else: ?><button type="button" id="addLine" hidden></button><?php endif; ?></div>
-<div class="table-responsive" style="overflow:visible"><table class="table mb-0 align-middle" id="lineTable">
+<div class="table-responsive" style="overflow:visible"><table class="table mb-0 align-middle lines-wide" id="lineTable">
   <thead><tr><th><?= e(term('item')) ?></th><th>Roll (<?= e(term('batch', true)) ?>)</th><th><?= e(term('rack')) ?></th><th>Qty</th><th>Price</th><th>Disc %</th><th>Tax %</th><th></th></tr></thead><tbody></tbody></table></div></div>
 <script type="application/json" id="initialLines"><?= json_encode($oldLines, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="<?= asset('js/delivery-lines.js') ?>" data-stock="<?= url('lookup/stock') ?>" data-lookup="<?= url('lookup/sale-items') ?>" data-order="<?= $order ? 1 : 0 ?>" data-warehouse="<?= (int)($order['warehouse_id'] ?? 0) ?>"></script>
