@@ -194,3 +194,16 @@ function sale_badge(string $kind, string $status): string
     [$label, $color] = $map[$status] ?? [$status, 'secondary'];
     return '<span class="badge text-bg-' . $color . '">' . e($label) . '</span>';
 }
+
+/** Format one report cell for the screen (exports use raw numbers). */
+function report_cell(array $col, mixed $v): string
+{
+    if ($v === null || $v === '') return '';
+    return match ($col['type']) {
+        'money' => money($v),
+        'qty' => qty($v),
+        'int' => (string)(int)$v,
+        'date' => fdate((string)$v),
+        default => (string)$v,
+    };
+}

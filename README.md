@@ -15,7 +15,9 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 5 – Customization: done** (company profile + logo, currency / date / digit formats, document number styles, workflow rules,
   your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice, receipt,
   delivery note, purchase order and quotation)
-- Next: Phase 6 – Reports & dashboard
+- **Phase 6 – Reports & dashboard: done** (dashboard with period filter, net sales hero, trend chart, top items, stock value, ageing, low-stock lists;
+  14 reports with filters, Excel / CSV export and print-to-PDF; low-stock → draft purchase orders)
+- Next: Phase 7 – SaaS layer (plan limits, subscriptions, onboarding)
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
@@ -51,7 +53,8 @@ php tests/phase2.php http://127.0.0.1:8099    # phase 2
 php tests/racks.php http://127.0.0.1:8099     # racks / locations
 php tests/purchase.php http://127.0.0.1:8099  # phase 3
 php tests/sales.php http://127.0.0.1:8099     # phase 4
-php tests/settings.php http://127.0.0.1:8099  # phase 5  (run all against a throw-away database)
+php tests/settings.php http://127.0.0.1:8099  # phase 5
+php tests/reports.php http://127.0.0.1:8099   # phase 6  (run all against a throw-away database)
 ```
 
 ## Layout

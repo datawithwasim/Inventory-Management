@@ -53,6 +53,10 @@ $active = fn(string $p) => str_starts_with($path, $p) ? 'active' : '';
         <li><a class="nav-link <?= $active('/sales/returns') ?>" href="<?= url('sales/returns') ?>"><i class="bi bi-arrow-counterclockwise me-2"></i>Sales returns</a></li>
       <?php endif; ?>
     <?php endif; ?>
+    <?php if (can('reports.view')): ?>
+      <li class="nav-heading">Insights</li>
+      <li><a class="nav-link <?= $active('/reports') ?>" href="<?= url('reports') ?>"><i class="bi bi-bar-chart-line me-2"></i>Reports</a></li>
+    <?php endif; ?>
     <li class="nav-heading">Administration</li>
     <?php if (can('users.view')): ?>
       <li><a class="nav-link <?= $active('/users') ?>" href="<?= url('users') ?>"><i class="bi bi-people me-2"></i>Users</a></li>

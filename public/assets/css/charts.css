@@ -1,0 +1,51 @@
+/* Chart tokens: light values; dark steps are chosen (not inverted) and validated separately. */
+:root {
+  --viz-surface: #fcfcfb; --viz-ink: #0b0b0b; --viz-ink2: #52514e; --viz-muted: #898781; --viz-grid: #e1e0d9;
+  --s1: #2a78d6; --s2: #eb6834;
+  --o1: #86b6ef; --o2: #5598e7; --o3: #2a78d6; --o4: #1c5cab; --o5: #104281;
+  --good: #1a7f4b; --bad: #c0392b;
+}
+:root[data-theme="dark"] {
+  --viz-surface: #1a1a19; --viz-ink: #ffffff; --viz-ink2: #c3c2b7; --viz-muted: #898781; --viz-grid: #383835;
+  --s1: #3987e5; --s2: #d95926;
+  --o1: #184f95; --o2: #256abf; --o3: #3987e5; --o4: #6da7ec; --o5: #9ec5f4;
+  --good: #4cc38a; --bad: #ff7b6b;
+}
+.viz-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.viz-svg .grid { stroke: var(--viz-grid); stroke-width: 1; }
+.viz-svg .axis { fill: var(--viz-muted); font-size: 11px; }
+.viz-svg .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.viz-svg .line.s1, .viz-svg .end.s1 { stroke: var(--s1); } .viz-svg .end.s1 { fill: var(--s1); }
+.viz-svg .line.s2, .viz-svg .end.s2 { stroke: var(--s2); } .viz-svg .end.s2 { fill: var(--s2); }
+.viz-svg .end { stroke-width: 2; stroke: var(--viz-surface); }
+.viz-svg .dlabel { fill: var(--viz-ink2); font-size: 11px; }
+.viz-svg .cross { stroke: var(--viz-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.viz-svg .dot { stroke: var(--viz-surface); stroke-width: 2; }
+.viz-svg .dot.s1 { fill: var(--s1); } .viz-svg .dot.s2 { fill: var(--s2); }
+.viz-legend { display: flex; gap: 1rem; font-size: .8rem; color: var(--viz-ink2); margin-bottom: .25rem; }
+.viz-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
+.hbars { display: flex; flex-direction: column; gap: 6px; }
+.hrow { display: grid; grid-template-columns: minmax(80px, 34%) 1fr; gap: 10px; align-items: center; font-size: .85rem; }
+.hlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--viz-ink2); }
+.hlabel a { color: inherit; text-decoration: none; } .hlabel a:hover { text-decoration: underline; }
+.htrack { display: flex; align-items: center; gap: 8px; min-height: 18px; }
+.hfill { height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; flex: none; }
+.hfill.o1 { background: var(--o1); } .hfill.o2 { background: var(--o2); } .hfill.o3 { background: var(--o3); }
+.hfill.o4 { background: var(--o4); } .hfill.o5 { background: var(--o5); }
+.hval { color: var(--viz-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hrow:hover .hlabel { color: var(--viz-ink); }
+.viz-tip { position: fixed; z-index: 2000; pointer-events: none; background: #1f2937; color: #fff; border-radius: 6px; padding: 6px 10px; font-size: .78rem; box-shadow: 0 4px 14px rgba(0,0,0,.25); max-width: 260px; }
+.viz-tip .t { font-weight: 600; margin-bottom: 2px; }
+.viz-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.viz-tip .row2 { display: flex; justify-content: space-between; gap: 14px; }
+.stat .big { font-size: 1.6rem; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat .lbl { color: var(--bs-secondary-color, #6c757d); font-size: .8rem; }
+.hero { font-size: 3.25rem; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.delta { font-size: .78rem; font-weight: 600; margin-left: .35rem; white-space: nowrap; }
+.delta.good { color: var(--good); } .delta.bad { color: var(--bad); } .delta.flat { color: var(--viz-muted); font-weight: 400; }
+.spark { width: 100%; height: 24px; display: block; margin-top: 6px; }
+.spark polyline { fill: none; stroke: var(--s1); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.viz-toggle { font-size: .78rem; text-decoration: none; }
+@media (max-width: 576px) { .hero { font-size: 2.5rem; } .hrow { grid-template-columns: 38% 1fr; } }
+@media (forced-colors: active) { .viz-svg .line { stroke: CanvasText; } .hfill { background: Highlight; } }
