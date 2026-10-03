@@ -20,6 +20,10 @@ return [
         'user' => $get('DB_USER', 'root'),
         'pass' => $get('DB_PASS', ''),
     ],
+    'mail' => [
+        'driver' => $get('MAIL_DRIVER', 'log'),
+        'from'   => $get('MAIL_FROM', 'noreply@localhost'),
+    ],
     'superadmin' => [
         'name'     => $get('SUPERADMIN_NAME', 'Super Admin'),
         'email'    => $get('SUPERADMIN_EMAIL', 'admin@example.com'),

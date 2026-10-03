@@ -1,0 +1,31 @@
+# Used when the whole project sits in the web root (cPanel public_html or a sub-folder).
+# If you can point the domain's document root at the "public" folder instead, this file is not needed.
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Never serve application code, config, SQL, logs or the .env file.
+RewriteRule ^(config|core|app|views|database|storage|tests|\.git)(/|$) - [F,L]
+RewriteRule ^\.env - [F,L]
+RewriteRule ^(composer\.(json|lock)|README\.md)$ - [F,L]
+
+# Public assets live in public/assets.
+RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+
+# Everything else goes through the front controller.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L]
+</IfModule>
+
+<FilesMatch "^\.|\.(env|sql|log|lock|example)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

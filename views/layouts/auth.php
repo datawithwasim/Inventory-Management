@@ -6,7 +6,7 @@
 </head>
 <body>
 <div class="auth-wrap p-3">
-  <div class="auth-card">
+  <div class="auth-card" <?= !empty($wide) ? 'style="max-width:640px"' : '' ?>>
     <div class="text-center mb-4">
       <i class="bi bi-box-seam fs-1 text-primary"></i>
       <h1 class="h4 mt-2"><?= e(config('name')) ?></h1>

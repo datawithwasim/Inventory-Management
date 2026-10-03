@@ -2,7 +2,11 @@
 /** @var Core\Router $router */
 
 $A = 'App\\Controllers\\';
-$S = 'Admin\\Controllers\\';
+$S = 'App\\Admin\\';
+
+// ---- One-time installer ----
+$router->get('/install', $A . 'InstallController@show');
+$router->post('/install', $A . 'InstallController@run');
 
 // ---- Company app ----
 $router->get('/', $A . 'AuthController@home');

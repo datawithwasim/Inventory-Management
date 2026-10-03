@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Admin\Controllers;
+namespace App\Admin;
 
 use App\Models\Tenants;
 use Core\Audit;

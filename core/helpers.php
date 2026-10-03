@@ -94,7 +94,12 @@ function slugify(string $text): string
 
 function send_mail(string $to, string $subject, string $body): void
 {
-    // Mail driver "log": written to storage/logs/mail.log. Swap for SMTP later.
+    if (config('mail.driver') === 'mail') {
+        $from = config('mail.from');
+        $ok = @mail($to, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8");
+        if ($ok) return;
+    }
+    // Fallback / "log" driver: written to storage/logs/mail.log.
     $entry = sprintf("[%s] To: %s | Subject: %s\n%s\n---\n", date('c'), $to, $subject, $body);
     file_put_contents(ROOT . '/storage/logs/mail.log', $entry, FILE_APPEND);
 }

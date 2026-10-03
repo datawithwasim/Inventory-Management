@@ -4,3 +4,4 @@ storage/logs/*
 storage/uploads/*
 vendor/
 .DS_Store
+storage/installed.lock

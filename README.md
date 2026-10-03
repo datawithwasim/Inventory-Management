@@ -7,7 +7,17 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
 - Next: Phase 2 – items, stock ledger, batches (1 batch = 1 roll)
 
-## Setup
+## Deploy on cPanel (no terminal needed)
+1. **PHP version:** cPanel → *MultiPHP Manager* → select PHP 8.1 or higher for your domain.
+2. **Database:** cPanel → *MySQL Databases* → create a database and a user, and add the user to the database with *All Privileges*. Note the full names (they carry your cPanel username prefix).
+3. **Upload:** download this branch as a ZIP, then upload and extract it in `public_html` (or in a sub-folder such as `public_html/inventory`). The files (`index.php`, `.htaccess`, `core/`, `app/` …) must sit directly in that folder. The bundled `.htaccess` hides code, config and `.env` from the web.
+4. **Install:** open `https://your-domain/install`, enter the database details and your Super Admin login. The installer creates the tables, writes `.env` and locks itself.
+5. Sign in at `/admin/login`, create your first company and give it a plan.
+
+Better, if cPanel lets you: point the domain's document root at the `public/` folder (then nothing but `public/` is web-visible).
+Password-reset emails use PHP `mail()` on the installer-generated `.env`; if sending fails they are logged to `storage/logs/mail.log`.
+
+## Setup (command line / local development)
 ```bash
 cp .env.example .env            # set DB_* and the first Super Admin credentials
 php database/migrate.php        # create tables
@@ -26,6 +36,6 @@ php tests/smoke.php http://127.0.0.1:8099     # run against a throw-away databas
 ```
 
 ## Layout
-`core/` framework · `app/` company app · `admin/` Super Admin · `views/` templates · `database/migrations/` SQL · `config/routes.php` routes.
+`core/` framework · `app/` company app · `app/Admin/` Super Admin · `views/` templates · `database/migrations/` SQL · `config/routes.php` routes.
 
 Every tenant-owned model extends `Core\Model`, which forces `tenant_id` on every query.

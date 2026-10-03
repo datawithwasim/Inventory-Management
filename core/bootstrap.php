@@ -8,7 +8,7 @@ spl_autoload_register(function (string $class): void {
         'Core\\'            => ROOT . '/core/',
         'App\\Controllers\\' => ROOT . '/app/Controllers/',
         'App\\Models\\'      => ROOT . '/app/Models/',
-        'Admin\\Controllers\\' => ROOT . '/admin/Controllers/',
+        'App\\Admin\\'       => ROOT . '/app/Admin/',
     ];
     foreach ($map as $prefix => $dir) {
         if (str_starts_with($class, $prefix)) {
