@@ -1,9 +1,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <?= Core\Theme::bootScript() ?>
-<link href="<?= asset('vendor/inter/inter.css') ?>" rel="stylesheet">
-<link href="<?= asset('vendor/bootstrap/bootstrap.min.css') ?>" rel="stylesheet">
-<link href="<?= asset('vendor/icons/bootstrap-icons.min.css') ?>" rel="stylesheet">
+<link href="<?= asset('lib/inter/inter.css') ?>" rel="stylesheet">
+<link href="<?= asset('lib/bootstrap/bootstrap.min.css') ?>" rel="stylesheet">
+<link href="<?= asset('lib/icons/bootstrap-icons.min.css') ?>" rel="stylesheet">
 <link href="<?= asset('css/app.css') ?>" rel="stylesheet">
 <link href="<?= asset('css/charts.css') ?>" rel="stylesheet">
 <?= Core\Theme::css() ?>
