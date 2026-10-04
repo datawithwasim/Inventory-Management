@@ -94,7 +94,7 @@ $foot = function (string $html): string { preg_match('/<tfoot.*?<\/tfoot>/s', $h
 $num = fn(string $s) => (float)str_replace([',', '₹', ' '], '', $s);
 
 echo "Every report opens\n";
-$slugs = ['stock-summary', 'batch-stock', 'stock-ledger', 'dead-stock', 'movers', 'sales-register', 'sales-summary', 'purchase-register', 'purchase-summary', 'ageing', 'customer-statement', 'supplier-statement', 'low-stock', 'adjustments'];
+$slugs = ['stock-summary', 'batch-stock', 'stock-ledger', 'dead-stock', 'movers', 'sales-register', 'sales-summary', 'purchase-register', 'purchase-summary', 'supplier-dues', 'rate-comparison', 'rate-history', 'price-paid', 'ageing', 'customer-statement', 'supplier-statement', 'low-stock', 'adjustments'];
 $bad = [];
 foreach ($slugs as $s) {
     $r = $get("/reports/$s");
@@ -104,8 +104,8 @@ foreach ($slugs as $s) {
         if ($r['status'] !== 200 || stripos($r['body'], 'SQLSTATE') !== false || stripos($r['body'], 'Fatal error') !== false) $bad[] = "$s?$q";
     }
 }
-check('all 14 reports (plain, print, filtered) render without errors' . ($bad ? ' — bad: ' . implode(', ', $bad) : ''), !$bad);
-check('/reports index lists every report', count(array_filter($slugs, fn($s) => str_contains($get('/reports')['body'], "reports/$s"))) === 14);
+check('all 18 reports (plain, print, filtered) render without errors' . ($bad ? ' — bad: ' . implode(', ', $bad) : ''), !$bad);
+check('/reports index lists every report', count(array_filter($slugs, fn($s) => str_contains($get('/reports')['body'], "reports/$s"))) === 18);
 check('unknown report is 404', $get('/reports/nope')['status'] === 404);
 check('sidebar has a Reports link', str_contains($get('/dashboard')['body'], 'href="' . url('reports') . '"') || str_contains($get('/dashboard')['body'], '>Reports<'));
 

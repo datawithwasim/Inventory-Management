@@ -145,5 +145,42 @@ check('old address of the custom-fields page and settings still work for the own
 $d = $a->get('/settings/formdesign?form=supplier')['body'];
 check('the designer knows the new supplier and item fields', str_contains($d, 'bank_ifsc') && str_contains($d, 'credit_limit') && str_contains($a->get('/settings/formdesign?form=item')['body'], 'design_no'));
 
+echo "Purchase reports\n";
+$txt = fn(string $html) => preg_replace('/\s+/', ' ', strip_tags($html));
+$p = $txt($a->get('/reports/rate-comparison')['body']);
+check('rate comparison lists suppliers side by side and marks the lowest', str_contains($p, 'Royal Velvet') && str_contains($p, 'Surat Mills') && str_contains($p, 'Delhi Traders') && str_contains($p, 'Lowest') && str_contains($p, '% ('));
+check('rate comparison: a single-supplier item says so', str_contains($p, 'Only supplier'));
+$p = $a->get("/reports/rate-comparison/export/csv?supplier=$s2")['body'];
+check('rate comparison filtered to one supplier hides the others', str_contains($p, 'Delhi Traders') && !str_contains($p, 'Surat Mills'));
+$p = $txt($a->get('/reports/rate-comparison?q=wallpaper')['body']);
+check('rate comparison search works', str_contains($p, 'Floral Wallpaper') && !str_contains($p, 'Royal Velvet'));
+$a->post("/suppliers/$s2/rates", ['variant_id' => $v1, 'rate' => '320', 'valid_from' => '2026-07-01'], "/suppliers/$s2");
+$p = $txt($a->get("/reports/rate-history?supplier=$s2&q=RVW")['body']);
+check('rate history shows first rate and the rise (290 → 320 = +10.3%)', str_contains($p, 'First rate') && str_contains($p, '+10.3%'));
+check('rate history shows the closed period', str_contains($p, '30 Jun 2026') || str_contains($p, '2026-06-30') || str_contains($p, '30-06-2026') || str_contains($p, '30/06/2026'));
+$p = $a->get('/reports/supplier-dues/export/csv?from=2026-01-01&to=2026-12-31')['body'];
+check('supplier dues report opens; supplier with no bills and nothing owed is left out', str_contains($txt($a->get('/reports/supplier-dues')['body']), 'Supplier purchases') && !str_contains($p, 'Delhi Traders'));
+// give Surat Mills a bill so it has dues
+$wh = (int)DB::val('SELECT warehouse_id FROM grns WHERE id = ?', [$g]);
+DB::run("INSERT INTO purchase_bills (tenant_id, bill_no, supplier_id, grn_id, bill_date, due_date, subtotal, tax_total, total, paid_amount, returned_amount) VALUES (?, 'PB-T1', ?, ?, '2026-04-02', '2026-04-20', 10000, 500, 10500, 2500, 0)", [$tA, $s1, $g]);
+$p = $a->get('/reports/supplier-dues/export/csv?from=2026-01-01&to=2026-12-31')['body'];
+check('supplier dues: purchased 10,500, owe 8,000, all overdue', str_contains($p, '"Surat Mills","Manufacturer / mill",Surat,1,10500,8000,8000'));
+$a->post('/suppliers/' . $s1, ['name' => 'Surat Mills', 'credit_limit' => '50000', 'is_active' => 1], "/suppliers/$s1/edit");
+check('credit limit use shown as 16%', str_contains($a->get('/reports/supplier-dues/export/csv?from=2026-01-01&to=2026-12-31')['body'], '16%'));
+$a->post('/suppliers/' . $s1, ['name' => 'Surat Mills', 'credit_limit' => '5000', 'is_active' => 1], "/suppliers/$s1/edit");
+$p = $txt($a->get('/reports/supplier-dues?from=2026-01-01&to=2026-12-31&status=due')['body']);
+check('supplier dues: over the credit limit is flagged', str_contains($p, 'over limit'));
+check('only-where-we-owe filter works and outside-period purchases show 0 bills', str_contains($txt($a->get('/reports/supplier-dues?from=2025-01-01&to=2025-02-01&status=due')['body']), '8,000.00'));
+$p = $txt($a->get("/reports/price-paid?from=2026-01-01&to=2026-12-31&q=RVW")['body']);
+check('price paid history shows the receipt, price and first purchase', str_contains($p, 'G-T1') && str_contains($p, '275.00') && str_contains($p, 'First purchase'));
+DB::run('INSERT INTO grn_items (tenant_id, grn_id, variant_id, qty, unit_price, tax_rate) VALUES (?,?,?,?,?,?)', [$tA, $g, $v1, 10, 302.5, 5]);
+$p = $txt($a->get("/reports/price-paid?from=2026-01-01&to=2026-12-31&q=RVW")['body']);
+check('price paid history shows +10% against the previous purchase', str_contains($p, '+10%'));
+foreach (['supplier-dues', 'rate-comparison', 'rate-history', 'price-paid'] as $slug) {
+    $c = $a->get("/reports/$slug/export/csv?from=2026-01-01&to=2026-12-31");
+    check("$slug exports to CSV", $c['status'] === 200 && substr_count($c['body'], "\n") >= 2);
+    check("$slug is empty for another company", !str_contains($txt($b->get("/reports/$slug?from=2026-01-01&to=2026-12-31")['body']), 'Surat Mills'));
+}
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

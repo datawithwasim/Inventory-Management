@@ -26,7 +26,7 @@
 
 <?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
 <?php if (!empty($rates)): $bestBy = []; foreach ($rates as $r) if (!isset($bestBy[$r['variant_id']])) $bestBy[$r['variant_id']] = $r['net']; ?>
-<div class="card mb-3"><div class="card-header"><i class="bi bi-tags me-1"></i>Supplier rates — current, cheapest first</div>
+<div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span><i class="bi bi-tags me-1"></i>Supplier rates — current, cheapest first</span><?php if (can('reports.view')): ?><a class="btn btn-sm btn-outline-secondary" href="<?= url('reports/rate-history?q=' . urlencode($item['name'])) ?>"><i class="bi bi-clock-history"></i> Rate history</a><?php endif; ?></div>
   <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th><?= e(term('supplier')) ?></th><th>Variant</th><th class="text-end">Rate</th><th class="text-end">Disc.</th><th class="text-end">Net</th><th class="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
   <?php foreach ($rates as $r): ?><tr><td><a href="<?= url("suppliers/{$r['supplier_id']}#rates") ?>"><?= e($r['supplier_name']) ?></a><?= abs($r['net'] - $bestBy[$r['variant_id']]) < 0.005 ? ' <span class="badge text-bg-success">Lowest</span>' : '' ?></td>
     <td class="small"><?= e($r['vname'] ?: $r['sku']) ?></td><td class="text-end"><?= e(money($r['rate'])) ?></td><td class="text-end"><?= (float)$r['discount_pct'] > 0 ? e((float)$r['discount_pct']) . '%' : '—' ?></td>

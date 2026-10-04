@@ -1,10 +1,11 @@
 <?php /** Rate list card on the supplier page. @var array $s @var array $rates */ ?>
 <div class="card mb-3" id="rates">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2"><span><i class="bi bi-tags me-1"></i>Rate list — what this <?= e(term('supplier', true)) ?> charges us</span>
-    <?php if (can('suppliers.edit')): ?><span class="d-flex gap-2">
+    <span class="d-flex gap-2 flex-wrap"><?php if (can('reports.view')): ?><a class="btn btn-sm btn-outline-secondary" href="<?= url('reports/rate-history?supplier=' . (int)$s['id']) ?>"><i class="bi bi-clock-history"></i> Rate history</a><?php endif; ?>
+    <?php if (can('suppliers.edit')): ?>
       <a class="btn btn-sm btn-outline-secondary" href="<?= url("suppliers/{$s['id']}/rates/template") ?>"><i class="bi bi-download"></i> CSV template</a>
       <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#rateImport"><i class="bi bi-upload"></i> Import CSV</button>
-      <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#rateAdd"><i class="bi bi-plus-lg"></i> Add rate</button></span><?php endif; ?></div>
+      <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#rateAdd"><i class="bi bi-plus-lg"></i> Add rate</button><?php endif; ?></span></div>
   <?php if (can('suppliers.edit')): ?>
   <div class="collapse border-bottom" id="rateImport"><form class="p-3 row g-2 align-items-end" method="post" enctype="multipart/form-data" action="<?= url("suppliers/{$s['id']}/rates/import") ?>"><?= csrf_field() ?>
     <div class="col-md-6"><label class="form-label small mb-1">CSV file (columns: sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, valid_from)</label><input type="file" name="file" accept=".csv,text/csv" class="form-control form-control-sm" required></div>

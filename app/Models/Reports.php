@@ -329,6 +329,134 @@ final class Reports
             },
         ];
 
+        $defs['supplier-dues'] = [
+            'title' => 'Supplier purchases & outstanding', 'group' => 'purchase',
+            'desc' => 'For each supplier: what we bought in the period, what we owe now (all bills), how much of it is overdue, and the credit limit.',
+            'filters' => ['from', 'to', 'supplier', 'status'],
+            'select' => ['status' => ['all' => 'All suppliers with activity', 'due' => 'Only where we owe money']],
+            'columns' => ['supplier' => $col('Supplier'), 'kind' => $col('Type'), 'city' => $col('City'), 'bills' => $col('Bills in period', 'int', true), 'purchased' => $col('Bought in period', 'money', true),
+                'owed' => $col('We owe now', 'money', true), 'overdue' => $col('Of which overdue', 'money', true), 'limit' => $col('Credit limit', 'money'), 'limit_use' => $col('Limit used')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $p = [$f['from'], $f['to'], $f['from'], $f['to'], $t];
+                $w = '';
+                if ($f['supplier']) { $w = ' AND s.id = ?'; $p[] = $f['supplier']; }
+                $rows = DB::all(
+                    "SELECT s.name AS supplier, s.supplier_type, s.city, s.credit_limit AS `limit`,
+                            (SELECT COUNT(*) FROM purchase_bills b WHERE b.supplier_id = s.id AND b.bill_date BETWEEN ? AND ?) AS bills,
+                            (SELECT COALESCE(SUM(b.total - b.returned_amount), 0) FROM purchase_bills b WHERE b.supplier_id = s.id AND b.bill_date BETWEEN ? AND ?) AS purchased,
+                            (SELECT COALESCE(SUM(b.total - b.returned_amount - b.paid_amount), 0) FROM purchase_bills b WHERE b.supplier_id = s.id) AS owed,
+                            (SELECT COALESCE(SUM(b.total - b.returned_amount - b.paid_amount), 0) FROM purchase_bills b WHERE b.supplier_id = s.id
+                                AND b.total - b.returned_amount - b.paid_amount > 0.004 AND COALESCE(b.due_date, b.bill_date) < CURDATE()) AS overdue
+                     FROM suppliers s WHERE s.tenant_id = ?$w ORDER BY owed DESC, purchased DESC, s.name LIMIT 2000", $p);
+                $out = [];
+                foreach ($rows as $r) {
+                    $r['owed'] = max(0.0, (float)$r['owed']);
+                    if ($f['status'] === 'due' ? $r['owed'] <= 0.004 : ((int)$r['bills'] === 0 && $r['owed'] <= 0.004 && !$f['supplier'])) continue;
+                    $r['kind'] = Purchase::SUPPLIER_TYPES[$r['supplier_type'] ?? ''] ?? '';
+                    $r['limit_use'] = (float)$r['limit'] > 0 ? round($r['owed'] / (float)$r['limit'] * 100) . '%' . ($r['owed'] > (float)$r['limit'] ? ' — over limit' : '') : '';
+                    $out[] = $r;
+                    if (count($out) >= $limit) break;
+                }
+                return $out;
+            },
+        ];
+
+        $defs['rate-comparison'] = [
+            'title' => 'Supplier rate comparison', 'group' => 'purchase',
+            'desc' => 'Current rates of every supplier for each item, side by side. The lowest net rate is marked and the others show how much dearer they are.',
+            'filters' => ['category', 'supplier', 'q'],
+            'columns' => ['item' => $col('Item'), 'variant' => $col('Variant'), 'sku' => $col('SKU'), 'supplier' => $col('Supplier'), 'rate' => $col('Rate', 'money'), 'discount' => $col('Disc. %'),
+                'net' => $col('Net rate', 'money'), 'min_qty' => $col('Min qty', 'qty'), 'lead' => $col('Lead time'), 'vs' => $col('Compared to lowest'), 'since' => $col('Valid from', 'date')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $today = date('Y-m-d');
+                $p = [$t, $today, $today];
+                $w = '';
+                if ($f['category']) { $w .= ' AND i.category_id = ?'; $p[] = $f['category']; }
+                if ($f['q'] !== '') { $w .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR i.design_no LIKE ?)'; array_push($p, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
+                $all = DB::all(
+                    "SELECT r.*, s.name AS supplier, s.lead_time_days AS s_lead, i.name AS item, v.name AS variant, v.sku FROM supplier_rates r
+                     JOIN suppliers s ON s.id = r.supplier_id AND s.is_active = 1 JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
+                     WHERE r.tenant_id = ? AND r.valid_from <= ? AND (r.valid_to IS NULL OR r.valid_to >= ?)$w ORDER BY r.valid_from DESC, r.id DESC", $p);
+                $cur = [];
+                foreach ($all as $r) { $k = $r['variant_id'] . '-' . $r['supplier_id']; if (!isset($cur[$k])) $cur[$k] = $r; }
+                $by = [];
+                foreach ($cur as $r) { $r['net'] = Purchase::netRate($r); $by[$r['variant_id']][] = $r; }
+                $out = [];
+                foreach ($by as $list) {
+                    usort($list, fn($a, $b) => $a['net'] <=> $b['net']);
+                    $low = $list[0]['net'];
+                    if ($f['supplier'] && !in_array($f['supplier'], array_map(fn($r) => (int)$r['supplier_id'], $list), true)) continue;
+                    foreach ($list as $r) {
+                        if ($f['supplier'] && (int)$r['supplier_id'] !== $f['supplier']) continue;
+                        $out[] = ['item' => $r['item'], 'variant' => $r['variant'] ?? '', 'sku' => $r['sku'], 'supplier' => $r['supplier'], 'rate' => $r['rate'],
+                            'discount' => (float)$r['discount_pct'] > 0 ? rtrim(rtrim(number_format((float)$r['discount_pct'], 2), '0'), '.') . '%' : '', 'net' => $r['net'], 'min_qty' => (float)$r['min_qty'] > 0 ? $r['min_qty'] : null,
+                            'lead' => ($r['lead_time_days'] ?? $r['s_lead']) ? (int)($r['lead_time_days'] ?? $r['s_lead']) . ' days' : '',
+                            'vs' => count($list) < 2 ? 'Only supplier' : ($r['net'] - $low < 0.005 ? 'Lowest' : '+' . round(($r['net'] - $low) / max($low, 0.01) * 100, 1) . '% (' . number_format($r['net'] - $low, 2) . ' more)'), 'since' => $r['valid_from']];
+                    }
+                }
+                usort($out, fn($a, $b) => [$a['item'], $a['variant'], $a['net']] <=> [$b['item'], $b['variant'], $b['net']]);
+                return array_slice($out, 0, $limit);
+            },
+        ];
+
+        $defs['rate-history'] = [
+            'title' => 'Supplier rate history', 'group' => 'purchase',
+            'desc' => 'Every rate a supplier has quoted, newest first, with how much it changed from their previous rate.',
+            'filters' => ['supplier', 'q'],
+            'columns' => ['from' => $col('Valid from', 'date'), 'to' => $col('Valid till', 'date'), 'supplier' => $col('Supplier'), 'item' => $col('Item'), 'variant' => $col('Variant'),
+                'rate' => $col('Rate', 'money'), 'net' => $col('Net rate', 'money'), 'change' => $col('Change vs previous')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $p = [$t];
+                $w = '';
+                if ($f['supplier']) { $w .= ' AND r.supplier_id = ?'; $p[] = $f['supplier']; }
+                if ($f['q'] !== '') { $w .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ?)'; array_push($p, ...array_fill(0, 3, '%' . $f['q'] . '%')); }
+                $rows = DB::all(
+                    "SELECT r.*, s.name AS supplier, i.name AS item, v.name AS variant FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id
+                     JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id WHERE r.tenant_id = ?$w ORDER BY r.supplier_id, r.variant_id, r.valid_from, r.id", $p);
+                $prev = [];
+                $out = [];
+                foreach ($rows as $r) {
+                    $k = $r['supplier_id'] . '-' . $r['variant_id'];
+                    $net = Purchase::netRate($r);
+                    $chg = '';
+                    if (isset($prev[$k]) && $prev[$k] > 0) { $d = ($net - $prev[$k]) / $prev[$k] * 100; $chg = abs($d) < 0.05 ? 'No change' : ($d > 0 ? '▲ +' : '▼ ') . round($d, 1) . '%'; }
+                    else $chg = 'First rate';
+                    $prev[$k] = $net;
+                    $out[] = ['from' => $r['valid_from'], 'to' => $r['valid_to'], 'supplier' => $r['supplier'], 'item' => $r['item'], 'variant' => $r['variant'] ?? '', 'rate' => $r['rate'], 'net' => $net, 'change' => $chg];
+                }
+                usort($out, fn($a, $b) => [$b['from']] <=> [$a['from']]);
+                return array_slice($out, 0, $limit);
+            },
+        ];
+
+        $defs['price-paid'] = [
+            'title' => 'Purchase price history (what we actually paid)', 'group' => 'purchase',
+            'desc' => 'Every goods-receipt line in the period with the price paid and how it compares with the previous purchase of the same item.',
+            'filters' => ['from', 'to', 'supplier', 'q'],
+            'columns' => ['date' => $col('Received', 'date'), 'grn' => $col('Receipt'), 'supplier' => $col('Supplier'), 'item' => $col('Item'), 'variant' => $col('Variant'),
+                'qty' => $col('Qty', 'qty', true), 'price' => $col('Unit price', 'money'), 'change' => $col('Vs previous purchase')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $p = [$t, $f['to']];
+                $w = '';
+                if ($f['q'] !== '') { $w .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ?)'; array_push($p, ...array_fill(0, 3, '%' . $f['q'] . '%')); }
+                $rows = DB::all(
+                    "SELECT g.received_date AS date, g.grn_no AS grn, g.supplier_id, s.name AS supplier, l.variant_id, i.name AS item, v.name AS variant, l.qty, l.unit_price AS price
+                     FROM grn_items l JOIN grns g ON g.id = l.grn_id JOIN suppliers s ON s.id = g.supplier_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id
+                     WHERE l.tenant_id = ? AND g.received_date <= ?$w ORDER BY l.variant_id, g.received_date, g.id, l.id", $p);
+                $prev = [];
+                $out = [];
+                foreach ($rows as $r) {
+                    $pr = $prev[$r['variant_id']] ?? null;
+                    $prev[$r['variant_id']] = (float)$r['price'];
+                    if ($r['date'] < $f['from'] || ($f['supplier'] && (int)$r['supplier_id'] !== $f['supplier'])) continue;
+                    $r['change'] = $pr === null ? 'First purchase' : ($pr > 0 && abs($r['price'] - $pr) / $pr * 100 >= 0.05 ? (($r['price'] > $pr ? '▲ +' : '▼ ') . round(($r['price'] - $pr) / $pr * 100, 1) . '%') : 'No change');
+                    $out[] = $r;
+                }
+                usort($out, fn($a, $b) => [$b['date'], $b['grn']] <=> [$a['date'], $a['grn']]);
+                return array_slice($out, 0, $limit);
+            },
+        ];
+
         $defs['ageing'] = [
             'title' => 'Receivables & payables ageing', 'group' => 'party',
             'desc' => 'Who owes you and whom you owe, grouped by how many days past the due date.',
