@@ -182,5 +182,29 @@ foreach (['supplier-dues', 'rate-comparison', 'rate-history', 'price-paid'] as $
     check("$slug is empty for another company", !str_contains($txt($b->get("/reports/$slug?from=2026-01-01&to=2026-12-31")['body']), 'Surat Mills'));
 }
 
+echo "Items CSV\n";
+$tpl = $a->get('/items/import/template')['body'];
+check('item template has the new columns and a wallpaper / linen / carpet example', str_contains($tpl, 'item_type') && str_contains($tpl, 'design_no') && str_contains($tpl, 'colour') && str_contains($tpl, 'wallpaper') && str_contains($tpl, 'carpet') && str_contains($tpl, 'linen'));
+$hd = "item_name,item_type,category,brand,unit,tax,hsn_code,design_no,composition,width,gsm,pattern,finish,track_batch,reorder_level,variant_name,colour,size,sku,barcode,cost_price,sale_price\n";
+$up = function (string $body) use ($a) { $f = tempnam(sys_get_temp_dir(), 'it') . '.csv'; file_put_contents($f, $body); return $a->post('/items/import', ['file' => new CURLFile($f, 'text/csv', 'i.csv')], '/items/import'); };
+$un = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
+$up($hd . "Silk Curtain,fabric,Fabric,,Meter,,5407,SC-1,Silk blend,48 in,150,Plain,Satin,,5,Gold,Gold,,SILK-G,,500,800\nSilk Curtain,,,,,,,,,,,,,,,Ivory,Ivory,,SILK-I,,500,800\nSea Wallpaper,wallpaper,,,Meter,,4814,WP-9,Vinyl,53 cm,,Waves,Textured,no,,,Blue,10 m roll,,,900,1500\nQueen Sheet,linen,,,Meter,,6302,BS-1,Cotton,,200 TC,Printed,,,,Queen,Pink,Queen,,,700,1200\n");
+$si = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Silk Curtain'", [$tA]);
+check('import keeps type and attributes; blank track_batch on a fabric means roll-tracked', $si && $si['item_type'] === 'fabric' && $si['hsn_code'] === '5407' && $si['design_no'] === 'SC-1' && $si['composition'] === 'Silk blend' && $si['width'] === '48 in' && (int)$si['track_batch'] === 1);
+check('both variants imported with their colours', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ? AND colour IN (?, ?)', [$si['id'], 'Gold', 'Ivory']) === 2);
+$wp = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Sea Wallpaper'", [$tA]);
+check('an explicit "no" stays untracked; wallpaper size on variant', (int)$wp['track_batch'] === 0 && $wp['item_type'] === 'wallpaper' && $val('SELECT size FROM item_variants WHERE item_id = ?', [$wp['id']]) === '10 m roll');
+check('linen is not roll-tracked by default', (int)$val("SELECT track_batch FROM items WHERE tenant_id = ? AND name = 'Queen Sheet'", [$tA]) === 0);
+$n = (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]);
+$up($hd . "Nice One,fabric,,,Meter,,,,,,,,,,,,,,,,1,2\nBad Type,unicorn,,,Meter,,,,,,,,,,,,,,,,1,2\n");
+check('an unknown item_type rejects the whole file', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $n);
+$up($hd . "Long Attr,fabric,,,Meter,,,,," . str_repeat('9', 50) . ",,,,,,,,,,,1,2\n");
+check('over-long width rejects the file', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Long Attr'", [$tA]));
+$exp = $a->get('/items/export')['body'];
+check('export includes the new columns and values', str_contains($exp, 'item_type') && str_contains($exp, 'SC-1') && str_contains($exp, 'Gold') && str_contains($exp, '10 m roll'));
+$re = tempnam(sys_get_temp_dir(), 'rx') . '.csv'; file_put_contents($re, $exp);
+$b->post('/items/import', ['file' => new CURLFile($re, 'text/csv', 'e.csv')], '/items/import');
+check("another company can import A's exported file as its own (round trip)", (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name = 'Silk Curtain'", [$tB]) === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND item_type = 'fabric' AND design_no = 'SC-1'", [$tB]) === 1);
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

@@ -13,7 +13,10 @@
   <ul class="small text-muted ps-3">
     <li><?= e(term('racks')) ?> are not part of this file: add stock and choose <?= e(term('racks', true)) ?> under Stock → Adjustments.</li>
     <li><code>unit</code> and <code>tax</code> must already exist (Masters). Categories and brands are created automatically.</li>
-    <li><code>track_batch</code>: yes / no. Use yes for fabric sold from rolls.</li>
+    <li><code>item_type</code>: fabric, linen, wallpaper, carpet, accessory or other. Blank means other.</li>
+    <li><code>hsn_code, design_no, composition, width, gsm, pattern, finish</code> describe the item; <code>colour</code> and <code>size</code> belong to each variant row.</li>
+    <li><code>track_batch</code>: yes / no (one roll = one <?= e(term('batch', true)) ?>). If left blank, fabric, wallpaper and carpet are tracked by roll.</li>
+    <li>Older files without the new columns still import.</li>
     <li>Blank <code>sku</code> is generated for you.</li>
     <li>From Excel: File → Save As → CSV.</li>
   </ul>
