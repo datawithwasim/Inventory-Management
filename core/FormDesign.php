@@ -199,7 +199,7 @@ final class FormDesign
             if ($r['customised'] && !isset($r['order'][$key])) continue;
             $label = $r['customised'] && ($r['props'][$key]['label'] ?? '') !== '' ? $r['props'][$key]['label'] : $f['label'];
             $attrs = $r['customised'] ? self::attrs($entity, $key) : ' style="order:901"';
-            $o .= '<div class="col-md-4 mb-3"' . $attrs . '><label class="form-label">' . htmlspecialchars($label, ENT_QUOTES) . ($f['is_required'] ? ' <span class="text-danger">*</span>' : '') . '</label>'
+            $o .= '<div class="col-md-4 mb-3" data-ff="' . $entity . '.' . $key . '"' . $attrs . '><label class="form-label">' . htmlspecialchars($label, ENT_QUOTES) . ($f['is_required'] ? ' <span class="text-danger">*</span>' : '') . '</label>'
                 . CustomFields::inputHtml($f, (string)($cfValues[$f['id']] ?? '')) . '</div>';
         }
         return $o;
@@ -220,13 +220,22 @@ final class FormDesign
         };
     }
 
+    public const TYPE_ICONS = ['text' => 'input-cursor-text', 'textarea' => 'text-paragraph', 'email' => 'envelope', 'phone' => 'telephone', 'url' => 'link-45deg', 'number' => '123', 'decimal' => 'hash',
+        'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square'];
+
     private static function typeIcon(string $type): string
     {
-        return ['text' => 'input-cursor-text', 'textarea' => 'text-paragraph', 'email' => 'envelope', 'phone' => 'telephone', 'url' => 'link-45deg', 'number' => '123', 'decimal' => 'hash',
-            'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square'][$type] ?? 'input-cursor-text';
+        return self::TYPE_ICONS[$type] ?? 'input-cursor-text';
     }
 
     /** Everything the visual designer needs, for every form. */
+    /** The designer model for one form only (for the in-context customizer). */
+    public static function modelFor(string $entity): ?array
+    {
+        foreach (self::model() as $m) if ($m['key'] === $entity) return $m;
+        return null;
+    }
+
     public static function model(): array
     {
         $out = [];

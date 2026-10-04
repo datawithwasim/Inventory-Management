@@ -475,3 +475,20 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 
 /* item variants: roomy inputs (the table scrolls sideways on small screens) */
 #variantTable input.form-control { min-width: 96px; } #variantTable th, #variantTable td { white-space: nowrap; }
+
+/* ---- in-context form customizer (admins) ---- */
+#ffCustomize.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+body.ff-customizing .ff-wrap { position: relative; outline: 1px dashed color-mix(in srgb, var(--brand) 45%, transparent); outline-offset: 3px; border-radius: 6px; }
+body.ff-customizing .ff-wrap:hover { outline-style: solid; }
+.ff-tag { position: absolute; top: -10px; right: -8px; z-index: 5; width: 24px; height: 24px; padding: 0; border: none; border-radius: 50%; background: var(--brand); color: #fff; font-size: .7rem; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer; }
+.ff-tag:hover { filter: brightness(1.1); }
+.ff-wrap.ff-hidden { opacity: .5; }
+.ff-badge { position: absolute; bottom: 4px; right: 6px; font-size: .62rem; background: var(--ink-3); color: #fff; border-radius: 4px; padding: 0 5px; }
+.ff-pop { position: absolute; z-index: 2000; width: 280px; }
+.ff-pop .ff-lbl { display: block; font-size: .72rem; font-weight: 600; color: var(--ink-2); margin-bottom: .15rem; }
+.ff-pop .ff-row { display: flex; align-items: center; gap: .4rem; margin: .35rem 0; }
+.ff-pop .ff-note { font-size: .72rem; color: var(--ink-3); }
+.ff-bar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: .5rem; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; padding: .5rem .8rem; }
+.ff-bar-title { font-size: .8rem; font-weight: 600; color: var(--ink-2); margin-right: .3rem; }
+.ff-flash { position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%); z-index: 2001; background: var(--ink); color: var(--surface); font-size: .8rem; padding: .5rem .9rem; border-radius: 8px; box-shadow: 0 3px 12px rgba(0,0,0,.25); }
+@media (max-width: 575px) { .ff-bar { flex-wrap: wrap; justify-content: center; width: calc(100% - 24px); border-radius: 14px; } .ff-pop { width: calc(100vw - 32px); } }

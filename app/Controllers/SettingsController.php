@@ -46,6 +46,17 @@ final class SettingsController extends Controller
         redirect('settings/company');
     }
 
+    /** JSON model of one form, for the in-context "Customize" editor on real pages. */
+    public function designModel(): void
+    {
+        $entity = (string)($_GET['form'] ?? '');
+        $model = FormDesign::modelFor($entity);
+        header('Content-Type: application/json');
+        if (!$model) { http_response_code(404); echo '{"error":"unknown form"}'; exit; }
+        echo json_encode(['model' => $model, 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES, 'icons' => FormDesign::TYPE_ICONS], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function show(string $tab): void
     {
         if ($tab === 'fields') redirect('settings/formdesign');
@@ -172,6 +183,7 @@ final class SettingsController extends Controller
                 if (!is_array($payload)) $this->bounce('Nothing to save — please try again.', $tab);
                 $notes = FormDesign::savePayload($payload);
                 Audit::log('settings_formdesign', 'settings');
+                if (!empty($d['ajax'])) { header('Content-Type: application/json'); echo json_encode(['ok' => true] + $notes); exit; }
                 $msg = 'Forms saved. They now look the way you designed them.';
                 if ($notes['created'] || $notes['deleted']) $msg .= ' (' . $notes['created'] . ' field(s) added, ' . $notes['deleted'] . ' deleted.)';
                 flash('success', $msg);

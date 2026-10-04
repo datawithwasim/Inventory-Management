@@ -436,5 +436,28 @@ check('a user with settings.view but not edit cannot save appearance', (function
 })());
 check('Super Admin pages still render in the new shell', str_contains($admin->get('/admin')['body'], 'class="app sbs-dark"') && $admin->get('/admin/tenants')['status'] === 200 && $admin->get('/admin/system')['status'] === 200);
 
+echo "In-context form customizer\n";
+check('record forms carry data-ff keys and the Customize button for admins', str_contains($a->get('/suppliers/create')['body'], 'data-ff="supplier.name"') && str_contains($a->get('/suppliers/create')['body'], 'id="ffCustomize"') && str_contains($a->get('/items/create')['body'], 'data-ff="item.name"'));
+$m = json_decode($a->get('/settings/formdesign/model?form=supplier')['body'], true);
+check('the model endpoint returns one form with its fields, widths and types', ($m['model']['key'] ?? '') === 'supplier' && isset($m['model']['fields']['phone']) && !empty($m['widths']) && !empty($m['types']) && !empty($m['icons']));
+check('the model endpoint 404s for a made-up form', $a->get('/settings/formdesign/model?form=nope')['status'] === 404);
+// an AJAX save (as the inline editor sends): rename phone, hide notes, add a custom field
+$pay = ['supplier' => ['style' => 'top', 'lines' => ['disc' => true, 'tax' => true], 'deleted' => [],
+    'sections' => [['title' => '', 'cols' => 0, 'fields' => ['name', 'phone', 'cf:new1']]],
+    'fields' => ['phone' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'custom_label' => 'Mobile number'],
+        'notes' => ['w' => '', 'help' => '', 'show' => false, 'custom_label' => ''],
+        'cf:new1' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Agent name', 'type' => 'text', 'options' => '', 'inList' => false, 'unique' => false, 'isNew' => true]]]];
+$r = $a->post('/settings/formdesign', ['ajax' => '1', 'current' => 'supplier', 'payload' => json_encode($pay)], '/settings/formdesign?form=supplier');
+$j = json_decode($r['body'], true);
+check('an AJAX save returns JSON (no redirect) and reports the new field', $r['status'] === 200 && ($j['ok'] ?? false) === true && (int)($j['created'] ?? 0) === 1);
+$sf = $a->get('/suppliers/create')['body'];
+check('the real form now shows the renamed label, the hidden field is gone, the new field is present', str_contains($sf, 'Mobile number') && !str_contains($sf, 'name="notes"') && str_contains($sf, 'Agent name'));
+$a->post('/settings/formdesign', ['payload' => json_encode(['supplier' => ['reset' => true]])], '/settings/modules');
+DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND entity = 'supplier'", [$tA]);
+check('a settings.view-only user cannot reach the model endpoint and sees no Customize button', (function () use ($sfx, $base) {
+    $c = new Client($base); $c->post('/login', ['email' => "vs-$sfx@test.local", 'password' => 'Password123'], '/login');
+    return $c->get('/settings/formdesign/model?form=supplier')['status'] === 403 && !str_contains($c->get('/suppliers/create')['body'], 'id="ffCustomize"');
+})());
+
 echo "\n" . ($fails ? "$fails check(s) FAILED" : 'All checks passed') . "\n";
 exit($fails ? 1 : 0);

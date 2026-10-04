@@ -232,6 +232,7 @@ $router->post('/pos/checkout', $A . 'PosController@checkout', ['auth', 'perm:pos
 
 // ---- Settings ----
 $router->get('/settings', $A . 'SettingsController@index', ['auth', 'perm:settings.view']);
+$router->get('/settings/formdesign/model', $A . 'SettingsController@designModel', ['auth', 'perm:settings.edit']);
 $router->get('/settings/custom-fields', $A . 'CustomFieldController@index', ['auth', 'perm:settings.view']);
 $router->get('/settings/custom-fields/create', $A . 'CustomFieldController@create', ['auth', 'perm:settings.edit']);
 $router->post('/settings/custom-fields', $A . 'CustomFieldController@store', ['auth', 'perm:settings.edit']);

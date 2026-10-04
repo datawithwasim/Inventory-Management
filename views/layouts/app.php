@@ -89,14 +89,18 @@ $dashActive = $path === '/dashboard';
     </div>
   </header>
   <main class="content" id="main">
-    <div class="page-head">
+    <div class="page-head d-flex justify-content-between align-items-center gap-2">
       <div>
         <h1><?= e($title ?? '') ?></h1>
       </div>
+      <?php if (!empty($GLOBALS['ff_entity']) && can('settings.edit')): ?>
+        <button type="button" class="btn btn-sm btn-outline-secondary no-print" id="ffCustomize" data-entity="<?= e($GLOBALS['ff_entity']) ?>" data-model="<?= e(url('settings/formdesign/model?form=' . $GLOBALS['ff_entity'])) ?>" data-save="<?= e(url('settings/formdesign')) ?>" data-advanced="<?= e(url('settings/formdesign?form=' . $GLOBALS['ff_entity'])) ?>"><i class="bi bi-magic"></i> Customize</button>
+      <?php endif; ?>
     </div>
     <?php require __DIR__ . '/flash.php'; ?>
     <?= $content ?>
     <?= $GLOBALS['foot_html'] ?? '' ?>
+    <?php if (!empty($GLOBALS['ff_entity']) && can('settings.edit')): ?><script src="<?= asset('js/form-inline-customize.js') ?>"></script><?php endif; ?>
   </main>
 </div>
 
