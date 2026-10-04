@@ -239,7 +239,7 @@ function ffh(string $key, mixed $value = ''): string
 function ffa(string $key): string
 {
     [$e, $c] = explode('.', $key, 2);
-    return ' data-ff="' . htmlspecialchars($key, ENT_QUOTES) . '"' . Core\FormDesign::attrs($e, $c);
+    return Core\FormDesign::attrs($e, $c);
 }
 
 /** The label to show: the company's own wording if set, else the default (already-escaped HTML). */
@@ -253,8 +253,6 @@ function fl(string $key, string $default): string
 /** Extra class for a form grid (label position chosen in the form designer). */
 function ffclass(string $entity): string
 {
-    // Marks the page as carrying this form, so the layout can offer in-context "Customize" (admins only).
-    if (isset(Core\FormDesign::FIELDS[$entity])) $GLOBALS['ff_entity'] = $entity;
     return Core\FormDesign::cls($entity);
 }
 
