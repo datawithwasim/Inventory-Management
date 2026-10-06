@@ -26,7 +26,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 
 - **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),
   Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type-aware attributes, HSN, colour & size per variant), and a **supplier-wise rate list**
-  (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price, plus 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
+  (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.

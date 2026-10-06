@@ -326,7 +326,8 @@ html.sb-collapsed .sb-group-head { background: var(--sb-line); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .16s; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes popIn { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
+/* individual translate/scale (not transform): Popper positions dropdowns with an inline transform, which an animated transform would override */
+@keyframes popIn { from { opacity: 0; translate: 0 -4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
 @keyframes slideIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 @keyframes growX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes draw { to { stroke-dashoffset: 0; } }
@@ -337,7 +338,7 @@ html.sb-collapsed .sb-group-head { background: var(--sb-line); }
 .dash-w:nth-child(1) { animation-delay: .02s; } .dash-w:nth-child(2) { animation-delay: .07s; } .dash-w:nth-child(3) { animation-delay: .12s; }
 .dash-w:nth-child(4) { animation-delay: .17s; } .dash-w:nth-child(5) { animation-delay: .22s; } .dash-w:nth-child(n+6) { animation-delay: .27s; }
 .alert { animation: slideIn .3s ease backwards; }
-.dropdown-menu.show { animation: popIn .14s ease-out; }
+.dropdown-menu.show { animation: popIn .14s ease-out; transform-origin: top right; }
 .palette:not([hidden]) { animation: fadeIn .14s ease-out; } .palette:not([hidden]) .palette-box { animation: popIn .18s ease-out; }
 .viz-tip { transition: opacity .1s; }
 .hfill { transform-origin: left center; animation: growX .6s cubic-bezier(.2, .7, .2, 1) backwards; }

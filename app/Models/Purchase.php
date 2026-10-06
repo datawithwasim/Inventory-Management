@@ -132,6 +132,21 @@ final class Purchase
         return $rows;
     }
 
+    /** Adds 'is_current' and 'net' to rate rows (any mix of suppliers / items). Rows must be ordered newest start date first. */
+    public static function markCurrent(array $rows): array
+    {
+        $today = date('Y-m-d');
+        $seen = [];
+        foreach ($rows as &$r) {
+            $k = $r['supplier_id'] . '-' . $r['variant_id'];
+            $live = $r['valid_from'] <= $today && ($r['valid_to'] === null || $r['valid_to'] >= $today);
+            $r['is_current'] = $live && !isset($seen[$k]);
+            if ($r['is_current']) $seen[$k] = 1;
+            $r['net'] = self::netRate($r);
+        }
+        return $rows;
+    }
+
     /** Current rates of every supplier for the variants of one item, cheapest first (for the item page). */
     public static function ratesForItem(int $itemId): array
     {

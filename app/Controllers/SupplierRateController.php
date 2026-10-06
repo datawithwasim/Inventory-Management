@@ -15,10 +15,17 @@ final class SupplierRateController extends PurchaseBase
         return Purchase::supplier((int)$id) ?? $this->notFound();
     }
 
+    /** Where to go afterwards: a relative path the form asked for (e.g. the global rate list), else the supplier's rate card. */
+    private function back(int $supplierId): never
+    {
+        $r = trim((string)($this->input()['return'] ?? ''));
+        redirect(preg_match('~^[a-z0-9_/-]+(\?[A-Za-z0-9_=&%.\-]*)?$~i', $r) === 1 ? $r : "suppliers/$supplierId#rates");
+    }
+
     private function fail(string $msg, int $supplierId): never
     {
         flash('danger', $msg);
-        redirect("suppliers/$supplierId#rates");
+        $this->back($supplierId);
     }
 
     /** Checks one rate row; returns the clean values or an error string. */
@@ -56,7 +63,7 @@ final class SupplierRateController extends PurchaseBase
         Purchase::addRate((int)$s['id'], $vid, $row);
         Audit::log('supplier_rate_add', 'supplier', (int)$s['id'], 'variant ' . $vid . ' @ ' . $row['rate']);
         flash('success', 'Rate saved.');
-        redirect("suppliers/{$s['id']}#rates");
+        $this->back((int)$s['id']);
     }
 
     public function destroy(string $id, string $rateId): void
@@ -65,7 +72,7 @@ final class SupplierRateController extends PurchaseBase
         DB::run('DELETE FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND id = ?', [$this->tid(), $s['id'], (int)$rateId]);
         Audit::log('supplier_rate_delete', 'supplier', (int)$s['id'], 'rate ' . (int)$rateId);
         flash('success', 'Rate removed.');
-        redirect("suppliers/{$s['id']}#rates");
+        $this->back((int)$s['id']);
     }
 
     public function template(string $id): void
@@ -111,6 +118,6 @@ final class SupplierRateController extends PurchaseBase
         fclose($h);
         Audit::log('supplier_rate_import', 'supplier', $sid, "$ok rates");
         flash($bad ? ($ok ? 'warning' : 'danger') : 'success', "$ok rate(s) imported" . ($bad ? ', ' . count($bad) . ' skipped. ' . implode(' ', array_slice($bad, 0, 5)) : '.'));
-        redirect("suppliers/$sid#rates");
+        $this->back($sid);
     }
 }
