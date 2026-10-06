@@ -15,7 +15,6 @@ final class SettingsNav
         'Make it yours' => [
             'appearance' => ['Appearance', 'palette', 'settings/appearance'],
             'modules' => ['Modules & menu', 'grid-1x2', 'settings/modules'],
-            'formdesign' => ['Form designer', 'layout-text-window', 'settings/formdesign'],
             'labels' => ['Names (labels)', 'type', 'settings/labels'],
             'templates' => ['Print templates', 'printer', 'settings/templates'],
         ],

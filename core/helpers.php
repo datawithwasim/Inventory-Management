@@ -253,6 +253,8 @@ function fl(string $key, string $default): string
 /** Extra class for a form grid (label position chosen in the form designer). */
 function ffclass(string $entity): string
 {
+    // Tells the page header which form this is, so it can offer "Edit page layout" (admins).
+    if (isset(Core\FormDesign::FIELDS[$entity])) $GLOBALS['ff_entity'] = $entity;
     return Core\FormDesign::cls($entity);
 }
 

@@ -50,6 +50,14 @@ final class FormDesign
         'adjustment' => ['warehouse_id' => 3, 'reason' => 3, 'note' => 6],
         'transfer' => ['warehouse_id' => 3, 'to_warehouse_id' => 3, 'note' => 6],
     ];
+    /** Forms that have a record detail page (Overview / Timeline) laid out from the same design. */
+    public const DETAIL = ['item', 'customer', 'supplier'];
+    /** Fields shown in the summary strip at the top of the detail page when the company has not chosen. */
+    public const SUMMARY_DEFAULT = [
+        'item' => ['item_type', 'category_id', 'unit_id', 'hsn_code'],
+        'customer' => ['phone', 'email', 'group_id', 'credit_days'],
+        'supplier' => ['supplier_type', 'phone', 'city', 'payment_terms_days'],
+    ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];
 
     public const COLS = [0 => 'Original', 1 => '1 column', 2 => '2 columns', 3 => '3 columns'];
@@ -140,8 +148,10 @@ final class FormDesign
             foreach ($sec['fields'] as $k) $order[$k] = ++$n * 10;
         }
         $style = ($saved['style'] ?? 'top') === 'left' ? 'left' : 'top';
+        $pickSum = isset($saved['summary']) ? (array)$saved['summary'] : (self::SUMMARY_DEFAULT[$entity] ?? []);
+        $summary = array_slice(array_values(array_filter(array_unique($pickSum), fn($k) => in_array($k, $valid, true) && $visible($k))), 0, 4);
         $lines = ['disc' => !isset($saved['lines']['disc']) || !empty($saved['lines']['disc']), 'tax' => !isset($saved['lines']['tax']) || !empty($saved['lines']['tax'])];
-        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'cf' => $cfByKey];
+        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'cf' => $cfByKey, 'summary' => $summary];
     }
 
     // ---------------------------------------------------------------- rendering helpers
@@ -253,7 +263,7 @@ final class FormDesign
                 $secs = $r['sections'];
                 if (!$layout) $secs = [['id' => 's1', 'title' => '', 'cols' => 0, 'fields' => array_keys(array_filter($fields, fn($f) => $f['show']))]];
                 $out[] = ['key' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity], 'group' => $group, 'layout' => $layout, 'customFields' => isset(CustomFields::ENTITIES[$entity]),
-                    'lineForm' => in_array($entity, self::LINE_FORMS, true), 'customised' => $r['customised'], 'style' => $r['style'], 'lines' => $r['lines'],
+                    'lineForm' => in_array($entity, self::LINE_FORMS, true), 'detail' => in_array($entity, self::DETAIL, true), 'summary' => $r['summary'], 'customised' => $r['customised'], 'style' => $r['style'], 'lines' => $r['lines'],
                     'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'fields' => $fields];
             }
         }
@@ -362,8 +372,12 @@ final class FormDesign
                 if ($help !== '') $row['help'] = $help;
                 if ($row) $props[$k] = $row;
             }
+            $sum = array_key_exists('summary', $in)
+                ? array_slice(array_values(array_unique(array_map($mapKey, array_map('strval', (array)$in['summary'])))), 0, 4)
+                : ($cfg[$entity]['summary'] ?? null);
             $cfg[$entity] = ['style' => ($in['style'] ?? 'top') === 'left' ? 'left' : 'top', 'sections' => $sections, 'props' => $props,
                 'lines' => ['disc' => !isset($in['lines']['disc']) || !empty($in['lines']['disc']) ? 1 : 0, 'tax' => !isset($in['lines']['tax']) || !empty($in['lines']['tax']) ? 1 : 0]];
+            if ($sum !== null) $cfg[$entity]['summary'] = $sum;
         }
         FormFields::save($hidden, $required);
         Settings::set('forms.layout', json_encode($cfg, JSON_UNESCAPED_UNICODE));

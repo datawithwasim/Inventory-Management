@@ -46,14 +46,22 @@ final class SettingsController extends Controller
         redirect('settings/company');
     }
 
+    /** A same-site path to come back to after editing a layout; anything else is dropped. */
+    private static function safeReturn(string $r): string
+    {
+        $r = trim($r);
+        return ($r !== '' && strlen($r) <= 500 && $r[0] === '/' && !str_starts_with($r, '//') && !preg_match('/[\x00-\x1f\\\\]/', $r)) ? $r : '';
+    }
+
     public function show(string $tab): void
     {
         if ($tab === 'fields') redirect('settings/formdesign');
         if ($tab === 'formfields') redirect('settings/formdesign');
-        if (!SettingsNav::valid($tab)) $this->notFound();
+        if (!SettingsNav::valid($tab) && $tab !== 'formdesign') $this->notFound();
         if ($tab === 'formdesign') {
-            $this->view('app/settings/formdesign', ['title' => 'Form designer', 'model' => FormDesign::model(), 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES,
-                'start' => (string)($_GET['form'] ?? ''), 'colsOpts' => FormDesign::COLS], 'layouts/designer');
+            $return = self::safeReturn((string)($_GET['return'] ?? ''));
+            $this->view('app/settings/formdesign', ['title' => 'Page layout', 'model' => FormDesign::model(), 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES,
+                'start' => (string)($_GET['form'] ?? ''), 'colsOpts' => FormDesign::COLS, 'return' => $return, 'backHref' => $return !== '' ? $return : url('settings/company')], 'layouts/designer');
             return;
         }
         $data = ['title' => 'Settings'];
@@ -175,8 +183,12 @@ final class SettingsController extends Controller
                 $msg = 'Forms saved. They now look the way you designed them.';
                 if ($notes['created'] || $notes['deleted']) $msg .= ' (' . $notes['created'] . ' field(s) added, ' . $notes['deleted'] . ' deleted.)';
                 flash('success', $msg);
-                if (!empty($d['close'])) redirect('settings/company');
-                redirect('settings/formdesign?form=' . rawurlencode((string)($d['current'] ?? '')));
+                $ret = self::safeReturn((string)($d['return'] ?? ''));
+                if (!empty($d['close'])) {
+                    if ($ret !== '') { header('Location: ' . $ret); exit; }
+                    redirect('settings/company');
+                }
+                redirect('settings/formdesign?form=' . rawurlencode((string)($d['current'] ?? '')) . ($ret !== '' ? '&return=' . rawurlencode($ret) : ''));
             case 'workflow':
                 Settings::set('po_approval', empty($d['po_approval']) ? '0' : '1');
                 Settings::set('negative_stock', empty($d['negative_stock']) ? '0' : '1');

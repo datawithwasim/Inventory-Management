@@ -106,6 +106,8 @@ $router->post('/stock/takes/{id}/delete', $A . 'StocktakeController@destroy', ['
 // ---- Purchase ----
 $router->get('/lookup/items', $A . 'LookupController@items', ['auth']);
 
+$router->post('/records/{entity}/{id}/notes', $A . 'RecordNoteController@store', ['auth']);
+$router->post('/records/notes/{noteId}/delete', $A . 'RecordNoteController@destroy', ['auth']);
 $router->get('/suppliers', $A . 'SupplierController@index', ['auth', 'perm:suppliers.view']);
 $router->get('/suppliers/create', $A . 'SupplierController@create', ['auth', 'perm:suppliers.create']);
 $router->post('/suppliers', $A . 'SupplierController@store', ['auth', 'perm:suppliers.create']);

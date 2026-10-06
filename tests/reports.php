@@ -185,7 +185,7 @@ $rows = array_values(array_filter($cells($h), fn($r) => count($r) > 4));
 check('statement from a later date starts with an opening balance of 10,856', count($rows) === 3 && $near($num($rows[0][5]), 10856) && $near($num($rows[2][5]), 4656));
 check('statement with no customer chosen asks for one', str_contains($page('customer-statement'), 'Choose a customer'));
 $h = $page('customer-statement', "customer=$otherCust&from=" . $day(-60));
-check('another company\'s customer id leaks nothing', !str_contains($h, 'X-1') && !str_contains($h, '999'));
+check('another company\'s customer id leaks nothing', !str_contains($h = preg_replace('/[a-f0-9]{32,}/', '', $h), 'X-1') && !str_contains($h, '999'));
 $h = $page('supplier-statement', "supplier=$s1&from=" . $day(-60));
 $rows = array_values(array_filter($cells($h), fn($r) => count($r) > 4));
 check('supplier statement: bill 28,000 − payment 10,000 − return 2,800 = 15,200', count($rows) === 4 && $near($num($rows[3][5]), 15200));

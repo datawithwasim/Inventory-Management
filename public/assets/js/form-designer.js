@@ -52,7 +52,35 @@
     $('dzPreview').classList.toggle('on', preview);
     $('dzNoCustom').classList.toggle('d-none', f.customFields);
     $('dzTypes').classList.toggle('off', !f.customFields);
+    if (!f.detail) tab = 'edit';
+    $('dzTabDetail').hidden = !f.detail;
+    document.querySelectorAll('#dzTabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
+    $('dz').classList.toggle('detail-tab', tab === 'detail');
+    $('dzPaper').hidden = tab === 'detail'; $('dzDetail').hidden = tab !== 'detail';
+    if (tab === 'detail') { renderDetail(); return; }
     renderSections(); renderUnused(); renderLines(); renderRight();
+  }
+
+  /* ---------------- detail page tab ---------------- */
+  var tab = 'edit';
+  document.querySelectorAll('#dzTabs button').forEach(function (b) { b.addEventListener('click', function () { tab = b.dataset.tab; sel = null; render(); }); });
+  function renderDetail() {
+    var f = F(), sum = f.summary || (f.summary = []);
+    $('dzDetailTitle').textContent = f.title.replace(/ form$/, '') + ' — detail page';
+    var keys = []; f.sections.forEach(function (s) { s.fields.forEach(function (k) { if (f.fields[k] && f.fields[k].show !== false) keys.push(k); }); });
+    $('dzSumCount').textContent = sum.length + ' / 4';
+    $('dzSumPreview').innerHTML = sum.length ? sum.map(function (k) { return '<div><span>' + esc(labelOf(fld(k))) + '</span><b>—</b></div>'; }).join('') : '<em class="text-muted small">Nothing chosen — the page opens straight on the sections.</em>';
+    $('dzSumList').innerHTML = keys.map(function (k) {
+      var on = sum.indexOf(k) > -1, x = fld(k);
+      return '<label class="dz-sumrow' + (on ? ' on' : '') + '"><input type="checkbox" data-k="' + esc(k) + '"' + (on ? ' checked' : '') + (!on && sum.length >= 4 ? ' disabled' : '') + '> <i class="bi bi-' + esc(x.kind) + '"></i> ' + esc(labelOf(x)) + '</label>';
+    }).join('');
+    $('dzSumList').querySelectorAll('input').forEach(function (c) {
+      c.addEventListener('change', function () {
+        var i = sum.indexOf(c.dataset.k);
+        if (c.checked && i < 0 && sum.length < 4) sum.push(c.dataset.k); else if (!c.checked && i > -1) sum.splice(i, 1);
+        touch(); renderDetail();
+      });
+    });
   }
 
   function tileHtml(x) {
@@ -129,7 +157,7 @@
       show: true, req: false, inList: false, w: '', help: '', span: 4 };
     return key;
   }
-  function hideField(key) { var x = fld(key); x.show = false; x.req = false; detach(key); if (sel === key) sel = null; }
+  function hideField(key) { var x = fld(key); x.show = false; x.req = false; detach(key); if (F().summary) F().summary = F().summary.filter(function (k) { return k !== key; }); if (sel === key) sel = null; }
   function restore(key, si) { var x = fld(key); x.show = true; if (si == null) si = F().sections.length - 1; insertAt(si, null, false, key); }
   function drop(si, ref, after) {
     var k;
@@ -269,6 +297,7 @@
     data.forEach(function (f) {
       if (JSON.stringify(f) === initialByKey[f.key]) return;
       var o = { style: f.style, lines: f.lines, deleted: f.deleted, sections: f.sections.map(function (s) { return { title: s.title, cols: s.cols, fields: s.fields.slice() }; }), fields: {} };
+      if (f.detail) o.summary = (f.summary || []).slice();
       if (f.resetFlag) o.reset = true;
       Object.keys(f.fields).forEach(function (k) {
         var x = f.fields[k];

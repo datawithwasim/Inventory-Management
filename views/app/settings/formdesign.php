@@ -2,8 +2,8 @@
     'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square']; ?>
 <div class="dz" id="dz" data-start="<?= e($start) ?>">
   <header class="dz-top">
-    <a class="dz-back" href="<?= url('settings/company') ?>" title="Back to settings"><i class="bi bi-arrow-left"></i></a>
-    <span class="dz-title">Form designer</span><span class="dz-sep"></span>
+    <a class="dz-back" href="<?= e($backHref) ?>" title="Back"><i class="bi bi-arrow-left"></i></a>
+    <span class="dz-title">Edit page layout</span><span class="dz-sep"></span>
     <select id="dzForm" class="dz-select" aria-label="Form"></select>
     <div class="dz-seg" id="dzStyle" title="Where the labels go on the form"><button type="button" data-s="top">Labels on top</button><button type="button" data-s="left">Labels on left</button></div>
     <span class="dz-grow"></span>
@@ -11,9 +11,9 @@
     <button type="button" class="dz-btn" id="dzPreview" title="Preview how the form will look"><i class="bi bi-eye"></i><span>Preview</span></button>
     <button type="button" class="dz-btn" id="dzUndo" disabled><i class="bi bi-arrow-counterclockwise"></i><span>Undo</span></button>
     <button type="button" class="dz-btn" id="dzReset"><i class="bi bi-eraser"></i><span>Reset form</span></button>
-    <a class="dz-btn light" href="<?= url('settings/company') ?>" id="dzCancel">Cancel</a>
+    <a class="dz-btn light" href="<?= e($backHref) ?>" id="dzCancel">Cancel</a>
     <form method="post" action="<?= url('settings/formdesign') ?>" id="dzSave" class="m-0 d-flex gap-2" data-noload><?= csrf_field() ?>
-      <input type="hidden" name="payload" id="dzPayload"><input type="hidden" name="current" id="dzCurrent"><input type="hidden" name="close" id="dzClose" value="">
+      <input type="hidden" name="payload" id="dzPayload"><input type="hidden" name="current" id="dzCurrent"><input type="hidden" name="close" id="dzClose" value=""><input type="hidden" name="return" value="<?= e($return) ?>">
       <button class="dz-btn primary" id="dzSaveBtn"><i class="bi bi-check2"></i><span>Save</span></button>
       <button class="dz-btn primary soft" id="dzSaveClose" type="submit">Save and close</button>
     </form>
@@ -32,6 +32,14 @@
     </aside>
 
     <main class="dz-center">
+      <div class="dz-tabs" id="dzTabs"><button type="button" class="on" data-tab="edit">Edit page</button><button type="button" data-tab="detail" id="dzTabDetail">Detail page</button></div>
+      <div class="dz-paper" id="dzDetail" hidden>
+        <div class="dz-paper-head"><h2 id="dzDetailTitle">Detail page</h2></div>
+        <p class="text-muted small mb-3">The record page shows every section and field exactly as arranged on the Edit page. Here you choose the <b>summary</b> — up to four key fields shown in a strip at the top.</p>
+        <div id="dzSumPreview" class="dz-sumprev"></div>
+        <div class="dz-box-title mb-2">Fields in the summary <span class="dz-count" id="dzSumCount">0</span></div>
+        <div id="dzSumList" class="dz-sumlist"></div>
+      </div>
       <div class="dz-paper" id="dzPaper">
         <div class="dz-paper-head"><h2 id="dzPaperTitle"></h2><span class="dz-mock-buttons"><span>Cancel</span><span class="p">Save</span></span></div>
         <div id="dzSections"></div>
