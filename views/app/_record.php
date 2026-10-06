@@ -63,7 +63,7 @@ $layoutUrl = url('settings/formdesign?form=' . $E . '&return=' . rawurlencode($_
 </div>
 <script>
 (function () {
-  var tabs = document.querySelectorAll('.rec-tabs button'), panels = document.querySelectorAll('.rec-panel');
+  var tabs = document.querySelectorAll('.rec-main > .rec-tabs button'), panels = document.querySelectorAll('.rec-main > .rec-panel');
   function show(id) { tabs.forEach(function (t) { t.classList.toggle('on', t.dataset.tab === id); }); panels.forEach(function (p) { p.hidden = p.id !== id; }); }
   tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
   document.querySelectorAll('.rec-side a').forEach(function (a) {

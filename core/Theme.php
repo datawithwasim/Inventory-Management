@@ -69,7 +69,7 @@ final class Theme
         return '<script>(function(){var m=null;try{m=localStorage.getItem("inv-mode")}catch(e){}'
             . 'if(!m||m==="default")m=' . json_encode($default) . ';'
             . 'if(m==="auto")m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";'
-            . 'var d=document.documentElement;d.setAttribute("data-bs-theme",m);d.setAttribute("data-theme",m);'
+            . 'var d=document.documentElement;d.setAttribute("data-default-mode",' . json_encode($default) . ');d.setAttribute("data-bs-theme",m);d.setAttribute("data-theme",m);'
             . 'try{if(localStorage.getItem("inv-sb")==="1")d.classList.add("sb-collapsed")}catch(e){}})();</script>';
     }
 }

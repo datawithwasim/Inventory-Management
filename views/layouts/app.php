@@ -75,16 +75,17 @@ $dashActive = $path === '/dashboard';
         </div>
       <?php endif; ?>
       <div class="dropdown">
-        <button class="user-btn" data-bs-toggle="dropdown" aria-expanded="false"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
-        <ul class="dropdown-menu dropdown-menu-end shadow">
-          <li class="dropdown-header">Account &amp; administration</li>
-          <?php foreach ($menu['account'] as $it): ?>
-            <li><a class="dropdown-item" href="<?= url(ltrim($it['href'], '/')) ?>"><i class="bi bi-<?= e($it['icon']) ?> me-2 text-muted"></i><?= e($it['label']) ?></a></li>
-          <?php endforeach; ?>
-          <li><hr class="dropdown-divider"></li>
-          <li><button type="button" class="dropdown-item" id="modeBtn"><i class="bi bi-moon-stars me-2 text-muted"></i><span>Dark mode</span></button></li>
-          <li><form method="post" action="<?= url('logout') ?>"><?= csrf_field() ?><button class="dropdown-item"><i class="bi bi-box-arrow-right me-2 text-muted"></i>Sign out</button></form></li>
-        </ul>
+        <button class="user-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Account menu"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
+        <div class="dropdown-menu dropdown-menu-end shadow pm">
+          <div class="pm-head"><span class="avatar avatar-lg"><?= e($initial) ?></span>
+            <div class="pm-who"><div class="pm-name"><?= e($me['name']) ?></div><div class="pm-mail"><?= e($me['email'] ?? '') ?></div><div class="pm-role"><?= e($me['role_name']) ?> · <?= e($me['tenant_name']) ?></div></div></div>
+          <div class="pm-list">
+            <?php foreach ($menu['account'] as $it): ?><a class="pm-item" href="<?= url(ltrim($it['href'], '/')) ?>"><i class="bi bi-<?= e($it['icon']) ?>"></i><span><?= e($it['label']) ?></span></a><?php endforeach; ?>
+          </div>
+          <div class="pm-theme"><span><i class="bi bi-circle-half"></i> Theme</span>
+            <div class="pm-seg" role="group" aria-label="Theme"><button type="button" data-theme-set="light"><i class="bi bi-sun"></i> Light</button><button type="button" data-theme-set="dark"><i class="bi bi-moon-stars"></i> Dark</button><button type="button" data-theme-set="auto" title="Follow the device setting">Auto</button></div></div>
+          <form method="post" action="<?= url('logout') ?>" class="pm-foot"><?= csrf_field() ?><button class="pm-item pm-out"><i class="bi bi-box-arrow-right"></i><span>Sign out</span></button></form>
+        </div>
       </div>
     </div>
   </header>

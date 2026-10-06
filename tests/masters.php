@@ -85,7 +85,7 @@ check('a newer rate closes the older one (history kept)', count($rows) === 2 && 
 $a->post("/suppliers/$s1/rates", ['variant_id' => $v1, 'rate' => '305', 'valid_from' => '2026-06-01'], "/suppliers/$s1");
 check('same item + same start date replaces instead of duplicating', (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE supplier_id = ? AND variant_id = ?', [$s1, $v1]) === 2 && (float)$val('SELECT rate FROM supplier_rates WHERE supplier_id = ? AND variant_id = ? AND valid_from = ?', [$s1, $v1, '2026-06-01']) === 305.0);
 $sp = $a->get("/suppliers/$s1")['body'];
-check('supplier page lists current and history rates', str_contains($sp, 'Current') && str_contains($sp, 'History') && str_contains($sp, 'D-77') && str_contains($sp, 'RVW'));
+check('supplier page lists current rates and keeps earlier ones behind the toggle', str_contains($sp, 'rl-old') && str_contains($sp, 'Show earlier rates') && str_contains($sp, 'id="rateModal"') && str_contains($sp, 'D-77') && str_contains($sp, 'RVW'));
 foreach ([['rate' => '-1'], ['rate' => 'abc'], ['rate' => '10', 'discount_pct' => '120'], ['rate' => '10', 'valid_from' => '2026-02-30'], ['rate' => '10', 'valid_from' => '2026-05-01', 'valid_to' => '2026-04-01'], ['rate' => '10', 'min_qty' => '-3'], ['rate' => '10', 'lead_time_days' => '999']] as $bad) {
     $a->post("/suppliers/$s1/rates", $bad + ['variant_id' => $v2, 'valid_from' => '2026-03-01'], "/suppliers/$s1");
 }

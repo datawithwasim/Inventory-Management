@@ -152,5 +152,17 @@ echo "Record pages hold up\n";
 foreach (["/suppliers/$s1", "/customers/$c1", "/items/$i1"] as $u) check("$u renders without notices", $a->get($u)['status'] === 200 && !preg_match('/Warning:|Notice:|Fatal error|Deprecated:/', $a->get($u)['body']));
 check('a made-up record id is a 404', $a->get('/suppliers/9999999')['status'] === 404 && $a->get('/items/9999999')['status'] === 404);
 
+echo "Profile menu, activity tabs, rate list\n";
+$dh = $a->get('/dashboard')['body'];
+check('profile menu shows name, email, role · company, Light / Dark / Auto and Sign out', str_contains($dh, 'class="pm-head"') && str_contains($dh, "recco-$sfx@test.local") && str_contains($dh, 'data-theme-set="dark"') && str_contains($dh, 'data-theme-set="auto"') && str_contains($dh, 'pm-out') && str_contains($dh, 'data-bs-auto-close="outside"'));
+check('the old single "Dark mode" menu item is gone from the app (POS / admin keep their icon button)', !str_contains($dh, 'id="modeBtn"') && str_contains($a->get('/pos')['body'], 'id="modeBtn"'));
+check('the page tells the script the company default theme', str_contains($dh, 'data-default-mode'));
+$sh = $a->get("/suppliers/$s1")['body'];
+check('supplier page: rate list uses modals (add / import), no inline form', str_contains($sh, 'id="rateModal"') && str_contains($sh, 'id="rateImportModal"') && !str_contains($sh, 'id="rateAdd"'));
+check('purchase orders and bills sit in one tabbed Purchase activity card (not two columns)', str_contains($sh, 'Purchase activity') && str_contains($sh, 'data-act="orders-po"') && str_contains($sh, 'data-act="orders-bills"') && !str_contains($sh, 'Recent purchase orders'));
+$ch = $a->get("/customers/$c1")['body'];
+check('customer page: Orders / Invoices tabs in one Sales activity card', str_contains($ch, 'Sales activity') && str_contains($ch, 'data-act="orders-orders"') && str_contains($ch, 'data-act="orders-invoices"'));
+check('the record tab script only controls Overview / Timeline', str_contains($sh, ".rec-main > .rec-tabs button"));
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

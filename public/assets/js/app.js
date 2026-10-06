@@ -55,14 +55,31 @@
     sb.addEventListener('click', function (e) { if (e.target.closest('a.sb-link')) body.classList.remove('sb-open'); });
   }
 
-  /* ---- light / dark ---- */
+  /* ---- light / dark: Light / Dark / Auto switch in the profile menu, or a single toggle button on POS and admin ---- */
+  function currentMode() { var m = store('inv-mode'); return m === 'light' || m === 'dark' || m === 'auto' ? m : 'default'; }
+  function applyMode(m) {
+    var eff = m;
+    if (m === 'auto' || m === 'default') {
+      var tenantDefault = root.getAttribute('data-default-mode') || 'auto';
+      eff = (m === 'default' && tenantDefault !== 'auto') ? tenantDefault : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
+    root.setAttribute('data-bs-theme', eff); root.setAttribute('data-theme', eff);
+  }
+  function syncModeUi() {
+    var cur = currentMode(), eff = root.getAttribute('data-bs-theme');
+    doc.querySelectorAll('[data-theme-set]').forEach(function (b) { b.classList.toggle('on', b.dataset.themeSet === (cur === 'default' ? eff : cur)); });
+    var tb = doc.getElementById('modeBtn');
+    if (tb) tb.innerHTML = '<i class="bi bi-' + (eff === 'dark' ? 'sun' : 'moon-stars') + '"></i>';
+  }
+  doc.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () { var m = b.dataset.themeSet; store('inv-mode', m); applyMode(m); syncModeUi(); });
+  });
   var modeBtn = doc.getElementById('modeBtn');
-  function syncModeIcon() { if (!modeBtn) return; var d = root.getAttribute('data-bs-theme') === 'dark'; modeBtn.innerHTML = '<i class="bi bi-' + (d ? 'sun' : 'moon-stars') + ' me-2 text-muted"></i><span>' + (d ? 'Light mode' : 'Dark mode') + '</span>'; }
-  syncModeIcon();
   if (modeBtn) modeBtn.addEventListener('click', function () {
     var m = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-bs-theme', m); root.setAttribute('data-theme', m); store('inv-mode', m); syncModeIcon();
+    store('inv-mode', m); applyMode(m); syncModeUi();
   });
+  syncModeUi();
 
   /* ---- flash messages: success fades away by itself ---- */
   doc.querySelectorAll('.alert-success.alert-dismissible').forEach(function (a) {
