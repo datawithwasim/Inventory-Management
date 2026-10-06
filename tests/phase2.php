@@ -252,5 +252,21 @@ echo "Admin: database updates\n";
 $sys = $admin->get('/admin/system');
 check('system page loads and reports up to date', $sys['status'] === 200 && str_contains($sys['body'], 'up to date') && str_contains($sys['body'], '002_inventory.sql'));
 
+echo "Record pages (Zoho-style) for stock documents and warehouses\n";
+$adjId = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment'", [$tA]);
+$trId = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+$tkId = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake'", [$tA]);
+$h = $a->get("/stock/adjustments/$adjId")['body'];
+check('adjustment page: shell, reason shown by its label, lines', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="lines"') && str_contains($h, 'Stock adjustment') | str_contains($h, 'Adjustment') && !str_contains($h, '>damage<'));
+$h = $a->get("/stock/transfers/$trId")['body'];
+check('transfer page: shell with From and To warehouse as links', str_contains($h, 'class="rec-top"') && preg_match('~<span>To warehouse</span><b><a href="[^"]*warehouses/\d+"~', $h) === 1);
+$h = $a->get("/stock/takes/$tkId")['body'];
+check('stock-take page: shell and the count form still work', str_contains($h, 'class="rec-top"') && str_contains($h, 'name="counts[') | str_contains($h, 'Counted'));
+$w = $a->get("/warehouses/$main");
+check('warehouse page: shell, stats, racks, stock here, edit link', $w['status'] === 200 && str_contains($w['body'], 'class="rec-top"') && str_contains($w['body'], 'Total stock') && str_contains($w['body'], 'id="racks"') && str_contains($w['body'], 'What is stored here'));
+check('warehouse list links to the page; unknown / other-company ids are 404', str_contains($a->get('/warehouses')['body'], "warehouses/$main\"") && $a->get('/warehouses/99999999')['status'] === 404 && $b->get("/warehouses/$main")['status'] === 404);
+$locId = (int)$val('SELECT MAX(id) FROM locations WHERE tenant_id = ?', [$tA]);
+if ($locId) { $l = $a->get("/locations/$locId"); check('rack page: shell, warehouse link, stock on the rack; other company gets 404', $l['status'] === 200 && str_contains($l['body'], 'class="rec-top"') && str_contains($l['body'], 'Stored on this') && $b->get("/locations/$locId")['status'] === 404); }
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

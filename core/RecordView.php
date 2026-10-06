@@ -10,9 +10,21 @@ use App\Models\Purchase;
 /** Read-only record pages laid out from the same design as the edit form (Overview, Timeline, Notes). */
 final class RecordView
 {
-    /** entity => [edit permission, table, audit entity name] */
-    public const META = ['item' => ['items.edit', 'items'], 'customer' => ['customers.edit', 'customers'], 'supplier' => ['suppliers.edit', 'suppliers']];
-    private const MONEY = ['credit_limit', 'cost_price', 'sale_price'];
+    /** entity => [edit permission, table, audit entity name, path of its record pages] */
+    public const META = [
+        'item' => ['items.edit', 'items', 'item', 'items'], 'customer' => ['customers.edit', 'customers', 'customer', 'customers'], 'supplier' => ['suppliers.edit', 'suppliers', 'supplier', 'suppliers'],
+        'warehouse' => ['warehouses.edit', 'warehouses', 'warehouse', 'warehouses'], 'location' => ['warehouses.edit', 'locations', 'location', 'locations'],
+        'requisition' => ['purchase.edit', 'purchase_requisitions', 'requisition', 'purchase/requisitions'], 'purchase_order' => ['purchase.edit', 'purchase_orders', 'purchase_order', 'purchase/orders'],
+        'grn' => ['purchase.edit', 'grns', 'grn', 'purchase/grns'], 'bill' => ['purchase.edit', 'purchase_bills', 'purchase_bill', 'purchase/bills'],
+        'purchase_return' => ['purchase.edit', 'purchase_returns', 'purchase_return', 'purchase/returns'],
+        'sales_order' => ['sales.edit', 'sales_orders', 'sales_order', 'sales/orders'], 'delivery' => ['sales.edit', 'deliveries', 'delivery', 'sales/deliveries'],
+        'invoice' => ['sales.edit', 'sales_invoices', 'sales_invoice', 'sales/invoices'], 'sales_return' => ['sales.edit', 'sales_returns', 'sales_return', 'sales/returns'],
+        'adjustment' => ['stock.adjust', 'stock_docs', 'stock_doc', 'stock/adjustments'], 'transfer' => ['stock.transfer', 'stock_docs', 'stock_doc', 'stock/transfers'],
+        'stocktake' => ['stock.adjust', 'stock_docs', 'stock_doc', 'stock/takes'],
+    ];
+    /** Fields whose value links to the record it names. */
+    private const LINKS = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses'];
+    private const MONEY = ['credit_limit', 'cost_price', 'sale_price', 'delivery_charge', 'installation_charge', 'extra_cost', 'other_charges'];
     private const DAYS = ['payment_terms_days' => 'Immediate', 'credit_days' => 'Immediate', 'lead_time_days' => ''];
     private static array $lookups = [];
 
@@ -39,7 +51,8 @@ final class RecordView
         }
         $v = $row[$key] ?? null;
         if ($v === null || $v === '') return '';
-        $tables = ['category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'group_id' => 'customer_groups'];
+        if (str_ends_with($key, '_date') || $key === 'valid_until') return fdate((string)$v);
+        $tables = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses', 'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'group_id' => 'customer_groups'];
         if (isset($tables[$key])) return self::lookup($tables[$key], (int)$v);
         if ($key === 'item_type') return ItemTypes::LABELS[$v] ?? (string)$v;
         if ($key === 'supplier_type') return Purchase::SUPPLIER_TYPES[$v] ?? (string)$v;
@@ -55,14 +68,23 @@ final class RecordView
         return $custom !== '' ? $custom : (FormDesign::FIELDS[$entity][$key] ?? $key);
     }
 
+    /** One value as safe HTML: linked to its record when it names one, a dash when empty. */
+    private static function cell(string $entity, string $k, array $row, array $cfValues): string
+    {
+        $val = self::value($entity, $k, $row, $cfValues);
+        if ($val === '') return '<i class="text-muted">—</i>';
+        if (isset(self::LINKS[$k]) && (int)($row[$k] ?? 0) > 0) return '<a href="' . e(url(self::LINKS[$k] . '/' . (int)$row[$k])) . '">' . e($val) . '</a>';
+        return nl2br(e($val));
+    }
+
     /** The strip of key fields at the top of the detail page. */
     public static function summary(string $entity, array $row, array $cfValues): string
     {
+        if (!isset(FormDesign::FIELDS[$entity])) return '';
         $r = FormDesign::resolve($entity);
         $o = '';
         foreach ($r['summary'] as $k) {
-            $val = self::value($entity, $k, $row, $cfValues);
-            $o .= '<div class="rec-kv"><span>' . e(self::label($entity, $k, $r)) . '</span><b>' . ($val !== '' ? e($val) : '<i class="text-muted">—</i>') . '</b></div>';
+            $o .= '<div class="rec-kv"><span>' . e(self::label($entity, $k, $r)) . '</span><b>' . self::cell($entity, $k, $row, $cfValues) . '</b></div>';
         }
         return $o === '' ? '' : '<div class="card rec-summary"><div class="card-body">' . $o . '</div></div>';
     }
@@ -70,6 +92,7 @@ final class RecordView
     /** All sections of the design as read-only label / value cards. */
     public static function sections(string $entity, array $row, array $cfValues): string
     {
+        if (!isset(FormDesign::FIELDS[$entity])) return '';
         $r = FormDesign::resolve($entity);
         $o = '';
         $first = true;
@@ -81,8 +104,7 @@ final class RecordView
             $cols = in_array((int)$s['cols'], [1, 2, 3], true) ? (int)$s['cols'] : 2;
             $o .= '<section class="card rec-sec"><div class="card-header">' . e($title) . '</div><div class="card-body"><div class="rec-grid c' . $cols . '">';
             foreach ($s['fields'] as $k) {
-                $val = self::value($entity, $k, $row, $cfValues);
-                $o .= '<div class="rec-kv"><span>' . e(self::label($entity, $k, $r)) . '</span><b>' . ($val !== '' ? nl2br(e($val)) : '<i class="text-muted">—</i>') . '</b></div>';
+                $o .= '<div class="rec-kv"><span>' . e(self::label($entity, $k, $r)) . '</span><b>' . self::cell($entity, $k, $row, $cfValues) . '</b></div>';
             }
             $o .= '</div></div></section>';
         }
@@ -95,12 +117,13 @@ final class RecordView
 
     public static function timeline(string $entity, int $id, ?string $createdAt = null): string
     {
+        $audit = self::META[$entity][2] ?? $entity;
         $rows = DB::all(
             "SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON a.actor_type = 'user' AND u.id = a.actor_id
-             WHERE a.tenant_id = ? AND a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [Auth::tenantId(), $entity, $id]);
+             WHERE a.tenant_id = ? AND a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [Auth::tenantId(), $audit, $id]);
         $o = '<ul class="rec-tl">';
         foreach ($rows as $a) {
-            $suffix = preg_replace('/^' . preg_quote($entity, '/') . '_/', '', (string)$a['action']);
+            $suffix = preg_replace('/^' . preg_quote($audit, '/') . '_/', '', (string)$a['action']);
             $verb = self::VERBS[$suffix] ?? str_replace('_', ' ', $suffix);
             $who = $a['user_name'] ?: ($a['actor_type'] === 'admin' ? 'Support' : 'System');
             $o .= '<li><span class="dot"></span><div><b>' . e($who) . '</b> ' . e($verb) . ($a['details'] ? ' <span class="text-muted">· ' . e(mb_substr((string)$a['details'], 0, 120)) . '</span>' : '')

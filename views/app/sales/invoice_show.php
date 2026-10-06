@@ -1,19 +1,12 @@
-<div class="row g-3 mb-3">
-  <div class="col-lg-8"><div class="card h-100"><div class="card-body"><div class="row">
-    <div class="col-md-4"><div class="text-muted small">Invoice</div><strong><?= e($i['invoice_no']) ?></strong> <?= pay_badge($status) ?></div>
-    <div class="col-md-4"><div class="text-muted small"><?= e(term('customer')) ?></div><a href="<?= url('customers/' . (int)$i['customer_id']) ?>"><?= e($i['customer']) ?></a></div>
-    <div class="col-md-4"><div class="text-muted small">Dates</div>Invoiced <?= e(fdate($i['invoice_date'])) ?><br>Due <?= e($i['due_date'] ?? '—') ?></div></div>
-    <div class="mt-2 small">
-      <?php if ($i['delivery_id']): ?>Delivery <a href="<?= url('sales/deliveries/' . (int)$i['delivery_id']) ?>"><?= e($i['delivery_no']) ?></a><?php endif; ?>
-      <?php if ($i['order_id']): ?> · Order <a href="<?= url('sales/orders/' . (int)$i['order_id']) ?>"><?= e($i['order_no']) ?></a><?php endif; ?></div>
-    <?php if ($i['notes']): ?><div class="text-muted mt-1"><?= e($i['notes']) ?></div><?php endif; ?>
-    <div class="mt-3 d-flex flex-wrap gap-2">
+
+<?php ob_start(); ?>
       <a class="btn btn-sm btn-primary" target="_blank" href="<?= url("sales/invoices/{$i['id']}/print") ?>"><i class="bi bi-printer"></i> Print invoice</a>
       <a class="btn btn-sm btn-outline-secondary" target="_blank" href="<?= url("sales/invoices/{$i['id']}/print?receipt=1") ?>">Receipt</a>
       <?php if (can('sales.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("sales/invoices/{$i['id']}/edit") ?>">Edit details</a><?php endif; ?>
       <?php if (can('sales.create') && $i['delivery_id']): ?><a class="btn btn-sm btn-outline-danger" href="<?= url('sales/returns/create?invoice=' . (int)$i['id']) ?>"><?= e(term('customer')) ?> return</a><?php endif; ?>
-    </div></div></div></div>
-  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><table class="table table-sm table-borderless mb-0">
+    <?php $actions = ob_get_clean(); ?>
+<?php ob_start(); ?>
+<div class="card mb-3" id="totals" style="max-width:460px"><div class="card-body"><table class="table table-sm table-borderless mb-0">
     <tr><td>Gross</td><td class="text-end"><?= e(money($i['subtotal'])) ?></td></tr>
     <?php if ((float)$i['discount_total'] > 0): ?><tr><td>Discount</td><td class="text-end">− <?= e(money($i['discount_total'])) ?></td></tr><?php endif; ?>
     <tr><td>Tax</td><td class="text-end"><?= e(money($i['tax_total'])) ?></td></tr>
@@ -23,9 +16,8 @@
     <?php if ((float)$i['returned_amount'] > 0): ?><tr><td>Returns credited</td><td class="text-end">− <?= e(money($i['returned_amount'])) ?></td></tr><?php endif; ?>
     <tr><td>Received</td><td class="text-end">− <?= e(money($i['paid_amount'])) ?></td></tr>
     <tr class="border-top"><th><?= $due < -0.004 ? 'Credit due to customer' : 'Balance due' ?></th><th class="text-end <?= $due > 0.004 ? 'text-danger' : 'text-success' ?>"><?= e(money(abs($due))) ?></th></tr></table></div></div></div>
-</div>
-<?php if ($items): ?><div class="card mb-3"><div class="table-responsive"><?php require __DIR__ . '/_delivery_rows.php'; ?></div></div><?php endif; ?>
-<div class="row g-3">
+<?php if ($items): ?><div class="card mb-3" id="items"><div class="table-responsive"><?php require __DIR__ . '/_delivery_rows.php'; ?></div></div><?php endif; ?>
+<div class="row g-3" id="payments">
   <div class="col-lg-7"><div class="card"><div class="card-header">Payments received</div><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><tbody>
     <?php foreach ($payments as $p): ?><tr><td><?= e(fdate($p['paid_on'])) ?></td><td><?= e(App\Models\Purchase::METHODS[$p['method']] ?? ($p['method'] === 'advance' ? 'Advance' : $p['method'])) ?><?= $p['reference'] ? ' · ' . e($p['reference']) : '' ?></td><td class="text-muted small"><?= e($p['note'] ?? '') ?></td><td class="text-end"><?= e(money($p['amount'])) ?></td>
       <td class="text-end"><?php if (can('sales.delete')): ?><form method="post" action="<?= url("sales/invoices/{$i['id']}/payments/{$p['id']}/delete") ?>" onsubmit="return confirm('Remove this payment?')"><?= csrf_field() ?><button class="btn btn-sm btn-outline-danger">×</button></form><?php endif; ?></td></tr><?php endforeach; ?>
@@ -40,3 +32,10 @@
       <div class="col-12"><input name="note" class="form-control" maxlength="150" placeholder="Note (optional)"></div>
       <div class="col-12"><button class="btn btn-success w-100">Record payment</button></div></div></form></div></div></div><?php endif; ?>
 </div>
+<?php $body = ob_get_clean();
+$rec = ['entity' => 'invoice', 'row' => $i, 'name' => $i['invoice_no'], 'back' => 'sales/invoices', 'body' => $body, 'actions' => $actions, 'badges' => pay_badge($status),
+    'related' => array_filter(['totals' => 'Amounts', 'items' => $items ? 'Items' : null, 'payments' => 'Payments']), 'factsTitle' => 'Invoice details',
+    'facts' => [[term('customer'), '<a href="' . url('customers/' . (int)$i['customer_id']) . '">' . e($i['customer']) . '</a>'], ['Invoice date', e(fdate($i['invoice_date']))], ['Due date', e($i['due_date'] ? fdate($i['due_date']) : '')],
+        ['Delivery', $i['delivery_id'] ? '<a href="' . url('sales/deliveries/' . (int)$i['delivery_id']) . '">' . e($i['delivery_no']) . '</a>' : ''],
+        ['Order', $i['order_id'] ? '<a href="' . url('sales/orders/' . (int)$i['order_id']) . '">' . e($i['order_no']) . '</a>' : ''], ['Notes', e($i['notes'] ?? '')], ['Balance due', e(money(max(0, $due)))]]];
+require dirname(__DIR__) . '/_record.php';

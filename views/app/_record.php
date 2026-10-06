@@ -1,7 +1,8 @@
 <?php
 /**
  * Zoho-style record page: header, left "Related list", Overview / Timeline tabs, notes.
- * @var array $rec entity, row, name, back, badges (html), actions (html: buttons), menu (html: dropdown items), related [anchor => label], body (html), cfValues
+ * @var array $rec entity, row, name, back, badges (html), actions (html: buttons), menu (html: dropdown items), related [anchor => label], body (html), cfValues,
+ *            facts [[label, html]] (extra details such as linked documents), warnTitle
  */
 $GLOBALS['rec_shell'] = true;
 $E = $rec['entity'];
@@ -18,12 +19,13 @@ $layoutUrl = url('settings/formdesign?form=' . $E . '&return=' . rawurlencode($_
     <div class="rec-title"><h1><?= e($rec['name']) ?></h1><div class="rec-badges"><?= $rec['badges'] ?? '' ?></div></div>
     <div class="rec-actions">
       <?= $rec['actions'] ?? '' ?>
-      <?php if (!empty($rec['menu']) || can('settings.edit')): ?>
+      <?php $hasLayout = isset(Core\FormDesign::FIELDS[$E]) && can('settings.edit'); ?>
+      <?php if (!empty($rec['menu']) || $hasLayout): ?>
         <div class="dropdown d-inline-block">
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" aria-label="More"><i class="bi bi-three-dots"></i></button>
           <ul class="dropdown-menu dropdown-menu-end shadow">
             <?= $rec['menu'] ?? '' ?>
-            <?php if (can('settings.edit')): ?><li><a class="dropdown-item" href="<?= e($layoutUrl) ?>"><i class="bi bi-layout-text-window me-2 text-muted"></i>Edit page layout</a></li><?php endif; ?>
+            <?php if ($hasLayout): ?><li><a class="dropdown-item" href="<?= e($layoutUrl) ?>"><i class="bi bi-layout-text-window me-2 text-muted"></i>Edit page layout</a></li><?php endif; ?>
           </ul>
         </div>
       <?php endif; ?>
@@ -39,6 +41,9 @@ $layoutUrl = url('settings/formdesign?form=' . $E . '&return=' . rawurlencode($_
       <div id="recOverview" class="rec-panel">
         <?= Core\RecordView::summary($E, $row, $rec['cfValues'] ?? []) ?>
         <?= Core\RecordView::sections($E, $row, $rec['cfValues'] ?? []) ?>
+        <?php if (!empty($rec['facts'])): ?><section class="card rec-sec"><div class="card-header"><?= e($rec['factsTitle'] ?? 'Details') ?></div><div class="card-body"><div class="rec-grid c2">
+          <?php foreach ($rec['facts'] as [$fl, $fv]): ?><div class="rec-kv"><span><?= e($fl) ?></span><b><?= $fv !== '' && $fv !== null ? $fv : '<i class="text-muted">—</i>' ?></b></div><?php endforeach; ?>
+        </div></div></section><?php endif; ?>
         <?= $rec['body'] ?? '' ?>
         <section class="card mb-3" id="notes"><div class="card-header">Notes</div><div class="card-body">
           <?php if ($canNote): ?><form method="post" action="<?= url("records/$E/{$row['id']}/notes") ?>" class="mb-3"><?= csrf_field() ?>

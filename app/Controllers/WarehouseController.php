@@ -29,6 +29,22 @@ final class WarehouseController extends Controller
         $this->view('app/warehouses/index', ['title' => term('warehouses'), 'rows' => $rows, 'limitReached' => $this->limitReached()]);
     }
 
+    public function show(string $id): void
+    {
+        $w = $this->load($id);
+        $t = (int)Auth::tenantId();
+        $this->view('app/warehouses/show', [
+            'title' => $w['name'], 'w' => $w,
+            'racks' => DB::all('SELECT l.id, l.code, l.description, l.is_active, COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.location_id = l.id), 0) AS qty
+                                FROM locations l WHERE l.tenant_id = ? AND l.warehouse_id = ? ORDER BY l.code LIMIT 200', [$t, $w['id']]),
+            'stock' => DB::all('SELECT i.id AS item_id, i.name AS item_name, v.name AS vname, v.sku, u.short_name AS unit, SUM(s.qty) AS qty FROM stock_balances s
+                                JOIN item_variants v ON v.id = s.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+                                WHERE s.tenant_id = ? AND s.warehouse_id = ? GROUP BY v.id, i.id, i.name, v.name, v.sku, u.short_name HAVING qty > 0.0005 ORDER BY qty DESC LIMIT 25', [$t, $w['id']]),
+            'totalQty' => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND warehouse_id = ?', [$t, $w['id']]),
+            'skuCount' => (int)DB::val('SELECT COUNT(DISTINCT variant_id) FROM stock_balances WHERE tenant_id = ? AND warehouse_id = ? AND qty > 0.0005', [$t, $w['id']]),
+        ]);
+    }
+
     public function create(): void
     {
         if ($this->limitReached()) {

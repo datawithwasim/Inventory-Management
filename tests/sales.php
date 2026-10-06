@@ -348,5 +348,21 @@ check("B cannot change A's group prices", $near($val('SELECT price FROM group_pr
 check("item lookup and stock lookup reveal nothing to B", !str_contains($b->get('/lookup/sale-items?q=velvet')['body'], 'Velvet') && trim($b->get("/lookup/stock?variant=$vel&warehouse=$main")['body']) === '{"tb":false,"batches":[],"racks":[]}');
 check("A's walk-in and B's walk-in are different customers", $walk !== $bWalk);
 
+echo "Record pages (Zoho-style) for sales documents\n";
+$h = $a->get("/sales/orders/$o1")['body'];
+check('order page: shell, summary (customer, dates), sections incl. charges, items, deliveries block, notes', str_contains($h, 'class="rec-top"') && str_contains($h, 'rec-summary') && str_contains($h, 'Sales order information') && str_contains($h, 'id="deliveries"') && str_contains($h, 'id="notes"') && preg_match('~<span>Customer</span><b><a href="[^"]*customers/\d+"~', $h) === 1);
+$odr = $a->get("/sales/orders/$o3")['body'];
+check('order page: the action buttons live in the header (some open order shows Confirm / Deliver / Cancel)', str_contains($h, 'rec-actions') && preg_match('/Deliver goods|Confirm &amp; reserve|Cancel|Close/', $h . $odr . $a->get("/sales/orders/$o4")['body']) === 1);
+$h = $a->get("/sales/deliveries/$d1")['body'];
+check('delivery page: shell, delivery note button, order link, rows', str_contains($h, 'class="rec-top"') && str_contains($h, '/print') && str_contains($h, 'id="lines"') && str_contains($h, 'Order'));
+$inv = (int)$val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$tA]);
+$h = $a->get("/sales/invoices/$inv")['body'];
+check('invoice page: shell, amounts, payments, record-payment form and print buttons', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Print invoice') && !str_contains($h, 'Edit page layout'));
+$h = $a->get("/sales/returns/$sr")['body'];
+check('sales return page: shell + items + total credit', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Total credit'));
+foreach (["sales/orders/$o1", "sales/deliveries/$d1", "sales/invoices/$inv", "sales/returns/$sr"] as $u) check("$u: no notices, one h1, timeline tab", ($r = $a->get("/$u"))['status'] === 200 && !preg_match('/Warning:|Notice:|Fatal error|Deprecated:/', $r['body']) && substr_count($r['body'], '<h1') === 1 && str_contains($r['body'], 'recTimeline'));
+$a->post("/records/sales_order/$o1/notes", ['body' => 'Deliver after 5pm'], "/sales/orders/$o1");
+check('a note on a sales order', str_contains(preg_replace('/\s+/', ' ', strip_tags($a->get("/sales/orders/$o1")['body'])), 'Deliver after 5pm'));
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

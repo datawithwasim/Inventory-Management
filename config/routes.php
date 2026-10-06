@@ -52,6 +52,7 @@ $router->post('/masters/{type}/{id}/delete', $A . 'MasterController@destroy', ['
 $router->get('/warehouses', $A . 'WarehouseController@index', ['auth', 'perm:warehouses.view']);
 $router->get('/warehouses/create', $A . 'WarehouseController@create', ['auth', 'perm:warehouses.create']);
 $router->post('/warehouses', $A . 'WarehouseController@store', ['auth', 'perm:warehouses.create']);
+$router->get('/warehouses/{id}', $A . 'WarehouseController@show', ['auth', 'perm:warehouses.view']);
 $router->get('/warehouses/{id}/edit', $A . 'WarehouseController@edit', ['auth', 'perm:warehouses.edit']);
 $router->post('/warehouses/{id}', $A . 'WarehouseController@update', ['auth', 'perm:warehouses.edit']);
 $router->post('/warehouses/{id}/default', $A . 'WarehouseController@makeDefault', ['auth', 'perm:warehouses.edit']);
@@ -60,6 +61,7 @@ $router->post('/warehouses/{id}/delete', $A . 'WarehouseController@destroy', ['a
 $router->get('/locations', $A . 'LocationController@index', ['auth', 'perm:warehouses.view']);
 $router->get('/locations/create', $A . 'LocationController@create', ['auth', 'perm:warehouses.create']);
 $router->post('/locations', $A . 'LocationController@store', ['auth', 'perm:warehouses.create']);
+$router->get('/locations/{id}', $A . 'LocationController@show', ['auth', 'perm:warehouses.view']);
 $router->get('/locations/{id}/edit', $A . 'LocationController@edit', ['auth', 'perm:warehouses.edit']);
 $router->post('/locations/{id}', $A . 'LocationController@update', ['auth', 'perm:warehouses.edit']);
 $router->post('/locations/{id}/delete', $A . 'LocationController@destroy', ['auth', 'perm:warehouses.delete']);

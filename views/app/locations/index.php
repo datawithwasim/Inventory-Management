@@ -12,7 +12,7 @@
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
   <thead><tr><th><?= e(term('rack')) ?></th><th><?= e(term('warehouse')) ?></th><th>Description</th><th class="text-end"><?= e(term('items')) ?> on it</th><th>Status</th><th></th></tr></thead><tbody>
   <?php foreach ($rows as $r): ?>
-    <tr><td><a href="<?= url('stock/racks?warehouse=' . (int)$r['warehouse_id'] . '&q=' . urlencode($r['code'])) ?>"><strong><?= e($r['code']) ?></strong></a></td><td><?= e($r['warehouse']) ?></td><td><?= e($r['description'] ?? '') ?></td>
+    <tr><td><a href="<?= url('locations/' . (int)$r['id']) ?>"><strong><?= e($r['code']) ?></strong></a></td><td><?= e($r['warehouse']) ?></td><td><?= e($r['description'] ?? '') ?></td>
       <td class="text-end"><?= (int)$r['items'] ?></td>
       <td><?= $r['is_active'] ? '<span class="badge text-bg-success">Active</span>' : '<span class="badge text-bg-secondary">Inactive</span>' ?></td>
       <td class="text-end text-nowrap">

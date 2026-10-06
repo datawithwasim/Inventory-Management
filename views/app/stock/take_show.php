@@ -1,11 +1,8 @@
 <?php $draft = $doc['status'] === 'draft'; ?>
-<div class="card mb-3"><div class="card-body d-flex justify-content-between">
-  <div><strong><?= e($doc['doc_no']) ?></strong> · <?= e($doc['warehouse']) ?> · started <?= e($doc['created_at']) ?>
-    <span class="badge text-bg-<?= $draft ? 'warning' : 'success' ?> ms-2"><?= e($doc['status']) ?></span>
-    <?php if ($doc['note']): ?><div class="text-muted"><?= e($doc['note']) ?></div><?php endif; ?></div>
-</div></div>
+<?php ob_start(); ?><?php $actions = ob_get_clean(); ?>
+<?php ob_start(); ?>
 <form method="post" action="<?= url("stock/takes/{$doc['id']}") ?>"><?= csrf_field() ?>
-<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle">
+<div class="card mb-3" id="lines"><div class="table-responsive"><table class="table mb-0 align-middle">
   <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?></th><th><?= e(term('rack')) ?></th><th class="text-end">System qty</th><th class="text-end" style="width:170px"><?= $draft ? 'Counted' : 'Counted' ?></th><th class="text-end">Difference</th></tr></thead><tbody>
   <?php foreach ($lines as $l): $diff = (float)$l['qty'] - (float)$l['expected_qty']; ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td>
@@ -24,3 +21,8 @@
 </form>
 <form method="post" action="<?= url("stock/takes/{$doc['id']}/delete") ?>" class="mt-2" onsubmit="return confirm('Delete this draft?')"><?= csrf_field() ?><button class="btn btn-sm btn-outline-danger">Delete draft</button></form>
 <?php else: ?></form><a class="btn btn-link mt-2" href="<?= url('stock/takes') ?>">&laquo; Back</a><?php endif; ?>
+<?php $body = ob_get_clean();
+$rec = ['entity' => 'stocktake', 'row' => $doc, 'name' => $doc['doc_no'], 'back' => 'stock/takes', 'body' => $body,
+    'badges' => '<span class="badge text-bg-' . ($draft ? 'warning' : 'success') . '">' . e($doc['status']) . '</span>', 'related' => ['lines' => 'Counts'], 'factsTitle' => 'Stock-take details',
+    'facts' => [[term('warehouse'), e($doc['warehouse'])], ['Started', e(fdate(substr((string)$doc['created_at'], 0, 10)))], ['Note', e($doc['note'] ?? '')]]];
+require dirname(__DIR__) . '/_record.php';

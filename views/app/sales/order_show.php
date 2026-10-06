@@ -1,20 +1,15 @@
 <?php $st = $o['status']; $canDeliver = in_array($st, ['confirmed', 'partial'], true) && $remaining > 0; ?>
-<div class="card mb-3"><div class="card-body"><div class="row">
-  <div class="col-md-3"><div class="text-muted small">Sales order</div><strong><?= e($o['order_no']) ?></strong> <?= sale_badge('order', $st) ?><?= $o['allow_backorder'] ? '<br><span class="badge text-bg-light border">back-order allowed</span>' : '' ?></div>
-  <div class="col-md-3"><div class="text-muted small"><?= e(term('customer')) ?></div><a href="<?= url('customers/' . (int)$o['customer_id']) ?>"><?= e($o['customer']) ?></a></div>
-  <div class="col-md-3"><div class="text-muted small">Ship from</div><?= e($o['warehouse']) ?><br><small class="text-muted">Ordered <?= e(fdate($o['order_date'])) ?><?= $o['expected_date'] ? ' · by ' . e(fdate($o['expected_date'])) : '' ?></small></div>
-  <div class="col-md-3"><div class="text-muted small">Deliver to</div><?= e($o['ship_to'] ?? '—') ?></div></div>
-  <?php if ($o['notes']): ?><div class="text-muted mt-2"><?= e($o['notes']) ?></div><?php endif; ?>
-  <div class="mt-3 d-flex flex-wrap gap-2">
+<?php ob_start(); ?>
     <?php if ($st === 'draft' && can('sales.edit')): ?><a class="btn btn-outline-primary" href="<?= url("sales/orders/{$o['id']}/edit") ?>">Edit</a><?php endif; ?>
     <?php if ($st === 'draft' && can('sales.create')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/confirm") ?>"><?= csrf_field() ?><button class="btn btn-primary">Confirm &amp; reserve stock</button></form><?php endif; ?>
     <?php if ($canDeliver && can('sales.create')): ?><a class="btn btn-success" href="<?= url("sales/orders/{$o['id']}/deliver") ?>"><i class="bi bi-truck"></i> Deliver goods</a><?php endif; ?>
     <?php if ($st === 'partial' && can('sales.edit')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/close") ?>" onsubmit="return confirm('Close this order? The undelivered part is dropped.')"><?= csrf_field() ?><button class="btn btn-outline-dark">Close order</button></form><?php endif; ?>
     <?php if (in_array($st, ['draft', 'confirmed'], true) && !$deliveries && can('sales.edit')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/cancel") ?>" onsubmit="return confirm('Cancel this order?')"><?= csrf_field() ?><button class="btn btn-outline-danger">Cancel order</button></form><?php endif; ?>
     <?php if ($st === 'draft' && can('sales.delete')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/delete") ?>" onsubmit="return confirm('Delete this draft?')"><?= csrf_field() ?><button class="btn btn-outline-danger">Delete draft</button></form><?php endif; ?>
-  </div></div></div>
+  <?php $actions = ob_get_clean(); ?>
+<?php ob_start(); ?>
 <?php $doc = $o; $qtyKey = 'qty_ordered'; $withDelivered = true; require __DIR__ . '/_doc_lines.php'; ?>
-<div class="row g-3">
+<div class="row g-3 mb-3" id="deliveries">
   <div class="col-lg-6"><div class="card"><div class="card-header">Deliveries &amp; invoices</div><ul class="list-group list-group-flush">
     <?php foreach ($deliveries as $d): ?><li class="list-group-item d-flex justify-content-between"><a href="<?= url("sales/deliveries/{$d['id']}") ?>"><?= e($d['delivery_no']) ?></a><span><?= e(fdate($d['delivery_date'])) ?><?= $d['invoice_id'] ? ' · <a href="' . url('sales/invoices/' . (int)$d['invoice_id']) . '">' . e($d['invoice_no']) . '</a>' : '' ?></span></li><?php endforeach; ?>
     <?php if (!$deliveries): ?><li class="list-group-item text-muted">Nothing delivered yet.</li><?php endif; ?></ul></div></div>
@@ -31,5 +26,9 @@
       <div class="col-2"><button class="btn btn-outline-success w-100">Add</button></div>
       <div class="col-12"><input name="reference" class="form-control" placeholder="Reference (optional)" maxlength="80"></div></form></div><?php endif; ?></div></div>
 </div>
-
-<?php require dirname(__DIR__) . '/settings/_cf_show.php'; ?>
+<?php $body = ob_get_clean();
+$rec = ['entity' => 'sales_order', 'row' => $o, 'name' => $o['order_no'], 'back' => 'sales/orders', 'cfValues' => $cfValues ?? [], 'body' => $body, 'actions' => $actions,
+    'badges' => sale_badge('order', $st) . ($o['allow_backorder'] ? ' <span class="badge text-bg-light border">back-order allowed</span>' : ''),
+    'related' => ['lines' => 'Items', 'deliveries' => 'Deliveries & advance'],
+    'facts' => [['Created by', e($o['user_name'] ?? '—')], ['Total', e(money($o['total']))]]];
+require dirname(__DIR__) . '/_record.php';

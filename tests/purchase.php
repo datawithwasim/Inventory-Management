@@ -314,5 +314,32 @@ $tmp = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Temp 
 $a->post("/suppliers/$tmp/delete", [], '/suppliers');
 check('an unused supplier can be deleted', !$val('SELECT 1 FROM suppliers WHERE id = ?', [$tmp]));
 
+echo "Record pages (Zoho-style) for purchase documents\n";
+$rp = fn(string $table, string $path, string $nofield) => (function () use ($a, $val, $tA, $table, $path) { $id = (int)$val("SELECT MAX(id) FROM `$table` WHERE tenant_id = ?", [$tA]); return [$id, $a->get("/$path/$id")['body']]; })();
+[$id, $h] = $rp('purchase_orders', 'purchase/orders', '');
+$t = preg_replace('/\s+/', ' ', strip_tags($h));
+check('PO page: record header, summary (supplier, dates), sections, items, timeline tab and notes', str_contains($h, 'class="rec-top"') && str_contains($h, 'rec-summary') && str_contains($h, 'Purchase order information') && str_contains($h, 'id="items"') && str_contains($h, 'data-tab="recTimeline"') && str_contains($h, 'id="notes"'));
+check('PO page: the action buttons are still there (print / edit / submit …)', str_contains($h, '/print') && preg_match('/Confirm order|Submit for approval|Approve|Receive goods/', $h) === 1);
+check('PO page: supplier is a link inside the sections', preg_match('~<span>Supplier</span><b><a href="[^"]*suppliers/\d+"~', $h) === 1);
+[$id, $h] = $rp('grns', 'purchase/grns', '');
+check('GRN page: shell, sections (received on, challan), supplier / PO links, items', str_contains($h, 'class="rec-top"') && str_contains($h, 'Goods receipt (GRN) information') | str_contains($h, 'Goods receipt (GRN)') && str_contains($h, 'id="items"') && str_contains($h, 'Received by'));
+[$id, $h] = $rp('purchase_bills', 'purchase/bills', '');
+check('bill page: shell, amounts card, payments and the payment form', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Balance due'));
+[$id, $h] = $rp('purchase_returns', 'purchase/returns', '');
+check('purchase return page: shell + items', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Total (incl. tax)'));
+[$id, $h] = $rp('purchase_requisitions', 'purchase/requisitions', '');
+if ($id) check('requisition page: shell, status badge, items', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && !str_contains($h, 'Edit page layout'));
+check('documents with a layout offer "Edit page layout" in the menu', str_contains($a->get('/purchase/orders/' . (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]))['body'], 'Edit page layout'));
+$pid = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$a->post("/records/purchase_order/$pid/notes", ['body' => 'Chase the mill on Monday'], "/purchase/orders/$pid");
+check('a note can be added on a purchase order and shows with the Timeline tab', str_contains(preg_replace('/\s+/', ' ', strip_tags($a->get("/purchase/orders/$pid")['body'])), 'Chase the mill on Monday'));
+$b->post("/records/purchase_order/$pid/notes", ['body' => 'intruder'], '/suppliers');
+check("another company cannot add a note to A's purchase order", !$val("SELECT 1 FROM record_notes WHERE body = 'intruder'"));
+foreach (['purchase/orders', 'purchase/grns', 'purchase/bills', 'purchase/returns', 'purchase/requisitions'] as $pth) {
+    $tb = ['purchase/orders' => 'purchase_orders', 'purchase/grns' => 'grns', 'purchase/bills' => 'purchase_bills', 'purchase/returns' => 'purchase_returns', 'purchase/requisitions' => 'purchase_requisitions'][$pth];
+    $id = (int)$val("SELECT MAX(id) FROM `$tb` WHERE tenant_id = ?", [$tA]);
+    if ($id) check("$pth/$id renders without notices and one h1", ($r = $a->get("/$pth/$id"))['status'] === 200 && !preg_match('/Warning:|Notice:|Fatal error|Deprecated:/', $r['body']) && substr_count($r['body'], '<h1') === 1);
+}
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

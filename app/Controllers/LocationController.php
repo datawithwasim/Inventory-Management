@@ -57,6 +57,15 @@ final class LocationController extends Controller
             'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY name', [$this->tid()]), 'unassigned' => $unassigned]);
     }
 
+    public function show(string $id): void
+    {
+        $l = $this->load($id);
+        $this->view('app/locations/show', ['title' => $l['code'], 'l' => $l,
+            'stock' => DB::all('SELECT i.id AS item_id, i.name AS item_name, v.name AS vname, v.sku, u.short_name AS unit, b.batch_no, b.id AS batch_id, s.qty FROM stock_balances s
+                                JOIN item_variants v ON v.id = s.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
+                                WHERE s.tenant_id = ? AND s.location_id = ? AND s.qty > 0.0005 ORDER BY i.name, b.batch_no LIMIT 200', [$this->tid(), $l['id']])]);
+    }
+
     public function create(): void
     {
         $this->view('app/locations/form', ['title' => 'Add racks', 'row' => null, 'warehouses' => $this->warehouses()]);

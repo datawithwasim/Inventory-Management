@@ -83,7 +83,7 @@ $dz = json_decode($mm[1] ?? '{}', true);
 $sup = array_values(array_filter($dz['model'] ?? [], fn($x) => $x['key'] === 'supplier'))[0] ?? [];
 check('the model says supplier / customer / item have a detail page and gives the default summary', ($sup['detail'] ?? false) === true && ($sup['summary'] ?? []) === ['supplier_type', 'phone', 'city', 'payment_terms_days']);
 $wh = array_values(array_filter($dz['model'] ?? [], fn($x) => $x['key'] === 'warehouse'))[0] ?? [];
-check('warehouse (no detail page) has no Detail tab', ($wh['detail'] ?? true) === false);
+check('warehouse has a detail page too, with its own summary default', ($wh['detail'] ?? false) === true && ($wh['summary'] ?? []) === ['code']);
 $savePayload(['supplier' => ['summary' => ['state', 'bank_name', 'credit_limit', 'lead_time_days', 'transport', 'pan', 'not_a_field', 'state']]]);
 $h = $a->get("/suppliers/$s1")['body'];
 preg_match('/<div class="card rec-summary">(.*?)<\/div><\/div>/s', $h, $sm);

@@ -513,3 +513,5 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 .dz-sumrow input:disabled { cursor: not-allowed; } .dz-sumrow:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 .page-layout-link { font-size: .8rem; font-weight: 500; margin-left: .9rem; color: var(--brand-text); vertical-align: middle; white-space: nowrap; } .page-layout-link:hover { text-decoration: underline; }
 @media print { .page-layout-link { display: none; } }
+.rec-actions { flex-wrap: wrap; justify-content: flex-end; } .rec-actions form { margin: 0; display: inline-block; }
+.rec-actions .btn:not(.btn-sm) { padding: .32rem .75rem; font-size: .84rem; }

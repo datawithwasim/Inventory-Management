@@ -9,7 +9,7 @@
   <tbody>
   <?php foreach ($rows as $r): ?>
     <tr>
-      <td><?= e($r['name']) ?> <?= $r['is_default'] ? '<span class="badge text-bg-primary">Default</span>' : '' ?></td>
+      <td><a href="<?= url("warehouses/{$r['id']}") ?>"><?= e($r['name']) ?></a> <?= $r['is_default'] ? '<span class="badge text-bg-primary">Default</span>' : '' ?></td>
       <td><?= e($r['code']) ?></td><td><?= e($r['address'] ?? '') ?></td>
       <td class="text-end"><?= e(qty($r['total_qty'])) ?></td>
       <td><?= $r['is_active'] ? '<span class="badge text-bg-success">Active</span>' : '<span class="badge text-bg-secondary">Inactive</span>' ?></td>

@@ -49,12 +49,17 @@ final class FormDesign
         'transfer' => ['warehouse_id' => 3, 'to_warehouse_id' => 3, 'note' => 6],
     ];
     /** Forms that have a record detail page (Overview / Timeline) laid out from the same design. */
-    public const DETAIL = ['item', 'customer', 'supplier'];
+    public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer'];
     /** Fields shown in the summary strip at the top of the detail page when the company has not chosen. */
     public const SUMMARY_DEFAULT = [
         'item' => ['item_type', 'category_id', 'unit_id', 'hsn_code'],
         'customer' => ['phone', 'email', 'group_id', 'credit_days'],
         'supplier' => ['supplier_type', 'phone', 'city', 'payment_terms_days'],
+        'warehouse' => ['code'],
+        'purchase_order' => ['supplier_id', 'warehouse_id', 'order_date', 'expected_date'], 'grn' => ['warehouse_id', 'received_date', 'supplier_ref', 'extra_cost'],
+        'bill' => ['supplier_bill_no', 'bill_date', 'due_date', 'other_charges'], 'purchase_return' => ['return_date', 'reason'],
+        'sales_order' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date'], 'delivery' => ['delivery_date', 'ship_to'], 'sales_return' => ['return_date', 'reason'],
+        'adjustment' => ['warehouse_id', 'reason'], 'transfer' => ['warehouse_id', 'to_warehouse_id'],
     ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];
 
