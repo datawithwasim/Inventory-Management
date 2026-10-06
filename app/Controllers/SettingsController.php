@@ -110,12 +110,11 @@ final class SettingsController extends Controller
             'invoice', 'receipt' => DB::val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$t]),
             'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$t]),
             'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$t]),
-            'quotation' => DB::val('SELECT MAX(id) FROM sales_quotations WHERE tenant_id = ?', [$t]),
         };
         if (!$id) return null;
         return match ($doc) {
             'invoice' => url("sales/invoices/$id/print"), 'receipt' => url("sales/invoices/$id/print?receipt=1"), 'delivery_note' => url("sales/deliveries/$id/print"),
-            'purchase_order' => url("purchase/orders/$id/print"), 'quotation' => url("sales/quotations/$id/print"),
+            'purchase_order' => url("purchase/orders/$id/print"),
         };
     }
 

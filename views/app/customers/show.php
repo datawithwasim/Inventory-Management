@@ -16,6 +16,6 @@ $rec = ['entity' => 'customer', 'row' => $c, 'name' => $c['name'], 'back' => 'cu
     'badges' => ($c['is_walkin'] ? '<span class="badge text-bg-info">Walk-in</span> ' : '') . ($c['is_active'] ?? 1 ? '' : '<span class="badge text-bg-dark">Inactive</span>'),
     'related' => ['balance' => 'Balance', 'orders' => 'Orders', 'invoices' => 'Invoices'],
     'actions' => (can('customers.edit') ? '<a class="btn btn-sm btn-primary" href="' . url("customers/{$c['id']}/edit") . '">Edit</a> ' : ''),
-    'menu' => (can('sales.create') ? '<li><a class="dropdown-item" href="' . url('sales/orders/create?customer=' . (int)$c['id']) . '"><i class="bi bi-bag-plus me-2 text-muted"></i>New order</a></li><li><a class="dropdown-item" href="' . url('sales/quotations/create?customer=' . (int)$c['id']) . '"><i class="bi bi-file-earmark-text me-2 text-muted"></i>New quotation</a></li>' : '')
+    'menu' => (can('sales.create') ? '<li><a class="dropdown-item" href="' . url('sales/orders/create?customer=' . (int)$c['id']) . '"><i class="bi bi-bag-plus me-2 text-muted"></i>New order</a></li>' : '')
         . (can('customers.delete') && !$c['is_walkin'] ? '<li><form method="post" action="' . url("customers/{$c['id']}/delete") . '" onsubmit="return confirm(\'Delete this customer?\')">' . csrf_field() . '<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button></form></li>' : '')];
 require dirname(__DIR__) . '/_record.php';

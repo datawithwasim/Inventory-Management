@@ -10,18 +10,18 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
 - **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
   landed cost, bills with payment status, purchase returns)
-- **Phase 4 – Sales: done** (customers & groups with price lists, quotations, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
+- **Phase 4 – Sales: done** (customers & groups with price lists, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
   invoices with payments and advances, customer returns, set/bundle sales, POS with barcode scanning)
 - **Phase 5 – Customization: done** (company profile + logo, currency / date / digit formats, document number styles, workflow rules,
   your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice, receipt,
-  delivery note, purchase order and quotation)
+  delivery note, purchase order)
 - **Phase 6 – Reports & dashboard: done** (dashboard with period filter, net sales hero, trend chart, top items, stock value, ageing, low-stock lists;
   14 reports with filters, Excel / CSV export and print-to-PDF; low-stock → draft purchase orders)
 - **Phase 8 – Extras: done** (barcode labels for items and rolls, one-click database backup, security hardening). REST API, 2FA, notifications and
   multi-language/currency were intentionally left out.
 - **Modern look & make-it-yours: done** — new app shell (grouped collapsible menu, global search with Ctrl+K, quick-create, light/dark mode, phone drawer),
   Bootstrap/icons/fonts now bundled locally (no CDN needed). Companies can customise: Appearance (brand colour, menu style, spacing, default theme),
-  Modules & menu (switch parts off), Edit page layout (Zoho-style builder, opened from the Edit page of any form; Detail page tab picks the record summary; record pages have Overview / Timeline / Notes and a Related list; migration 011) — full-screen builder for all forms: sections with 1–3 columns, drag fields, create new custom fields from a 13-type palette, hide/require, widths, hints, labels left/top, line-item columns, preview, undo; needs migration 008 — Super Admin → System → Run updates), Custom fields (now created inside the Form designer — 15 types incl. multi-select, date & time, "Unique"; migration 009; the separate Settings page is gone) on items, customers, suppliers, quotations, sales orders and
+  Modules & menu (switch parts off), Edit page layout (Zoho-style builder, opened from the Edit page of any form; Detail page tab picks the record summary; record pages have Overview / Timeline / Notes and a Related list; migration 011) — full-screen builder for all forms: sections with 1–3 columns, drag fields, create new custom fields from a 13-type palette, hide/require, widths, hints, labels left/top, line-item columns, preview, undo; needs migration 008 — Super Admin → System → Run updates), Custom fields (now created inside the Form designer — 15 types incl. multi-select, date & time, "Unique"; migration 009; the separate Settings page is gone) on items, customers, suppliers, sales orders and
   purchase orders), Names, Print templates. Each user can customise their Dashboard widgets and list columns.
 
 - **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),

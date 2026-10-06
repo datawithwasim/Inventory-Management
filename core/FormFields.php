@@ -18,7 +18,6 @@ final class FormFields
             'bank_ifsc' => 'IFSC', 'notes' => 'Notes'],
         'warehouse' => ['address' => 'Address'],
         'location' => ['description' => 'Description'],
-        'quotation' => ['valid_until' => 'Valid until', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes / terms'],
         'sales_order' => ['expected_date' => 'Delivery date', 'ship_to' => 'Delivery address', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes'],
         'delivery' => ['ship_to' => 'Deliver to', 'note' => 'Note'],
         'sales_return' => ['reason' => 'Reason'],
@@ -31,10 +30,10 @@ final class FormFields
         'transfer' => ['note' => 'Note'],
     ];
     public const ENTITY_LABELS = ['item' => 'Item form', 'customer' => 'Customer form', 'supplier' => 'Supplier form', 'warehouse' => 'Warehouse form', 'location' => 'Rack / location form',
-        'quotation' => 'Quotation', 'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',
+        'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',
         'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer'];
     /** Settings page sections: heading => entities. */
-    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['quotation', 'sales_order', 'delivery', 'sales_return'],
+    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['sales_order', 'delivery', 'sales_return'],
         'Purchase documents' => ['requisition', 'purchase_order', 'grn', 'bill', 'purchase_return'], 'Stock documents' => ['adjustment', 'transfer']];
 
     private static ?array $hidden = null;

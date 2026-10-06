@@ -8,7 +8,7 @@ final class Numbering
 {
     /** Internal code => label shown in Settings. */
     public const DOCS = [
-        'QT' => 'Quotation', 'SO' => 'Sales order', 'DLV' => 'Delivery', 'INV' => 'Sales invoice', 'SR' => 'Sales return',
+        'SO' => 'Sales order', 'DLV' => 'Delivery', 'INV' => 'Sales invoice', 'SR' => 'Sales return',
         'REQ' => 'Purchase requisition', 'PO' => 'Purchase order', 'GRN' => 'Goods receipt', 'PB' => 'Purchase bill', 'PRT' => 'Purchase return',
         'ADJ' => 'Stock adjustment', 'TRF' => 'Stock transfer', 'STK' => 'Stock-take', 'SKU' => 'Auto-generated item SKU',
     ];

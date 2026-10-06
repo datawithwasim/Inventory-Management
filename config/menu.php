@@ -29,7 +29,6 @@ return [
         'sales' => ['label' => 'Sales', 'icon' => 'bag-check', 'items' => [
             ['label' => fn() => 'POS (counter)', 'icon' => 'upc-scan', 'path' => '/pos', 'perm' => ['pos.use'], 'module' => 'pos'],
             ['label' => fn() => term('customers'), 'icon' => 'person-lines-fill', 'path' => '/customers', 'perm' => ['customers.view']],
-            ['label' => fn() => 'Quotations', 'icon' => 'file-earmark-text', 'path' => '/sales/quotations', 'perm' => ['sales.view'], 'module' => 'quotations'],
             ['label' => fn() => 'Sales orders', 'icon' => 'bag-check', 'path' => '/sales/orders', 'perm' => ['sales.view']],
             ['label' => fn() => 'Deliveries', 'icon' => 'truck-flatbed', 'path' => '/sales/deliveries', 'perm' => ['sales.view']],
             ['label' => fn() => 'Invoices & payments', 'icon' => 'receipt', 'path' => '/sales/invoices', 'perm' => ['sales.view']],
@@ -51,7 +50,6 @@ return [
         ['label' => fn() => 'New ' . term('customer', true), 'icon' => 'person-plus', 'path' => '/customers/create', 'perm' => ['customers.create']],
         ['label' => fn() => 'New ' . term('supplier', true), 'icon' => 'truck', 'path' => '/suppliers/create', 'perm' => ['suppliers.create']],
         ['label' => fn() => 'New sales order', 'icon' => 'bag-plus', 'path' => '/sales/orders/create', 'perm' => ['sales.create']],
-        ['label' => fn() => 'New quotation', 'icon' => 'file-earmark-plus', 'path' => '/sales/quotations/create', 'perm' => ['sales.create'], 'module' => 'quotations'],
         ['label' => fn() => 'New purchase order', 'icon' => 'cart-plus', 'path' => '/purchase/orders/create', 'perm' => ['purchase.create']],
         ['label' => fn() => 'Stock adjustment', 'icon' => 'sliders', 'path' => '/stock/adjustments/create', 'perm' => ['stock.adjust']],
         ['label' => fn() => 'Open POS', 'icon' => 'upc-scan', 'path' => '/pos', 'perm' => ['pos.use'], 'module' => 'pos'],

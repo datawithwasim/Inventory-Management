@@ -9,7 +9,6 @@ final class Modules
     public const ALL = [
         'requisitions'     => ['Purchase requisitions', 'Internal "we need to buy this" requests that become purchase orders.', ['/purchase/requisitions']],
         'purchase_returns' => ['Purchase returns', 'Send goods back to a supplier.', ['/purchase/returns']],
-        'quotations'       => ['Quotations', 'Price quotes to customers before an order.', ['/sales/quotations']],
         'sales_returns'    => ['Sales returns', 'Take goods back from a customer.', ['/sales/returns']],
         'pos'              => ['POS (counter sale)', 'Fast barcode billing at the shop counter.', ['/pos']],
         'transfers'        => ['Stock transfers', 'Move stock between warehouses.', ['/stock/transfers']],

@@ -184,7 +184,7 @@ final class Sales
 
     /* ---------- documents ---------- */
 
-    /** Recomputes totals of a quotation or order from its lines and charges. */
+    /** Recomputes totals of an order from its lines and charges. */
     public static function recalc(string $table, string $itemsTable, string $fk, string $qtyCol, int $id): void
     {
         $gross = $disc = $net = $tax = 0.0;
@@ -334,6 +334,5 @@ final class Sales
             [$invoiceId, self::tid(), $invoiceId]);
     }
 
-    public const QUOTE_STATUS = ['draft' => ['Draft', 'secondary'], 'sent' => ['Sent', 'info'], 'accepted' => ['Accepted', 'success'], 'rejected' => ['Rejected', 'danger'], 'converted' => ['Order created', 'primary']];
     public const ORDER_STATUS = ['draft' => ['Draft', 'secondary'], 'confirmed' => ['Confirmed', 'primary'], 'partial' => ['Partly delivered', 'info'], 'delivered' => ['Delivered', 'success'], 'closed' => ['Closed', 'dark'], 'cancelled' => ['Cancelled', 'danger']];
 }

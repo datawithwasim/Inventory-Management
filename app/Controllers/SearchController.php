@@ -38,8 +38,7 @@ final class SearchController extends Controller
             }
             if (can('sales.view')) {
                 $docs = [];
-                foreach ([['sales_invoices', 'invoice_no', 'sales/invoices', 'Invoice', 'receipt'], ['sales_orders', 'order_no', 'sales/orders', 'Sales order', 'bag-check'],
-                          ['sales_quotations', 'quote_no', 'sales/quotations', 'Quotation', 'file-earmark-text']] as [$tb, $col, $route, $lbl, $icon]) {
+                foreach ([['sales_invoices', 'invoice_no', 'sales/invoices', 'Invoice', 'receipt'], ['sales_orders', 'order_no', 'sales/orders', 'Sales order', 'bag-check']] as [$tb, $col, $route, $lbl, $icon]) {
                     foreach (DB::all("SELECT id, $col AS no FROM $tb WHERE tenant_id = ? AND $col LIKE ? ORDER BY id DESC LIMIT 3", [$t, $like]) as $r) $docs[] = ['l' => $r['no'], 's' => $lbl, 'i' => $icon, 'u' => url("$route/{$r['id']}")];
                 }
                 $add('Sales documents', $docs);

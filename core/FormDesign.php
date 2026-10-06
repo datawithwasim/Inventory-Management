@@ -19,7 +19,6 @@ final class FormDesign
             'payment_terms_days' => 'Payment terms (days)', 'credit_limit' => 'Credit limit', 'lead_time_days' => 'Lead time (days)', 'transport' => 'Preferred transport',
             'bank_name' => 'Bank name', 'bank_account' => 'Account number', 'bank_ifsc' => 'IFSC', 'notes' => 'Notes'],
         'warehouse' => ['name' => 'Name', 'code' => 'Code', 'address' => 'Address'],
-        'quotation' => ['customer_id' => 'Customer', 'quote_date' => 'Date', 'valid_until' => 'Valid until', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes / terms'],
         'sales_order' => ['customer_id' => 'Customer', 'warehouse_id' => 'Ship from', 'order_date' => 'Order date', 'expected_date' => 'Deliver by', 'ship_to' => 'Delivery address',
             'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes'],
         'delivery' => ['delivery_date' => 'Delivery date', 'ship_to' => 'Deliver to', 'note' => 'Note'],
@@ -39,7 +38,6 @@ final class FormDesign
         'supplier' => ['name' => 8, 'supplier_type' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'tax_no' => 6, 'pan' => 6, 'address' => 12, 'city' => 4, 'state' => 4, 'pincode' => 4,
             'ship_address' => 12, 'payment_terms_days' => 3, 'credit_limit' => 3, 'lead_time_days' => 3, 'transport' => 3, 'bank_name' => 4, 'bank_account' => 4, 'bank_ifsc' => 4, 'notes' => 12],
         'warehouse' => ['name' => 12, 'code' => 12, 'address' => 12],
-        'quotation' => ['customer_id' => 5, 'quote_date' => 3, 'valid_until' => 4, 'delivery_charge' => 3, 'installation_charge' => 3, 'notes' => 6],
         'sales_order' => ['customer_id' => 4, 'warehouse_id' => 3, 'order_date' => 2, 'expected_date' => 3, 'ship_to' => 6, 'delivery_charge' => 3, 'installation_charge' => 3, 'notes' => 8],
         'delivery' => ['delivery_date' => 2, 'ship_to' => 3, 'note' => 8],
         'sales_return' => ['return_date' => 3, 'reason' => 5],
@@ -62,7 +60,7 @@ final class FormDesign
 
     public const COLS = [0 => 'Original', 1 => '1 column', 2 => '2 columns', 3 => '3 columns'];
     /** Forms that carry a line-items table whose columns can be switched off. */
-    public const LINE_FORMS = ['quotation', 'sales_order', 'purchase_order'];
+    public const LINE_FORMS = ['sales_order', 'purchase_order'];
 
     private static ?array $cfg = null;
     private static array $res = [];

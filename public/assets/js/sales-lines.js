@@ -1,4 +1,4 @@
-/* Line editor for quotations and sales orders. Plain JS, no dependencies. */
+/* Line editor for sales orders. Plain JS, no dependencies. */
 (function () {
   var me = document.currentScript;
   var lookupUrl = me.dataset.lookup;

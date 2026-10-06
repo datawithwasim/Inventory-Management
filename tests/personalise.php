@@ -61,17 +61,17 @@ $a->post('/settings/appearance', ['brand' => '#4f46e5', 'brand_custom' => '', 's
 check('print layout forces light mode', str_contains((string)file_get_contents(dirname(__DIR__) . '/views/layouts/print.php'), "setAttribute('data-bs-theme','light')"));
 
 echo "Modules\n";
-check('everything is on by default', str_contains($body('/dashboard'), 'Quotations') && str_contains($body('/dashboard'), 'Reports') && $a->get('/sales/quotations')['status'] === 200);
-$a->post('/settings/modules', ['on' => ['requisitions', 'purchase_returns', 'sales_returns', 'pos', 'transfers', 'takes', 'labels']], '/settings/modules');   // quotations + reports off
+check('everything is on by default', str_contains($body('/dashboard'), 'Requisitions') && str_contains($body('/dashboard'), 'Reports') && $a->get('/purchase/requisitions')['status'] === 200);
+$a->post('/settings/modules', ['on' => ['purchase_returns', 'sales_returns', 'pos', 'transfers', 'takes', 'labels']], '/settings/modules');   // requisitions + reports off
 $h = $body('/dashboard');
-check('quotations and reports vanish from the menu and quick-create', !str_contains($h, 'href="' . url('sales/quotations') . '"') && !str_contains($h, 'href="' . url('reports') . '"') && !str_contains($h, 'New quotation'));
-check('their pages stop opening (404)', $a->get('/sales/quotations')['status'] === 404 && $a->get('/reports')['status'] === 404 && $a->get('/reports/stock-summary')['status'] === 404);
-check('search shortcuts drop them too', !str_contains($h, '"Quotations"'));
+check('requisitions and reports vanish from the menu', !str_contains($h, 'href="' . url('purchase/requisitions') . '"') && !str_contains($h, 'href="' . url('reports') . '"'));
+check('their pages stop opening (404)', $a->get('/purchase/requisitions')['status'] === 404 && $a->get('/reports')['status'] === 404 && $a->get('/reports/stock-summary')['status'] === 404);
+check('search shortcuts drop them too', !str_contains($h, '"Requisitions"'));
 check('other parts still work', $a->get('/sales/orders')['status'] === 200 && $a->get('/stock')['status'] === 200);
 check('dashboard no longer links to the low-stock report', !str_contains($h, 'reports/low-stock'));
-check('another company is unaffected', $b->get('/sales/quotations')['status'] === 200 && $b->get('/reports')['status'] === 200);
-$a->post('/settings/modules', ['on' => ['bogus', 'quotations', 'reports', 'requisitions', 'purchase_returns', 'sales_returns', 'pos', 'transfers', 'takes', 'labels']], '/settings/modules');
-check('switching back on restores everything; unknown keys ignored', $a->get('/sales/quotations')['status'] === 200 && $a->get('/reports')['status'] === 200 && $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'modules.off'", [$tA]) === '[]');
+check('another company is unaffected', $b->get('/purchase/requisitions')['status'] === 200 && $b->get('/reports')['status'] === 200);
+$a->post('/settings/modules', ['on' => ['bogus', 'reports', 'requisitions', 'purchase_returns', 'sales_returns', 'pos', 'transfers', 'takes', 'labels']], '/settings/modules');
+check('switching back on restores everything; unknown keys ignored', $a->get('/purchase/requisitions')['status'] === 200 && $a->get('/reports')['status'] === 200 && $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'modules.off'", [$tA]) === '[]');
 $a->post('/settings/modules', ['on' => []], '/settings/modules');
 check('all off: POS, transfers, labels, takes, returns blocked', $a->get('/pos')['status'] === 404 && $a->get('/stock/transfers')['status'] === 404 && $a->get('/labels')['status'] === 404 && $a->get('/stock/takes')['status'] === 404 && $a->get('/purchase/returns')['status'] === 404);
 $a->post('/settings/modules', ['on' => array_keys(Core\Modules::ALL)], '/settings/modules');
@@ -118,12 +118,10 @@ echo "Custom fields on documents\n";
 $a->post('/settings/custom-fields', ['entity' => 'sales_order', 'label' => 'Site address', 'type' => 'text', 'is_required' => 1], '/settings/custom-fields/create');
 $a->post('/settings/custom-fields', ['entity' => 'sales_order', 'label' => 'Priority', 'type' => 'dropdown', 'options' => "Low\nHigh"], '/settings/custom-fields/create');
 $a->post('/settings/custom-fields', ['entity' => 'purchase_order', 'label' => 'Ship via', 'type' => 'text'], '/settings/custom-fields/create');
-$a->post('/settings/custom-fields', ['entity' => 'quotation', 'label' => 'Valid for site', 'type' => 'checkbox'], '/settings/custom-fields/create');
 $cfSite = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Site address'", [$tA]);
 $cfPri = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Priority'", [$tA]);
 $cfShip = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Ship via'", [$tA]);
-$cfQ = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Valid for site'", [$tA]);
-check('fields can be added to quotations, sales orders and purchase orders', $cfSite && $cfPri && $cfShip && $cfQ);
+check('fields can be added to sales orders and purchase orders', $cfSite && $cfPri && $cfShip);
 $vel = (int)$val('SELECT v.id FROM item_variants v WHERE v.tenant_id = ? AND v.sku = ?', [$tA, 'LMP']);
 $cust = (int)$val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'WithTax'", [$tA]);
 $sup = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Loom'", [$tA]);
@@ -144,11 +142,7 @@ $po = ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m
 $a->post('/purchase/orders', $po + ['cf' => [$cfShip => 'Rail']], '/purchase/orders/create');
 $poId = (int)$val('SELECT id FROM purchase_orders WHERE tenant_id = ?', [$tA]);
 check('purchase order saved with "Ship via" and shows it', $poId && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$cfShip, $poId]) === 'Rail' && str_contains($body("/purchase/orders/$poId"), 'Rail'));
-$a->post('/sales/quotations', ['customer_id' => $cust, 'quote_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 250]], 'cf' => [$cfQ => '1']], '/sales/quotations/create');
-$qid = (int)$val('SELECT id FROM sales_quotations WHERE tenant_id = ?', [$tA]);
-check('quotation checkbox field saved and shown as Yes', $qid && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$cfQ, $qid]) === '1' && str_contains($body("/sales/quotations/$qid"), 'Yes'));
 check('same ids in another company see nothing', !str_contains($b->get("/sales/orders/$so")['body'], 'New site'));
-check('deleting an order cleans nothing it should keep (quotation→order link reset)', true);
 $a->post("/sales/orders/$so/delete", [], '/sales/orders');
 check('draft order deletes fine with custom values attached', !$val('SELECT 1 FROM sales_orders WHERE id = ?', [$so]));
 
@@ -197,9 +191,9 @@ $h = $body('/settings/formdesign');
 $model = json_decode(preg_match('#<script type="application/json" id="dzData">(.*?)</script>#s', $h, $mm) ? html_entity_decode($mm[1]) : '{}', true);
 $forms = $model['model'] ?? [];
 $byKey = fn($k) => array_values(array_filter($forms, fn($m) => $m['key'] === $k))[0] ?? null;
-check('designer is a full-screen page (no Settings frame) with palette, canvas and 15 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 15 && count($forms) === 16);
+check('designer is a full-screen page (no Settings frame) with palette, canvas and 15 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 15 && count($forms) === 15);
 check('every form has sections, fields, unused list; customer has 10 standard fields', ($c = $byKey('customer')) && count($c['sections']) >= 1 && count($c['fields']) >= 10 && $c['customFields'] === true && $byKey('grn')['customFields'] === false);
-check('only the three documents carry a line-items table', array_column(array_filter($forms, fn($m) => $m['lineForm']), 'key') === ['quotation', 'sales_order', 'purchase_order']);
+check('only the two documents carry a line-items table', array_column(array_filter($forms, fn($m) => $m['lineForm']), 'key') === ['sales_order', 'purchase_order']);
 check('the old "Form fields" address leads to the designer', ($r = $a->get('/settings/formfields'))['status'] === 302 && str_contains((string)$r['location'], 'settings/formdesign'));
 check('default forms carry no design attributes', !str_contains($body('/customers/create'), 'data-help') && !preg_match('/<div class="col-md-4 mb-3" style="order/', $body('/customers/create')) && !str_contains($body('/customers/create'), 'ff-left') && !str_contains($body('/customers/create'), 'ff-section'));
 // build a payload from the model
@@ -282,7 +276,7 @@ $p = ['sales_order' => $state()['sales_order']];
 $p['sales_order']['lines'] = ['disc' => false, 'tax' => true];
 $savePayload($p);
 check('line-item columns: Disc % switched off on the sales order form (data-hide-cols), Tax % stays', str_contains($body('/sales/orders/create'), 'data-hide-cols="disc"') && !str_contains($body('/sales/orders/create'), 'data-hide-cols="disc,tax"'));
-check('other documents keep all columns', !str_contains($body('/sales/quotations/create'), 'data-hide-cols') && !str_contains($body('/purchase/orders/create'), 'data-hide-cols'));
+check('other documents keep all columns', !str_contains($body('/purchase/orders/create'), 'data-hide-cols'));
 // sales order: sections + custom field palette on documents
 $p = ['sales_order' => $state()['sales_order']];
 $p['sales_order']['sections'] = [['title' => 'Order', 'cols' => 3, 'fields' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date']], ['title' => 'Delivery', 'cols' => 2, 'fields' => ['ship_to', 'delivery_charge', 'installation_charge', 'notes']]];

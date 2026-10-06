@@ -1,4 +1,4 @@
-<?php /** quote / order line table with live totals */ ?>
+<?php /** order line table with live totals */ ?>
 <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span><?= e(term('items')) ?></span>
   <button type="button" class="btn btn-sm btn-outline-primary" id="addLine"><i class="bi bi-plus-lg"></i> Add <?= e(term('item', true)) ?></button></div>
 <div class="table-responsive" style="overflow:visible"><table class="table mb-0 align-middle" id="lineTable"<?= fflines($lineEntity ?? '') ?>>

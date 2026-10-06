@@ -5,7 +5,6 @@
   <div class="col-md-3"><div class="text-muted small">Ship from</div><?= e($o['warehouse']) ?><br><small class="text-muted">Ordered <?= e(fdate($o['order_date'])) ?><?= $o['expected_date'] ? ' · by ' . e(fdate($o['expected_date'])) : '' ?></small></div>
   <div class="col-md-3"><div class="text-muted small">Deliver to</div><?= e($o['ship_to'] ?? '—') ?></div></div>
   <?php if ($o['notes']): ?><div class="text-muted mt-2"><?= e($o['notes']) ?></div><?php endif; ?>
-  <?php if ($o['quotation_id']): ?><div class="small mt-1">From quotation <a href="<?= url('sales/quotations/' . (int)$o['quotation_id']) ?>"><?= e($o['quote_no']) ?></a></div><?php endif; ?>
   <div class="mt-3 d-flex flex-wrap gap-2">
     <?php if ($st === 'draft' && can('sales.edit')): ?><a class="btn btn-outline-primary" href="<?= url("sales/orders/{$o['id']}/edit") ?>">Edit</a><?php endif; ?>
     <?php if ($st === 'draft' && can('sales.create')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/confirm") ?>"><?= csrf_field() ?><button class="btn btn-primary">Confirm &amp; reserve stock</button></form><?php endif; ?>

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * End-to-end test for Phase 4 (customers, quotations, orders + reservation, deliveries from rolls/racks, invoices, returns, POS).
+ * End-to-end test for Phase 4 (customers, orders + reservation, deliveries from rolls/racks, invoices, returns, POS).
  *   php tests/sales.php http://127.0.0.1:8099        # against a throw-away database
  */
 $base = rtrim($argv[1] ?? 'http://127.0.0.1:8099', '/');
@@ -91,40 +91,22 @@ check('retail customer pays list price, no discount', $near($p['price'], 700) &&
 check('barcode scan finds the item and the set shows its availability', ($js("/lookup/sale-item?code=111&customer=$ravi")['sku'] ?? '') === 'TBL' && (float)($js("/lookup/sale-items?q=dining&warehouse=$main")[0]['available'] ?? -1) === 10.0);
 check('customer pages load', $a->get('/customers')['status'] === 200 && $a->get("/customers/$acme")['status'] === 200 && $a->get("/customers/$acme/edit")['status'] === 200 && $a->get('/customers/groups')['status'] === 200 && $a->get("/customers/groups/$grp/edit")['status'] === 200);
 
-echo "Quotation\n";
-$qt = fn(array $lines, array $over = []) => $a->post('/sales/quotations', $over + ['customer_id' => $ravi, 'quote_date' => date('Y-m-d'), 'delivery_charge' => 500, 'installation_charge' => 300, 'lines' => $lines], '/sales/quotations/create');
+echo "Order input checks\n";
+$qt = fn(array $lines, array $over = []) => $a->post('/sales/orders', $over + ['customer_id' => $ravi, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'delivery_charge' => 500, 'installation_charge' => 300, 'lines' => $lines], '/sales/orders/create');
 $qt([['variant_id' => $tbl, 'qty' => 2, 'unit_price' => 4200, 'tax_rate' => 12], ['variant_id' => $vel, 'qty' => 10, 'unit_price' => 700, 'discount_pct' => 5, 'tax_rate' => 12]]);
-$q1 = (int)$val('SELECT MAX(id) FROM sales_quotations WHERE tenant_id = ?', [$tA]);
-check('quotation saved; totals: gross 15400, discount 350, tax 1806, + 800 charges = 17656', $q1 > 0 && $near($val('SELECT subtotal FROM sales_quotations WHERE id = ?', [$q1]), 15400) && $near($val('SELECT discount_total FROM sales_quotations WHERE id = ?', [$q1]), 350) && $near($val('SELECT tax_total FROM sales_quotations WHERE id = ?', [$q1]), 1806) && $near($val('SELECT total FROM sales_quotations WHERE id = ?', [$q1]), 17656));
-$n = $count('sales_quotations');
+$oq = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+check('order saved; totals: gross 15400, discount 350, tax 1806, + 800 charges = 17656', $oq > 0 && $near($val('SELECT subtotal FROM sales_orders WHERE id = ?', [$oq]), 15400) && $near($val('SELECT discount_total FROM sales_orders WHERE id = ?', [$oq]), 350) && $near($val('SELECT tax_total FROM sales_orders WHERE id = ?', [$oq]), 1806) && $near($val('SELECT total FROM sales_orders WHERE id = ?', [$oq]), 17656));
+$n = $count('sales_orders');
 $qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1], ['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]);
 $qt([['variant_id' => $tbl, 'qty' => 0, 'unit_price' => 1]]);
 $qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => -1]]);
 $qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1, 'discount_pct' => 101]]);
 $qt([['variant_id' => $tbl, 'qty' => 1.5, 'unit_price' => 1]]);
 $qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]], ['customer_id' => 999999]);
-$qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]], ['valid_until' => '2000-01-01']);
-check('bad quotations refused (duplicate item, zero qty, negative price, discount > 100, decimals on pieces, unknown customer, expired date)', $count('sales_quotations') === $n);
-$a->post("/sales/quotations/$q1/send", [], "/sales/quotations/$q1");
-$a->post("/sales/quotations/$q1/accept", [], "/sales/quotations/$q1");
-check('quotation sent → accepted', $val('SELECT status FROM sales_quotations WHERE id = ?', [$q1]) === 'accepted');
-$a->post("/sales/quotations/$q1/convert", ['warehouse_id' => $main], "/sales/quotations/$q1");
-$oq = (int)$val('SELECT order_id FROM sales_quotations WHERE id = ?', [$q1]);
-check('converted into a draft order with the same lines and charges', $oq > 0 && $val('SELECT status FROM sales_orders WHERE id = ?', [$oq]) === 'draft' && (int)$val('SELECT COUNT(*) FROM sales_order_items WHERE order_id = ?', [$oq]) === 2 && $near($val('SELECT total FROM sales_orders WHERE id = ?', [$oq]), 17656) && $val('SELECT status FROM sales_quotations WHERE id = ?', [$q1]) === 'converted');
-$a->post("/sales/quotations/$q1/convert", ['warehouse_id' => $main], "/sales/quotations/$q1");
-check('a converted quotation cannot be converted twice', $count('sales_orders') === 1);
-$a->post("/sales/quotations/$q1", ['customer_id' => $ravi, 'quote_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], "/sales/quotations/$q1/edit");
-check('a converted quotation cannot be edited', $near($val('SELECT total FROM sales_quotations WHERE id = ?', [$q1]), 17656));
-$qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 4200]]);
-$q2 = (int)$val('SELECT MAX(id) FROM sales_quotations WHERE tenant_id = ?', [$tA]);
-$a->post("/sales/quotations/$q2/reject", [], "/sales/quotations/$q2");
-check('quotation can be rejected', $val('SELECT status FROM sales_quotations WHERE id = ?', [$q2]) === 'rejected');
-$qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 4200]]);
-$q3 = (int)$val('SELECT MAX(id) FROM sales_quotations WHERE tenant_id = ?', [$tA]);
-$a->post("/sales/quotations/$q3/delete", [], '/sales/quotations');
-check('a draft quotation can be deleted', !$val('SELECT 1 FROM sales_quotations WHERE id = ?', [$q3]));
-check('quotation pages load', $a->get('/sales/quotations')['status'] === 200 && $a->get("/sales/quotations/$q1")['status'] === 200 && $a->get('/sales/quotations/create')['status'] === 200 && $a->get("/sales/quotations/$q2")['status'] === 200);
+check('bad orders refused (duplicate item, zero qty, negative price, discount > 100, decimals on pieces, unknown customer)', $count('sales_orders') === $n);
+check('order pages load', $a->get('/sales/orders')['status'] === 200 && $a->get("/sales/orders/$oq")['status'] === 200 && $a->get('/sales/orders/create')['status'] === 200);
 $a->post("/sales/orders/$oq/delete", [], '/sales/orders');
+check('a draft order can be deleted', !$val('SELECT 1 FROM sales_orders WHERE id = ?', [$oq]));
 
 echo "Orders and stock reservation\n";
 $so = fn(int $cust, array $lines, array $over = []) => $a->post('/sales/orders', $over + ['customer_id' => $cust, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'delivery_charge' => 0, 'installation_charge' => 0, 'lines' => $lines], '/sales/orders/create');
@@ -344,8 +326,8 @@ check('no negative balances anywhere', !DB::val('SELECT 1 FROM stock_balances WH
 check('every invoice total equals goods − discount + tax + charges', !DB::val('SELECT 1 FROM sales_invoices WHERE tenant_id = ? AND ABS(total - (subtotal - discount_total + tax_total + delivery_charge + installation_charge)) > 0.011', [$tA]));
 
 echo "Tenant isolation\n";
-check("company B cannot open A's customer / quotation / order / delivery / invoice / return (404)",
-    $b->get("/customers/$acme")['status'] === 404 && $b->get("/sales/quotations/$q1")['status'] === 404 && $b->get("/sales/orders/$o1")['status'] === 404
+check("company B cannot open A's customer / order / delivery / invoice / return (404)",
+    $b->get("/customers/$acme")['status'] === 404 && $b->get("/sales/orders/$o1")['status'] === 404
     && $b->get("/sales/deliveries/$d1")['status'] === 404 && $b->get("/sales/invoices/$inv1")['status'] === 404 && $b->get("/sales/returns/$sr")['status'] === 404 && $b->get("/sales/invoices/$inv1/print")['status'] === 404);
 $bMain = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1', [$tB]);
 $bWalk = (int)$val('SELECT id FROM customers WHERE tenant_id = ? AND is_walkin = 1', [$tB]);

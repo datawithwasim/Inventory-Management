@@ -182,18 +182,6 @@ $router->get('/customers/{id}/edit', $A . 'CustomerController@edit', ['auth', 'p
 $router->post('/customers/{id}', $A . 'CustomerController@update', ['auth', 'perm:customers.edit']);
 $router->post('/customers/{id}/delete', $A . 'CustomerController@destroy', ['auth', 'perm:customers.delete']);
 
-$router->get('/sales/quotations', $A . 'QuotationController@index', ['auth', 'perm:sales.view']);
-$router->get('/sales/quotations/create', $A . 'QuotationController@create', ['auth', 'perm:sales.create']);
-$router->post('/sales/quotations', $A . 'QuotationController@store', ['auth', 'perm:sales.create']);
-$router->get('/sales/quotations/{id}', $A . 'QuotationController@show', ['auth', 'perm:sales.view']);
-$router->get('/sales/quotations/{id}/print', $A . 'QuotationController@print', ['auth', 'perm:sales.view']);
-$router->get('/sales/quotations/{id}/edit', $A . 'QuotationController@edit', ['auth', 'perm:sales.edit']);
-$router->post('/sales/quotations/{id}', $A . 'QuotationController@update', ['auth', 'perm:sales.edit']);
-$router->post('/sales/quotations/{id}/send', $A . 'QuotationController@send', ['auth', 'perm:sales.edit']);
-$router->post('/sales/quotations/{id}/accept', $A . 'QuotationController@accept', ['auth', 'perm:sales.edit']);
-$router->post('/sales/quotations/{id}/reject', $A . 'QuotationController@reject', ['auth', 'perm:sales.edit']);
-$router->post('/sales/quotations/{id}/convert', $A . 'QuotationController@convert', ['auth', 'perm:sales.create']);
-$router->post('/sales/quotations/{id}/delete', $A . 'QuotationController@destroy', ['auth', 'perm:sales.delete']);
 
 $router->get('/sales/orders', $A . 'SalesOrderController@index', ['auth', 'perm:sales.view']);
 $router->get('/sales/orders/create', $A . 'SalesOrderController@create', ['auth', 'perm:sales.create']);

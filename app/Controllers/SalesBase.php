@@ -50,7 +50,7 @@ abstract class SalesBase extends PurchaseBase
         if (($max = self::discountLimitExceeded($disc)) !== null) $this->bounce("$prefix: a discount above " . qty($max) . '% needs someone with approval rights.', $back);
     }
 
-    /** Priced lines for quotations and orders. */
+    /** Priced lines for orders. */
     protected function collectSaleLines(array $raw, string $back): array
     {
         $out = [];

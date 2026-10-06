@@ -116,7 +116,6 @@ final class CustomerController extends SalesBase
         $c = $this->load($id);
         $t = $this->tid();
         $used = $c['is_walkin']
-            || DB::val('SELECT 1 FROM sales_quotations WHERE tenant_id = ? AND customer_id = ? LIMIT 1', [$t, $c['id']])
             || DB::val('SELECT 1 FROM sales_orders WHERE tenant_id = ? AND customer_id = ? LIMIT 1', [$t, $c['id']])
             || DB::val('SELECT 1 FROM deliveries WHERE tenant_id = ? AND customer_id = ? LIMIT 1', [$t, $c['id']])
             || DB::val('SELECT 1 FROM sales_invoices WHERE tenant_id = ? AND customer_id = ? LIMIT 1', [$t, $c['id']])

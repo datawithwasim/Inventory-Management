@@ -18,9 +18,9 @@ final class SalesOrderController extends SalesBase
     private function load(string $id): array
     {
         return DB::one(
-            'SELECT o.*, c.name AS customer, c.credit_days, w.name AS warehouse, u.name AS user_name, q.quote_no
+            'SELECT o.*, c.name AS customer, c.credit_days, w.name AS warehouse, u.name AS user_name
              FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id
-             LEFT JOIN users u ON u.id = o.created_by LEFT JOIN sales_quotations q ON q.id = o.quotation_id
+             LEFT JOIN users u ON u.id = o.created_by
              WHERE o.tenant_id = ? AND o.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
@@ -216,8 +216,6 @@ final class SalesOrderController extends SalesBase
             redirect("sales/orders/{$o['id']}");
         }
         DB::transaction(function () use ($o) {
-            // a quotation that was converted into this draft goes back to "accepted" so it can be converted again
-            DB::run("UPDATE sales_quotations SET order_id = NULL, status = 'accepted' WHERE tenant_id = ? AND order_id = ?", [$this->tid(), $o['id']]);
             DB::run('DELETE FROM sales_orders WHERE tenant_id = ? AND id = ?', [$this->tid(), $o['id']]);
         });
         Audit::log('order_delete', 'sales_order', (int)$o['id'], $o['order_no']);
