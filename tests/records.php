@@ -159,10 +159,11 @@ check('the old single "Dark mode" menu item is gone from the app (POS / admin ke
 check('the page tells the script the company default theme', str_contains($dh, 'data-default-mode'));
 $sh = $a->get("/suppliers/$s1")['body'];
 check('supplier page: rate list uses modals (add / import), no inline form', str_contains($sh, 'id="rateModal"') && str_contains($sh, 'id="rateImportModal"') && !str_contains($sh, 'id="rateAdd"'));
-check('purchase orders and bills sit in one tabbed Purchase activity card (not two columns)', str_contains($sh, 'Purchase activity') && str_contains($sh, 'data-act="orders-po"') && str_contains($sh, 'data-act="orders-bills"') && !str_contains($sh, 'Recent purchase orders'));
+check('Purchase orders and Bills are two separate full-width cards like the Rate list, each in the Related list', preg_match('~<section class="card mb-3" id="orders">.*?Purchase orders~s', $sh) === 1 && str_contains($sh, '<section class="card mb-3" id="bills">') && str_contains($sh, 'data-rel="orders"') && str_contains($sh, 'data-rel="bills"') && !str_contains($sh, 'data-act=') && !str_contains($sh, 'col-md-6'));
 $ch = $a->get("/customers/$c1")['body'];
-check('customer page: Orders / Invoices tabs in one Sales activity card', str_contains($ch, 'Sales activity') && str_contains($ch, 'data-act="orders-orders"') && str_contains($ch, 'data-act="orders-invoices"'));
+check('customer page: Orders and Invoices are separate cards listed in the Related list', str_contains($ch, '<section class="card mb-3" id="orders">') && str_contains($ch, '<section class="card mb-3" id="invoices">') && str_contains($ch, 'data-rel="invoices"') && !str_contains($ch, 'data-act='));
 check('the record tab script only controls Overview / Timeline', str_contains($sh, ".rec-main > .rec-tabs button"));
+check('an empty rate list shows only its empty message (the "Nothing matches" line starts hidden)', preg_match('~<tr id="rlNone" hidden>~', $sh) === 1);
 
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

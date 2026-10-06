@@ -6,7 +6,7 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
 ?>
 <section class="card mb-3" id="rates">
   <div class="card-header rl-head">
-    <div><div class="rl-title"><i class="bi bi-tags"></i> Rate list</div><div class="rl-sub">What this <?= e(term('supplier', true)) ?> charges us · <?= count($cur) ?> current<?= $hist ? ' · ' . $hist . ' earlier' : '' ?></div></div>
+    <div><div class="rl-title"><i class="bi bi-tags"></i> Rate list <span class="act-n"><?= count($cur) ?></span></div><div class="rl-sub">What this <?= e(term('supplier', true)) ?> charges us · <?= count($cur) ?> current<?= $hist ? ' · ' . $hist . ' earlier' : '' ?></div></div>
     <div class="rl-tools">
       <?php if (can('reports.view')): ?><a class="btn btn-sm btn-outline-secondary" href="<?= url('reports/rate-history?supplier=' . (int)$s['id']) ?>"><i class="bi bi-clock-history"></i><span class="d-none d-md-inline"> History report</span></a><?php endif; ?>
       <?php if ($canEdit): ?>
@@ -42,7 +42,7 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
           <?php endif; ?>
         </td></tr>
     <?php endforeach; ?>
-    <tr id="rlNone" <?= $rates ? 'hidden' : '' ?>><td colspan="8" class="text-muted py-3">Nothing matches.</td></tr>
+    <tr id="rlNone" hidden><td colspan="8" class="text-muted py-3">Nothing matches.</td></tr>
     </tbody></table></div>
   <?php if (!$rates): ?>
     <div class="rl-empty"><i class="bi bi-tags"></i><div><b>No rates yet</b><div class="text-muted small">Add what this <?= e(term('supplier', true)) ?> quotes. The rate fills in by itself when you pick the <?= e(term('item', true)) ?> on a purchase order.</div></div>
