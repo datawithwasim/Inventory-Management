@@ -18,6 +18,7 @@
 <div class="table-responsive" style="overflow:visible"><table class="table mb-0 align-middle lines-wide" id="lineTable">
   <thead><tr><th><?= e(term('item')) ?></th><th>Roll (<?= e(term('batch', true)) ?>)</th><th><?= e(term('rack')) ?></th><th>Qty</th><th>Price</th><th>Disc %</th><th>Tax %</th><th></th></tr></thead><tbody></tbody></table></div></div>
 <script type="application/json" id="initialLines"><?= json_encode($oldLines, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script src="<?= asset('js/item-picker.js') ?>"></script>
 <script src="<?= asset('js/delivery-lines.js') ?>" data-stock="<?= url('lookup/stock') ?>" data-lookup="<?= url('lookup/sale-items') ?>" data-order="<?= $order ? 1 : 0 ?>" data-warehouse="<?= (int)($order['warehouse_id'] ?? 0) ?>"></script>
 <button class="btn btn-success">Deliver &amp; take stock out</button> <a class="btn btn-link" href="<?= $order ? url("sales/orders/{$order['id']}") : url('sales/deliveries') ?>">Cancel</a>
 </form>

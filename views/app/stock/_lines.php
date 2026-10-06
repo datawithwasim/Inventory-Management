@@ -6,4 +6,5 @@
   <tbody></tbody></table></div></div>
 <script type="application/json" id="initialLines"><?= json_encode($oldLines, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script type="application/json" id="rackData"><?= json_encode((object)$racks, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script src="<?= asset('js/item-picker.js') ?>"></script>
 <script src="<?= asset('js/stock-lines.js') ?>" data-mode="<?= e($mode) ?>" data-lookup="<?= url('stock/lookup') ?>" data-batches="<?= url('stock/batch-options') ?>" data-placement="<?= url('stock/placement') ?>"></script>

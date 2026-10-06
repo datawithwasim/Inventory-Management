@@ -30,6 +30,24 @@
     }
   });
 
+  /* ---- Save / Cancel of create and edit forms move up beside the page heading ---- */
+  (function () {
+    var slot = doc.getElementById('pageActions'); if (!slot) return;
+    var n = 0, moved = 0;
+    doc.querySelectorAll('main.content form a.btn.btn-link').forEach(function (cancel) {
+      var save = cancel.previousElementSibling, f = cancel.closest('form');
+      if (!f || (f.getAttribute('method') || '').toLowerCase() !== 'post' || f.closest('.modal, .rec-main, .palette') || !/^(Cancel|Back)$/.test(cancel.textContent.trim())) return;
+      if (!save || !save.matches('button.btn:not(.btn-link):not(.btn-outline-primary):not(.btn-outline-danger):not(.btn-outline-secondary)')) return;
+      if (!f.id) f.id = 'pageForm' + (++n);
+      var holder = cancel.parentNode;
+      save.setAttribute('form', f.id);
+      cancel.className = 'btn btn-outline-secondary'; save.className = save.className.replace(/\bmt-\d\b/g, '').replace(/\s+/g, ' ').trim();
+      slot.appendChild(cancel); slot.appendChild(save); moved++;
+      if (holder && holder !== f && !holder.children.length && !holder.textContent.trim()) holder.remove();
+    });
+    if (moved) slot.closest('.page-head').classList.add('has-actions');
+  })();
+
   /* ---- sidebar ---- */
   var sb = doc.getElementById('sidebar');
   if (sb) {

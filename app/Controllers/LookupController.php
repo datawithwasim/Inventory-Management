@@ -22,7 +22,9 @@ final class LookupController extends Controller
                 WHERE v.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 AND v.is_active = 1';
         if ($variant > 0) {
             $rows = DB::all($sel . ' AND v.id = ?', [Auth::tenantId(), $variant]);
-        } elseif ($q !== '') {
+        } elseif ($q === '') {
+            $rows = DB::all($sel . ' ORDER BY i.name, v.name LIMIT 15', [Auth::tenantId()]);
+        } else {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $rows = DB::all($sel . ' AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?) ORDER BY i.name, v.name LIMIT 15', [Auth::tenantId(), $like, $like, $like, $q]);
         }

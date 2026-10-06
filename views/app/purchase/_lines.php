@@ -15,4 +15,5 @@ $heads = [
 </table></div></div>
 <script type="application/json" id="initialLines"><?= json_encode($oldLines, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <?php if ($mode === 'grn'): ?><script type="application/json" id="rackData"><?= json_encode((object)($racks ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script><?php endif; ?>
+<script src="<?= asset('js/item-picker.js') ?>"></script>
 <script src="<?= asset('js/purchase-lines.js') ?>" data-mode="<?= e($mode) ?>" data-lookup="<?= url('lookup/items') ?>"></script>

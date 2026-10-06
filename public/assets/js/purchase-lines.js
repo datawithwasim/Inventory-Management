@@ -51,7 +51,7 @@
         vUnit = hid(p + '[unit]', d.unit), vDec = hid(p + '[dec]', d.dec), poItem = hid(p + '[po_item_id]', d.po_item_id);
     var search = mk('input', { type: 'text', class: 'form-control form-control-sm', placeholder: 'Search item, SKU or barcode', autocomplete: 'off' });
     search.value = d.label || '';
-    var list = mk('div', { class: 'list-group position-absolute shadow-sm', style: 'z-index:20;max-height:240px;overflow:auto;min-width:320px', hidden: '' });
+    var list = mk('div', { class: 'ip-list', hidden: '' });
     var tdItem;
     if (linked) {
       search.type = 'hidden';
@@ -135,26 +135,11 @@
       list.hidden = true; apply(); recalc(); qty.focus();
     }
     if (!linked) {
-      search.oninput = function () {
-        vId.value = ''; clearTimeout(timer);
-        var q = search.value.trim();
-        if (!q) { list.hidden = true; return; }
-        timer = setTimeout(function () {
-          fetch(lookupUrl + '?q=' + encodeURIComponent(q) + supQ(), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
-            list.innerHTML = '';
-            rows.forEach(function (v) {
-              var a = mk('button', { type: 'button', class: 'list-group-item list-group-item-action py-1 small',
-                text: v.item_name + (v.name ? ' — ' + v.name : '') + ' (' + v.sku + ')' + (v.track_batch ? ' · roll/batch' : '') });
-              a.onclick = function () { choose(v); };
-              list.appendChild(a);
-            });
-            if (!rows.length) list.appendChild(mk('div', { class: 'list-group-item small text-muted', text: 'No items found' }));
-            list.hidden = false;
-          });
-        }, 200);
-      };
-      search.onkeydown = function (e) { if (e.key === 'Enter') e.preventDefault(); };
-      document.addEventListener('click', function (e) { if (!tr.contains(e.target)) list.hidden = true; });
+      ItemPicker.attach({ input: search, list: list, host: tr, emptyOk: true,
+        url: function (q) { return lookupUrl + '?q=' + encodeURIComponent(q) + supQ(); },
+        onType: function () { vId.value = ''; },
+        render: function (v) { return { title: v.item_name + (v.name ? ' — ' + v.name : ''), sub: v.sku + (v.rate_note ? ' · ' + v.rate_note : ''), tag: v.track_batch ? 'Roll' : '', right: v.rate != null ? parseFloat(v.rate).toFixed(2) : (parseFloat(v.cost_price) ? parseFloat(v.cost_price).toFixed(2) : '') }; },
+        pick: choose });
     }
     [qty, price, tax].forEach(function (el) { el.addEventListener('input', recalc); });
     tr.refillRack = function () { if (rack) fillRacks(rack, rack.value); };

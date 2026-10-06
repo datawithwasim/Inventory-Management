@@ -165,5 +165,13 @@ check('customer page: Orders and Invoices are separate cards listed in the Relat
 check('the record tab script only controls Overview / Timeline', str_contains($sh, ".rec-main > .rec-tabs button"));
 check('an empty rate list shows only its empty message (the "Nothing matches" line starts hidden)', preg_match('~<tr id="rlNone" hidden>~', $sh) === 1);
 
+echo "Form header actions and the item picker\n";
+check('every app page has the heading-row slot the Save / Cancel buttons move into', str_contains($a->get('/suppliers/create')['body'], 'id="pageActions"'));
+check('the line editors load the shared item picker before their own script', preg_match('~item-picker\.js.*?purchase-lines\.js~s', $a->get('/purchase/orders/create')['body']) === 1 && preg_match('~item-picker\.js.*?sales-lines\.js~s', $a->get('/sales/orders/create')['body']) === 1 && preg_match('~item-picker\.js.*?stock-lines\.js~s', $a->get('/stock/adjustments/create')['body']) === 1);
+$a->post('/items', ['name' => 'Picker Cloth', 'unit_id' => $unit, 'variants' => [['sku' => 'PCK1', 'cost_price' => 10]]], '/items/create');
+$empty = json_decode($a->get('/lookup/items?q=')['body'], true);
+check('the purchase item lookup lists items even with nothing typed (the box shows something on focus)', is_array($empty) && count($empty) >= 1 && isset($empty[0]['item_name']));
+check('…and still only this company\'s items', $b->get('/lookup/items?q=')['body'] === '[]');
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

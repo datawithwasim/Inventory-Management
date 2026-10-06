@@ -46,7 +46,7 @@
     search.value = d.label || '';
     var info = mk('div', { class: 'form-text small' });
     var shade = mk('div', { class: 'small text-warning', text: '⚠ Cut from different rolls – the shade may differ.', hidden: '' });
-    var list = mk('div', { class: 'list-group position-absolute shadow-sm', style: 'z-index:20;max-height:260px;overflow:auto;min-width:360px', hidden: '' });
+    var list = mk('div', { class: 'ip-list', hidden: '' });
     var tdItem;
     if (linked) {
       search.type = 'hidden';
@@ -126,27 +126,11 @@
       list.hidden = true; load(); qty.focus();
     }
     if (!linked) {
-      search.oninput = function () {
-        vId.value = ''; clearTimeout(timer);
-        var q = search.value.trim();
-        if (!q) { list.hidden = true; return; }
-        timer = setTimeout(function () {
-          var url = lookupUrl + '?q=' + encodeURIComponent(q) + '&customer=' + encodeURIComponent(customer ? customer.value : 0) + '&warehouse=' + encodeURIComponent(wh ? wh.value : 0);
-          fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
-            list.innerHTML = '';
-            rows.forEach(function (v) {
-              var a = mk('button', { type: 'button', class: 'list-group-item list-group-item-action py-1 small',
-                text: v.item_name + (v.name ? ' — ' + v.name : '') + ' (' + v.sku + ') · ' + v.price.toFixed(2) + (v.available != null ? ' · free ' + fmt(v.available) : '') + (v.is_bundle ? ' · set' : '') });
-              a.onclick = function () { choose(v); };
-              list.appendChild(a);
-            });
-            if (!rows.length) list.appendChild(mk('div', { class: 'list-group-item small text-muted', text: 'No items found' }));
-            list.hidden = false;
-          });
-        }, 200);
-      };
-      search.onkeydown = function (e) { if (e.key === 'Enter') e.preventDefault(); };
-      document.addEventListener('click', function (e) { if (!tr.contains(e.target)) list.hidden = true; });
+      ItemPicker.attach({ input: search, list: list, host: tr,
+        url: function (q) { return lookupUrl + '?q=' + encodeURIComponent(q) + '&customer=' + encodeURIComponent(customer ? customer.value : 0) + '&warehouse=' + encodeURIComponent(wh ? wh.value : 0); },
+        onType: function () { vId.value = ''; },
+        render: function (v) { return { title: v.item_name + (v.name ? ' — ' + v.name : ''), sub: v.sku + (v.available != null ? ' · free ' + fmt(v.available) + ' ' + v.unit : '') + (v.is_bundle ? ' · set' : ''), right: v.price.toFixed(2) }; },
+        pick: choose });
     }
     if (d.multi) shade.hidden = false;
     if (d.variant_id) load(d.batch_id, d.location_id);

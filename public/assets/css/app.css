@@ -551,3 +551,29 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 .act-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); font-weight: 600; background: transparent; }
 .act-empty { display: flex; align-items: center; gap: .6rem; padding: 1.3rem 1.2rem; color: var(--ink-3); } .act-empty i { font-size: 1.2rem; }
 .act-foot { padding: .6rem 1rem; border-top: 1px solid var(--line); font-size: .85rem; text-align: right; }
+
+/* ---- Save / Cancel beside the page heading ---- */
+.page-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; } .page-actions:empty { display: none; }
+.page-head.has-actions { position: sticky; top: var(--topbar-h); z-index: 1015; background: var(--app-bg); margin: -.35rem 0 1rem; padding: .6rem 0; align-items: center; border-bottom: 1px solid transparent; }
+.page-head.has-actions .page-layout-link { margin-left: .75rem; }
+@media (max-width: 575px) { .page-head.has-actions { position: static; } .page-actions { width: 100%; } .page-actions .btn { flex: 1; } }
+
+/* ---- item search panel (line editors) ---- */
+.ip-list { position: absolute; left: 0; top: calc(100% + 4px); z-index: 1050; min-width: 440px; width: max-content; max-width: min(640px, 92vw); max-height: 340px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow-lg); padding: .3rem; }
+.ip-list.up { top: auto; bottom: calc(100% + 4px); } .ip-list[hidden] { display: none; }
+.ip-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .5rem .65rem; border-radius: 8px; cursor: pointer; }
+.ip-row.on { background: color-mix(in srgb, var(--brand) 11%, transparent); }
+.ip-title { font-weight: 550; font-size: .88rem; line-height: 1.25; } .ip-sub { font-size: .76rem; color: var(--ink-3); margin-top: .1rem; }
+.ip-side { display: flex; flex-direction: column; align-items: flex-end; gap: .15rem; flex: none; } .ip-right { font-weight: 600; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.ip-tag { font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 .45rem; color: var(--ink-2); }
+.ip-msg { padding: .8rem .9rem; font-size: .84rem; color: var(--ink-3); }
+@media (max-width: 575px) { .ip-list { min-width: 0; width: calc(100vw - 48px); } }
+
+/* ---- line tables: every box on one line, nothing floats up or down ---- */
+#lineTable > tbody > tr > td { vertical-align: top; padding: .6rem .5rem; }
+#lineTable td .form-control-sm, #lineTable td .form-select-sm { height: 31px; }
+#lineTable td input.form-control { display: inline-block; vertical-align: top; }
+#lineTable td .text-muted.small:not(.form-text) { display: inline-block; line-height: 31px; margin-left: .35rem; vertical-align: top; }
+#lineTable td .form-text:empty { display: none; } #lineTable td .form-text { margin-top: .2rem; }
+#lineTable td.line-total, #lineTable td.text-end.line-total { line-height: 31px; padding-top: .6rem; }
+#lineTable td > .btn, #lineTable td .btn-sm { height: 31px; display: inline-flex; align-items: center; }

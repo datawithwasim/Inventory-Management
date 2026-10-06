@@ -94,6 +94,7 @@ $dashActive = $path === '/dashboard';
       <div>
         <h1><?= e($title ?? '') ?><?php if (!empty($GLOBALS['ff_entity']) && can('settings.edit')): ?><a class="page-layout-link" href="<?= e(url('settings/formdesign?form=' . $GLOBALS['ff_entity'] . '&return=' . rawurlencode($_SERVER['REQUEST_URI'] ?? ''))) ?>"><i class="bi bi-layout-text-window"></i> Edit page layout</a><?php endif; ?></h1>
       </div>
+      <div class="page-actions" id="pageActions"></div>
     </div>
     <?php require __DIR__ . '/flash.php'; endif; ?>
     <?= $content ?>

@@ -7,4 +7,5 @@
     <tr><td>Gross</td><td class="text-end" id="tSub">0.00</td></tr><tr><td>Discount</td><td class="text-end" id="tDisc">0.00</td></tr><tr><td>Tax</td><td class="text-end" id="tTax">0.00</td></tr>
     <tr><td>Delivery &amp; installation</td><td class="text-end" id="tCharges">0.00</td></tr><tr class="border-top"><th>Total</th><th class="text-end" id="tTotal">0.00</th></tr></table></div></div></div></div>
 <script type="application/json" id="initialLines"><?= json_encode($oldLines, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script src="<?= asset('js/item-picker.js') ?>"></script>
 <script src="<?= asset('js/sales-lines.js') ?>" data-lookup="<?= url('lookup/sale-items') ?>"></script>

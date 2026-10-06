@@ -44,7 +44,7 @@
     var search = mk('input', { type: 'text', class: 'form-control form-control-sm', placeholder: 'Search item, SKU or barcode', autocomplete: 'off' });
     search.value = d.label || '';
     var hint = mk('div', { class: 'form-text small' });
-    var list = mk('div', { class: 'list-group position-absolute shadow-sm', style: 'z-index:20;max-height:260px;overflow:auto;min-width:360px', hidden: '' });
+    var list = mk('div', { class: 'ip-list', hidden: '' });
     var tdItem = mk('td', { style: 'min-width:270px;position:relative' }, [vId, vLabel, vUnit, vDec, search, hint, list]);
     var qty = num(p + '[qty]', d.qty, '0.001', 100);
     var unit = mk('span', { class: 'ms-1 text-muted small', text: d.unit || '' });
@@ -65,27 +65,11 @@
       hint.textContent = (v.is_bundle ? 'Set · ' : '') + (v.available != null ? 'Free stock: ' + parseFloat(v.available) + ' ' + v.unit : '');
       list.hidden = true; recalc(); qty.focus();
     }
-    search.oninput = function () {
-      vId.value = ''; hint.textContent = ''; clearTimeout(timer);
-      var q = search.value.trim();
-      if (!q) { list.hidden = true; return; }
-      timer = setTimeout(function () {
-        var url = lookupUrl + '?q=' + encodeURIComponent(q) + '&customer=' + encodeURIComponent(customer ? customer.value : 0) + '&warehouse=' + encodeURIComponent(warehouse ? warehouse.value : 0);
-        fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
-          list.innerHTML = '';
-          rows.forEach(function (v) {
-            var a = mk('button', { type: 'button', class: 'list-group-item list-group-item-action py-1 small',
-              text: v.item_name + (v.name ? ' — ' + v.name : '') + ' (' + v.sku + ') · ' + v.price.toFixed(2) + (v.available != null ? ' · free ' + parseFloat(v.available) : '') + (v.is_bundle ? ' · set' : '') });
-            a.onclick = function () { choose(v); };
-            list.appendChild(a);
-          });
-          if (!rows.length) list.appendChild(mk('div', { class: 'list-group-item small text-muted', text: 'No items found' }));
-          list.hidden = false;
-        });
-      }, 200);
-    };
-    search.onkeydown = function (e) { if (e.key === 'Enter') e.preventDefault(); };
-    document.addEventListener('click', function (e) { if (!tr.contains(e.target)) list.hidden = true; });
+    ItemPicker.attach({ input: search, list: list, host: tr,
+      url: function (q) { return lookupUrl + '?q=' + encodeURIComponent(q) + '&customer=' + encodeURIComponent(customer ? customer.value : 0) + '&warehouse=' + encodeURIComponent(warehouse ? warehouse.value : 0); },
+      onType: function () { vId.value = ''; hint.textContent = ''; },
+      render: function (v) { return { title: v.item_name + (v.name ? ' — ' + v.name : ''), sub: v.sku + (v.available != null ? ' · free ' + parseFloat(v.available) + ' ' + v.unit : '') + (v.is_bundle ? ' · set' : ''), right: v.price.toFixed(2) }; },
+      pick: choose });
     [qty, price, disc, tax].forEach(function (el) { el.addEventListener('input', recalc); });
     if (d.dec === 0 || d.dec === '0') qty.step = '1';
     recalc();

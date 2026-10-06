@@ -31,7 +31,7 @@
     var tr = mk('tr');
     var search = mk('input', { type: 'text', class: 'form-control form-control-sm', placeholder: 'Search item, SKU or barcode', autocomplete: 'off' });
     search.value = d.label || '';
-    var list = mk('div', { class: 'list-group position-absolute shadow-sm', style: 'z-index:20;max-height:240px;overflow:auto;min-width:320px', hidden: '' });
+    var list = mk('div', { class: 'ip-list', hidden: '' });
     var vId = hid(p + '[variant_id]', d.variant_id), vLabel = hid(p + '[label]', d.label), vTb = hid(p + '[tb]', d.tb),
         vUnit = hid(p + '[unit]', d.unit), vDec = hid(p + '[dec]', d.dec);
     var tdItem = mk('td', { style: 'min-width:260px;position:relative' }, [vId, vLabel, vTb, vUnit, vDec, search, list]);
@@ -120,26 +120,11 @@
       vTb.value = v.track_batch ? '1' : '0'; vUnit.value = v.unit; vDec.value = v.allow_decimal ? '1' : '0';
       list.hidden = true; applyStep(); loadBatches(null, true); qty.focus();
     }
-    search.oninput = function () {
-      vId.value = ''; hint.textContent = ''; clearTimeout(timer);
-      var q = search.value.trim();
-      if (!q) { list.hidden = true; return; }
-      timer = setTimeout(function () {
-        fetch(lookupUrl + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (rows) {
-          list.innerHTML = '';
-          rows.forEach(function (v) {
-            var a = mk('button', { type: 'button', class: 'list-group-item list-group-item-action py-1 small',
-              text: v.item_name + (v.name ? ' — ' + v.name : '') + ' (' + v.sku + ')' + (v.track_batch ? ' · batch' : '') });
-            a.onclick = function () { choose(v); };
-            list.appendChild(a);
-          });
-          if (!rows.length) list.appendChild(mk('div', { class: 'list-group-item small text-muted', text: 'No items found' }));
-          list.hidden = false;
-        });
-      }, 200);
-    };
-    search.onkeydown = function (e) { if (e.key === 'Enter') e.preventDefault(); };
-    document.addEventListener('click', function (e) { if (!tr.contains(e.target)) list.hidden = true; });
+    ItemPicker.attach({ input: search, list: list, host: tr,
+      url: function (q) { return lookupUrl + '?q=' + encodeURIComponent(q); },
+      onType: function () { vId.value = ''; hint.textContent = ''; },
+      render: function (v) { return { title: v.item_name + (v.name ? ' — ' + v.name : ''), sub: v.sku, tag: v.track_batch ? 'Roll / batch' : '' }; },
+      pick: choose });
     if (d.variant_id) { applyStep(); loadBatches(d.batch_id, !restored); if (d.lot_no) lot.hidden = false; }
     return tr;
   }
