@@ -88,7 +88,7 @@
     var f = F(), box = $('dzSections'), h = '';
     f.sections.forEach(function (s, si) {
       h += '<section class="dz-sec" data-i="' + si + '"><div class="dz-sec-head">' +
-        (preview ? '<div class="dz-sec-name">' + esc(s.title) + '</div>' : '<input class="dz-sec-title" data-a="title" value="' + esc(s.title) + '" placeholder="' + esc(si === 0 ? f.title.replace(/ form$/, '') + ' information' : 'More details') + '" maxlength="60">') +
+        (preview ? '<div class="dz-sec-name">' + esc(s.title) + '</div>' : '<input class="dz-sec-title" data-a="title" value="' + esc(s.title) + '" placeholder="' + esc(si === 0 ? f.title.replace(/ form$/, '').replace(/\s*\(.*?\)/g, '') + ' information' : 'More details') + '" maxlength="60">') +
         '<div class="dz-sec-tools"><button type="button" data-a="cols" title="Columns in this section"><i class="bi bi-layout-three-columns"></i> ' + (s.cols ? s.cols + ' col' : 'Original') + '</button>' +
         '<button type="button" data-a="sec-up" title="Move section up"><i class="bi bi-arrow-up"></i></button><button type="button" data-a="sec-down" title="Move section down"><i class="bi bi-arrow-down"></i></button>' +
         '<button type="button" data-a="sec-del" title="Delete section"><i class="bi bi-trash"></i></button></div></div>' +

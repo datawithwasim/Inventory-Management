@@ -18,6 +18,6 @@ $stc = ['open' => 'primary', 'converted' => 'success', 'cancelled' => 'secondary
 $rec = ['entity' => 'requisition', 'row' => $r, 'name' => $r['req_no'], 'back' => 'purchase/requisitions', 'body' => $body, 'actions' => $actions,
     'badges' => '<span class="badge text-bg-' . $stc . '">' . e($r['status']) . '</span>', 'factsTitle' => 'Requisition details',
     'related' => array_filter(['items' => 'Items', 'convert' => ($r['status'] === 'open' && can('purchase.create')) ? 'Turn into PO' : null]),
-    'facts' => [['Raised', e(fdate(substr((string)$r['created_at'], 0, 10)))], ['By', e($r['user_name'] ?? '—')], ['Note', e($r['note'] ?? '')],
-        ['Purchase order', $r['po_id'] ? '<a href="' . url('purchase/orders/' . (int)$r['po_id']) . '">' . e($r['po_no']) . '</a>' : '']]];
+    'facts' => ['raised' => ['Raised', e(fdate(substr((string)$r['created_at'], 0, 10)))], 'by' => ['By', e($r['user_name'] ?? '—')],
+        'po' => ['Purchase order', $r['po_id'] ? '<a href="' . url('purchase/orders/' . (int)$r['po_id']) . '">' . e($r['po_no']) . '</a>' : '']]];
 require dirname(__DIR__) . '/_record.php';

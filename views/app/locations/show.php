@@ -7,7 +7,7 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'location', 'row' => $l, 'name' => $l['code'], 'back' => 'locations', 'body' => $body, 'badges' => $l['is_active'] ? '' : '<span class="badge text-bg-secondary">Inactive</span>',
     'factsTitle' => e(term('rack')) . ' details', 'related' => ['stock' => 'Stored here'],
-    'facts' => [[term('warehouse'), '<a href="' . url('warehouses/' . (int)$l['warehouse_id']) . '">' . e($l['warehouse']) . '</a>'], ['Code', e($l['code'])], ['Description', e($l['description'] ?? '')]],
+    'facts' => ['warehouse' => [term('warehouse'), '<a href="' . url('warehouses/' . (int)$l['warehouse_id']) . '">' . e($l['warehouse']) . '</a>']],
     'actions' => (can('warehouses.edit') ? '<a class="btn btn-sm btn-primary" href="' . url("locations/{$l['id']}/edit") . '">Edit</a> ' : ''),
     'menu' => (can('warehouses.delete') ? '<li><form method="post" action="' . url("locations/{$l['id']}/delete") . '" onsubmit="return confirm(\'Delete this?\')">' . csrf_field() . '<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button></form></li>' : '')];
 require dirname(__DIR__) . '/_record.php';

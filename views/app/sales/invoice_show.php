@@ -35,7 +35,7 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'invoice', 'row' => $i, 'name' => $i['invoice_no'], 'back' => 'sales/invoices', 'body' => $body, 'actions' => $actions, 'badges' => pay_badge($status),
     'related' => array_filter(['totals' => 'Amounts', 'items' => $items ? 'Items' : null, 'payments' => 'Payments']), 'factsTitle' => 'Invoice details',
-    'facts' => [[term('customer'), '<a href="' . url('customers/' . (int)$i['customer_id']) . '">' . e($i['customer']) . '</a>'], ['Invoice date', e(fdate($i['invoice_date']))], ['Due date', e($i['due_date'] ? fdate($i['due_date']) : '')],
-        ['Delivery', $i['delivery_id'] ? '<a href="' . url('sales/deliveries/' . (int)$i['delivery_id']) . '">' . e($i['delivery_no']) . '</a>' : ''],
-        ['Order', $i['order_id'] ? '<a href="' . url('sales/orders/' . (int)$i['order_id']) . '">' . e($i['order_no']) . '</a>' : ''], ['Notes', e($i['notes'] ?? '')], ['Balance due', e(money(max(0, $due)))]]];
+    'facts' => ['customer' => [term('customer'), '<a href="' . url('customers/' . (int)$i['customer_id']) . '">' . e($i['customer']) . '</a>'],
+        'delivery' => ['Delivery', $i['delivery_id'] ? '<a href="' . url('sales/deliveries/' . (int)$i['delivery_id']) . '">' . e($i['delivery_no']) . '</a>' : ''],
+        'order' => ['Order', $i['order_id'] ? '<a href="' . url('sales/orders/' . (int)$i['order_id']) . '">' . e($i['order_no']) . '</a>' : ''], 'balance_due' => ['Balance due', e(money(max(0, $due)))]]];
 require dirname(__DIR__) . '/_record.php';

@@ -191,7 +191,7 @@ $h = $body('/settings/formdesign');
 $model = json_decode(preg_match('#<script type="application/json" id="dzData">(.*?)</script>#s', $h, $mm) ? html_entity_decode($mm[1]) : '{}', true);
 $forms = $model['model'] ?? [];
 $byKey = fn($k) => array_values(array_filter($forms, fn($m) => $m['key'] === $k))[0] ?? null;
-check('designer is a full-screen page (no Settings frame) with palette, canvas and 15 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 15 && count($forms) === 15);
+check('designer is a full-screen page (no Settings frame) with palette, canvas and 15 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 15 && count($forms) === 17);
 check('every form has sections, fields, unused list; customer has 10 standard fields', ($c = $byKey('customer')) && count($c['sections']) >= 1 && count($c['fields']) >= 10 && $c['customFields'] === true && $byKey('grn')['customFields'] === false);
 check('only the two documents carry a line-items table', array_column(array_filter($forms, fn($m) => $m['lineForm']), 'key') === ['sales_order', 'purchase_order']);
 check('the old "Form fields" address leads to the designer', ($r = $a->get('/settings/formfields'))['status'] === 302 && str_contains((string)$r['location'], 'settings/formdesign'));

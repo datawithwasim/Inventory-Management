@@ -357,7 +357,7 @@ $h = $a->get("/sales/deliveries/$d1")['body'];
 check('delivery page: shell, delivery note button, order link, rows', str_contains($h, 'class="rec-top"') && str_contains($h, '/print') && str_contains($h, 'id="lines"') && str_contains($h, 'Order'));
 $inv = (int)$val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$tA]);
 $h = $a->get("/sales/invoices/$inv")['body'];
-check('invoice page: shell, amounts, payments, record-payment form and print buttons', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Print invoice') && !str_contains($h, 'Edit page layout'));
+check('invoice page: shell, amounts, payments, record-payment form and print buttons', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Print invoice') && str_contains($h, 'Edit page layout'));
 $h = $a->get("/sales/returns/$sr")['body'];
 check('sales return page: shell + items + total credit', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Total credit'));
 foreach (["sales/orders/$o1", "sales/deliveries/$d1", "sales/invoices/$inv", "sales/returns/$sr"] as $u) check("$u: no notices, one h1, timeline tab", ($r = $a->get("/$u"))['status'] === 200 && !preg_match('/Warning:|Notice:|Fatal error|Deprecated:/', $r['body']) && substr_count($r['body'], '<h1') === 1 && str_contains($r['body'], 'recTimeline'));

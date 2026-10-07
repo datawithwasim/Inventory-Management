@@ -109,7 +109,7 @@ final class RecordView
             $s['fields'] = array_values(array_diff($s['fields'], $r['summary']));   // the summary strip already shows these
             if (!$s['fields']) continue;
             $title = $s['title'] !== '' ? $s['title'] : ($first ? (FormFields::ENTITY_LABELS[$entity] ?? 'Details') : 'More details');
-            $title = $s['title'] === '' && $first ? preg_replace('/ form$/i', '', $title) . ' information' : $title;
+            $title = $s['title'] === '' && $first ? trim(preg_replace(['/ form$/i', '/\s*\(.*?\)/'], '', $title)) . ' information' : $title;
             $first = false;
             $cols = in_array((int)$s['cols'], [1, 2, 3], true) ? (int)$s['cols'] : 2;
             $o .= '<section class="card rec-sec"><div class="card-header">' . e($title) . '</div><div class="card-body"><div class="rec-grid c' . $cols . '">';

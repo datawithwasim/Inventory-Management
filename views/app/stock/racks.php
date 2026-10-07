@@ -6,7 +6,7 @@
   <div class="col-auto"><a class="btn btn-outline-warning" href="<?= url('stock/racks?q=-') ?>">Only "no <?= e(term('rack', true)) ?>"</a></div>
 </form>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-  <thead><tr><th><?= e(term('warehouse')) ?></th><th><?= e(term('rack')) ?></th><th><?= e(term('item')) ?></th><th>SKU</th><th><?= e(term('batch')) ?> (roll)</th><th class="text-end">Qty</th></tr></thead><tbody>
+  <thead><tr><th><?= e(term('warehouse')) ?></th><th><?= e(term('rack')) ?></th><th><?= e(term('item')) ?></th><th>SKU</th><th><?= e(term('batch')) ?></th><th class="text-end">Qty</th></tr></thead><tbody>
   <?php foreach ($rows as $r): ?>
     <tr><td><?= e($r['warehouse']) ?></td>
       <td><?= $r['rack'] ? '<strong>' . e($r['rack']) . '</strong>' : '<span class="badge text-bg-warning">No rack</span>' ?></td>

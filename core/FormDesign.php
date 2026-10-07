@@ -29,6 +29,8 @@ final class FormDesign
         'purchase_return' => ['return_date' => 'Return date', 'reason' => 'Reason'],
         'adjustment' => ['warehouse_id' => 'Warehouse', 'reason' => 'Reason', 'note' => 'Note'],
         'transfer' => ['warehouse_id' => 'From warehouse', 'to_warehouse_id' => 'To warehouse', 'note' => 'Note'],
+        'invoice' => ['invoice_date' => 'Invoice date', 'due_date' => 'Due date', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes (printed on the invoice)'],
+        'requisition' => ['note' => 'Note'], 'location' => ['code' => 'Rack code', 'description' => 'Description'], 'stocktake' => ['warehouse_id' => 'Warehouse', 'note' => 'Note'],
     ];
     /** Default width (of 12 columns) each field has on the real form. */
     public const SPANS = [
@@ -47,9 +49,11 @@ final class FormDesign
         'purchase_return' => ['return_date' => 3, 'reason' => 5],
         'adjustment' => ['warehouse_id' => 3, 'reason' => 3, 'note' => 6],
         'transfer' => ['warehouse_id' => 3, 'to_warehouse_id' => 3, 'note' => 6],
+        'invoice' => ['invoice_date' => 6, 'due_date' => 6, 'delivery_charge' => 6, 'installation_charge' => 6, 'notes' => 12],
+        'requisition' => ['note' => 12], 'location' => ['code' => 6, 'description' => 12], 'stocktake' => ['warehouse_id' => 6, 'note' => 12],
     ];
     /** Forms that have a record detail page (Overview / Timeline) laid out from the same design. */
-    public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer'];
+    public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer', 'invoice', 'requisition', 'location', 'stocktake'];
     /** Fields shown in the summary strip at the top of the detail page when the company has not chosen. */
     public const SUMMARY_DEFAULT = [
         'item' => ['item_type', 'category_id', 'unit_id', 'hsn_code'],
@@ -60,6 +64,7 @@ final class FormDesign
         'bill' => ['supplier_bill_no', 'bill_date', 'due_date', 'other_charges'], 'purchase_return' => ['return_date', 'reason'],
         'sales_order' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date'], 'delivery' => ['delivery_date', 'ship_to'], 'sales_return' => ['return_date', 'reason'],
         'adjustment' => ['warehouse_id', 'reason'], 'transfer' => ['warehouse_id', 'to_warehouse_id'],
+        'invoice' => ['sys:customer', 'invoice_date', 'due_date', 'sys:balance_due'], 'requisition' => ['sys:raised', 'sys:by', 'sys:po'], 'location' => ['sys:warehouse', 'code'], 'stocktake' => ['warehouse_id', 'sys:started'],
     ];
     /**
      * Record-only fields: facts the record page knows (who created it, linked documents, totals) that have no input on the form.
@@ -74,6 +79,8 @@ final class FormDesign
         'delivery' => ['customer' => '@customer', 'order' => 'Order', 'invoice' => 'Invoice', 'by' => 'By'],
         'sales_return' => ['customer' => '@customer', 'invoice' => 'Invoice', 'by' => 'By', 'total' => 'Total credit (incl. tax)'],
         'adjustment' => ['date' => 'Date', 'by' => 'By'], 'transfer' => ['date' => 'Date', 'by' => 'By'],
+        'invoice' => ['customer' => '@customer', 'delivery' => 'Delivery', 'order' => 'Order', 'balance_due' => 'Balance due'],
+        'requisition' => ['raised' => 'Raised', 'by' => 'By', 'po' => 'Purchase order'], 'location' => ['warehouse' => '@warehouse'], 'stocktake' => ['started' => 'Started'],
     ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];
 

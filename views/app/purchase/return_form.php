@@ -5,7 +5,7 @@
 <?php if (ff('purchase_return.reason')): ?>  <div class="col-md-5"<?= ffa('purchase_return.reason') ?>><label class="form-label"><?= fl('purchase_return.reason', 'Reason') ?><?= ffstar('purchase_return.reason') ?></label><input name="reason"<?= ffreq('purchase_return.reason') ?> class="form-control" maxlength="150" value="<?= e(old('reason')) ?>" placeholder="e.g. damaged, wrong shade"></div><?php else: ?><?= ffh('purchase_return.reason', e(old('reason'))) ?><?php endif; ?>
 </div></div></div>
 <div class="card mb-3"><div class="table-responsive"><table class="table mb-0 align-middle">
-  <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?> (roll)</th><th class="text-end">Received</th><th class="text-end">Can return</th><th>Take from <?= e(term('rack', true)) ?></th><th style="width:150px">Return qty</th></tr></thead><tbody>
+  <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?></th><th class="text-end">Received</th><th class="text-end">Can return</th><th>Take from <?= e(term('rack', true)) ?></th><th style="width:150px">Return qty</th></tr></thead><tbody>
   <?php foreach ($items as $l): $top = $l['placements'][0]['location_id'] ?? 0; $mine = old('lines', [])[$l['id']] ?? []; ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td>
       <td><?= e($l['batch_no'] ?? '—') ?></td><td class="text-end"><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td>

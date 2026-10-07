@@ -198,5 +198,17 @@ $sm = preg_replace('/\s+/', ' ', strip_tags(preg_replace('~^.*?class="card rec-s
 check('the summary strip can hold a record-only field (Total) picked in the same canvas', str_contains($sm, '<span>Total</span><b>125') );
 check('sections and titles on the page match the canvas: Order, Audit with Created by; Approved by is unused so absent', preg_match('~>Order<.*?Order date.*?>Audit<.*?Notes.*?Created by~s', $h) === 1 && !str_contains($h, 'Approved by'));
 
+echo "Invoice, requisition, rack and stock-take use the same layout system\n";
+foreach (['invoice', 'requisition', 'location', 'stocktake'] as $fe) {
+    $d = $a->get("/settings/formdesign?form=$fe")['body'];
+    check("designer lists the $fe form with its detail-page fields", str_contains($d, '"key":"' . $fe . '"') && str_contains($d, '"layout":true'));
+}
+$wh2 = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]);
+$a->post('/locations', ['warehouse_id' => $wh2, 'mode' => 'single', 'code' => 'Z-01', 'description' => 'Top shelf'], '/locations/create');
+$loc = (int)$val('SELECT id FROM locations WHERE tenant_id = ? AND code = ?', [$tA, 'Z-01']);
+$h = $a->get("/locations/$loc")['body'];
+check('rack page: warehouse comes from the layout (summary), description in its section, no loose Details card', $loc > 0 && str_contains($h, 'Top shelf') && str_contains($h, 'rec-summary') && !str_contains($h, '<div class="card-header">Details</div>') && str_contains($h, 'Edit page layout'));
+check('rack edit form carries the layout link', str_contains($a->get("/locations/$loc/edit")['body'], 'form=location'));
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

@@ -24,5 +24,5 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'stocktake', 'row' => $doc, 'name' => $doc['doc_no'], 'back' => 'stock/takes', 'body' => $body,
     'badges' => '<span class="badge text-bg-' . ($draft ? 'warning' : 'success') . '">' . e($doc['status']) . '</span>', 'related' => ['lines' => 'Counts'], 'factsTitle' => 'Stock-take details',
-    'facts' => [[term('warehouse'), e($doc['warehouse'])], ['Started', e(fdate(substr((string)$doc['created_at'], 0, 10)))], ['Note', e($doc['note'] ?? '')]]];
+    'facts' => ['started' => ['Started', e(fdate(substr((string)$doc['created_at'], 0, 10)))]]];
 require dirname(__DIR__) . '/_record.php';

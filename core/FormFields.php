@@ -27,14 +27,14 @@ final class FormFields
         'bill' => ['supplier_bill_no' => "Supplier's bill number", 'due_date' => 'Due date', 'other_charges' => 'Other charges', 'notes' => 'Notes'],
         'purchase_return' => ['reason' => 'Reason'],
         'adjustment' => ['note' => 'Note'],
-        'transfer' => ['note' => 'Note'],
+        'transfer' => ['note' => 'Note'], 'invoice' => [], 'stocktake' => [],
     ];
     public const ENTITY_LABELS = ['item' => 'Item form', 'customer' => 'Customer form', 'supplier' => 'Supplier form', 'warehouse' => 'Warehouse form', 'location' => 'Rack / location form',
         'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',
-        'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer'];
+        'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer', 'invoice' => 'Sales invoice', 'stocktake' => 'Stock-take'];
     /** Settings page sections: heading => entities. */
-    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['sales_order', 'delivery', 'sales_return'],
-        'Purchase documents' => ['requisition', 'purchase_order', 'grn', 'bill', 'purchase_return'], 'Stock documents' => ['adjustment', 'transfer']];
+    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['sales_order', 'delivery', 'invoice', 'sales_return'],
+        'Purchase documents' => ['requisition', 'purchase_order', 'grn', 'bill', 'purchase_return'], 'Stock documents' => ['adjustment', 'transfer', 'stocktake']];
 
     private static ?array $hidden = null;
     private static ?array $required = null;

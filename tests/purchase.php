@@ -322,13 +322,13 @@ check('PO page: record header, summary (supplier, dates), sections, items, timel
 check('PO page: the action buttons are still there (print / edit / submit …)', str_contains($h, '/print') && preg_match('/Confirm order|Submit for approval|Approve|Receive goods/', $h) === 1);
 check('PO page: supplier is a link inside the sections', preg_match('~<span>Supplier</span><b><a href="[^"]*suppliers/\d+"~', $h) === 1);
 [$id, $h] = $rp('grns', 'purchase/grns', '');
-check('GRN page: shell, sections (received on, challan), supplier / PO links, items', str_contains($h, 'class="rec-top"') && str_contains($h, 'Goods receipt (GRN) information') | str_contains($h, 'Goods receipt (GRN)') && str_contains($h, 'id="items"') && str_contains($h, 'Received by'));
+check('GRN page: shell, sections (received on, challan), supplier / PO links, items', str_contains($h, 'class="rec-top"') && str_contains($h, 'Goods receipt information') && str_contains($h, 'id="items"') && str_contains($h, 'Received by'));
 [$id, $h] = $rp('purchase_bills', 'purchase/bills', '');
 check('bill page: shell, amounts card, payments and the payment form', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Balance due'));
 [$id, $h] = $rp('purchase_returns', 'purchase/returns', '');
 check('purchase return page: shell + items', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Total (incl. tax)'));
 [$id, $h] = $rp('purchase_requisitions', 'purchase/requisitions', '');
-if ($id) check('requisition page: shell, status badge, items', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && !str_contains($h, 'Edit page layout'));
+if ($id) check('requisition page: shell, status badge, items, layout link', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Edit page layout'));
 check('documents with a layout offer "Edit page layout" in the menu', str_contains($a->get('/purchase/orders/' . (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]))['body'], 'Edit page layout'));
 $pid = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
 $a->post("/records/purchase_order/$pid/notes", ['body' => 'Chase the mill on Monday'], "/purchase/orders/$pid");

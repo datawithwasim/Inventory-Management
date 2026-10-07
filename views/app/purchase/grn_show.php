@@ -5,7 +5,7 @@
   <?php if (can('purchase.create')): ?><a class="btn btn-outline-danger" href="<?= url('purchase/returns/create?grn=' . (int)$g['id']) ?>">Return goods</a><?php endif; ?><?php $actions = ob_get_clean(); ?>
 <?php ob_start(); ?>
 <div class="card mb-3" id="items"><div class="table-responsive"><table class="table mb-0 align-middle">
-  <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?> (roll)</th><th><?= e(term('rack')) ?></th><th class="text-end">Qty</th><th class="text-end">Returned</th><th class="text-end">Price</th><th class="text-end">Stock cost</th></tr></thead><tbody>
+  <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?></th><th><?= e(term('rack')) ?></th><th class="text-end">Qty</th><th class="text-end">Returned</th><th class="text-end">Price</th><th class="text-end">Stock cost</th></tr></thead><tbody>
   <?php foreach ($items as $l): ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td>
       <td><?= $l['batch_no'] ? '<a href="' . url('stock/batches/' . (int)$l['batch_id']) . '">' . e($l['batch_no']) . '</a>' . ($l['supplier_lot'] ? '<br><small class="text-muted">lot ' . e($l['supplier_lot']) . '</small>' : '') : '—' ?></td>
