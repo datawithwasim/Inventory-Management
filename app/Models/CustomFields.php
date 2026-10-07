@@ -9,7 +9,7 @@ use Core\DB;
 /** Extra fields a company adds to items, customers and suppliers (Settings → Custom fields). */
 final class CustomFields
 {
-    public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders'];
+    public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders', 'supplier_item' => 'Supplier items'];
     public const TYPES = ['text' => 'Single line', 'textarea' => 'Multi-line', 'email' => 'Email', 'phone' => 'Phone', 'url' => 'URL', 'number' => 'Number', 'decimal' => 'Decimal',
         'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'datetime' => 'Date & time', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'multiselect' => 'Multi-select (tick several)', 'checkbox' => 'Yes / No'];
     /** Types where a duplicate value can be refused ("Unique"). */

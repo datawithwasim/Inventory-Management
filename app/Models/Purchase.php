@@ -100,7 +100,7 @@ final class Purchase
     /** The supplier's own name / code for one variant, or null when it is not in their catalogue. */
     public static function productOf(int $supplierId, int $variantId): ?array
     {
-        return DB::one('SELECT * FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [self::tid(), $supplierId, $variantId]);
+        return DB::one('SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [self::tid(), $supplierId, $variantId]);
     }
 
     /**
@@ -114,10 +114,10 @@ final class Purchase
         $code = $code !== null && trim($code) !== '' ? mb_substr(trim($code), 0, 60) : null;
         $note = $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 150) : null;
         $have = self::productOf($supplierId, $variantId);
-        if (!$have) return DB::insert('supplier_products', ['tenant_id' => $t, 'supplier_id' => $supplierId, 'variant_id' => $variantId, 'supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]);
+        if (!$have) return DB::insert('supplier_items', ['tenant_id' => $t, 'supplier_id' => $supplierId, 'variant_id' => $variantId, 'supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]);
         $set = $overwrite ? ['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]
             : array_filter(['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note], fn($v) => $v !== null);
-        if ($set) DB::run('UPDATE supplier_products SET ' . implode(',', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE tenant_id = ? AND id = ?', [...array_values($set), $t, $have['id']]);
+        if ($set) DB::run('UPDATE supplier_items SET ' . implode(',', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE tenant_id = ? AND id = ?', [...array_values($set), $t, $have['id']]);
         return (int)$have['id'];
     }
 
@@ -126,23 +126,56 @@ final class Purchase
     {
         $rows = DB::all(
             'SELECT p.*, v.sku, v.name AS vname, v.is_active AS v_active, i.name AS item_name, i.id AS item_id, i.item_type, u.short_name AS unit
-             FROM supplier_products p JOIN item_variants v ON v.id = p.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+             FROM supplier_items p LEFT JOIN item_variants v ON v.id = p.variant_id LEFT JOIN items i ON i.id = v.item_id LEFT JOIN units u ON u.id = i.unit_id
              WHERE p.tenant_id = ? AND p.supplier_id = ? ORDER BY i.name, v.name', [self::tid(), $supplierId]);
         foreach ($rows as &$r) {
-            $cur = self::currentRate($supplierId, (int)$r['variant_id']);
+            $cur = $r['variant_id'] ? self::currentRate($supplierId, (int)$r['variant_id']) : null;
             $r['rate_row'] = $cur;
             $r['net'] = $cur ? self::netRate($cur) : null;
-            $last = self::lastPaid($supplierId, (int)$r['variant_id']);
+            $last = $r['variant_id'] ? self::lastPaid($supplierId, (int)$r['variant_id']) : null;
             $r['last_paid'] = $last ? (float)$last['unit_price'] : null;
             $r['last_on'] = $last['received_date'] ?? null;
         }
         return $rows;
     }
 
+    /** Making one supplier item the preferred source of its variant clears the flag on the others. */
+    public static function setPreferred(int $supplierItemId, int $variantId, bool $on): void
+    {
+        $t = self::tid();
+        if ($on && $variantId > 0) DB::run('UPDATE supplier_items SET is_preferred = 0 WHERE tenant_id = ? AND variant_id = ? AND id <> ?', [$t, $variantId, $supplierItemId]);
+        DB::run('UPDATE supplier_items SET is_preferred = ? WHERE tenant_id = ? AND id = ?', [$on && $variantId > 0 ? 1 : 0, $t, $supplierItemId]);
+    }
+
+    /**
+     * Every supplier that can supply an item (through the supplier items linked to its variants), with the rate in force today.
+     * Cheapest rate first within a variant; suppliers without a rate yet come last. This is what the item page shows.
+     */
+    public static function suppliersForItem(int $itemId): array
+    {
+        $t = self::tid();
+        $rows = DB::all(
+            'SELECT p.id AS si_id, p.supplier_id, p.variant_id, p.supplier_name AS sname, p.supplier_code AS scode, p.is_preferred, p.lead_time_days AS si_lead, p.min_order_qty AS si_moq,
+                    s.name AS supplier_name, v.sku, v.name AS vname
+             FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id JOIN item_variants v ON v.id = p.variant_id
+             WHERE p.tenant_id = ? AND v.item_id = ? AND p.is_active = 1 AND s.is_active = 1 ORDER BY p.variant_id, s.name', [$t, $itemId]);
+        foreach ($rows as &$r) {
+            $cur = self::currentRate((int)$r['supplier_id'], (int)$r['variant_id']);
+            $r['has_rate'] = (bool)$cur;
+            $r['rate'] = $cur['rate'] ?? null; $r['discount_pct'] = $cur['discount_pct'] ?? 0;
+            $r['net'] = $cur ? self::netRate($cur) : null;
+            $r['min_qty'] = $cur && (float)$cur['min_qty'] > 0 ? $cur['min_qty'] : $r['si_moq'];
+            $r['lead_time_days'] = $cur['lead_time_days'] ?? $r['si_lead'];
+        }
+        unset($r);
+        usort($rows, fn($a, $b) => [$a['variant_id'], $a['net'] === null ? 1 : 0, $a['net'] ?? 0] <=> [$b['variant_id'], $b['net'] === null ? 1 : 0, $b['net'] ?? 0]);
+        return $rows;
+    }
+
     /** SQL columns sup_name / sup_code: the supplier's own name and code for a line's variant. $supplierSql names the supplier id (an expression using the line alias l). */
     public static function theirCols(string $supplierSql): string
     {
-        $sub = fn($c) => "(SELECT sp.$c FROM supplier_products sp WHERE sp.tenant_id = l.tenant_id AND sp.supplier_id = ($supplierSql) AND sp.variant_id = l.variant_id)";
+        $sub = fn($c) => "(SELECT sp.$c FROM supplier_items sp WHERE sp.tenant_id = l.tenant_id AND sp.supplier_id = ($supplierSql) AND sp.variant_id = l.variant_id)";
         return ', ' . $sub('supplier_name') . ' AS sup_name, ' . $sub('supplier_code') . ' AS sup_code';
     }
 
@@ -150,7 +183,7 @@ final class Purchase
     public static function productMap(int $supplierId): array
     {
         $o = [];
-        foreach (DB::all('SELECT variant_id, supplier_name, supplier_code FROM supplier_products WHERE tenant_id = ? AND supplier_id = ?', [self::tid(), $supplierId]) as $r) $o[(int)$r['variant_id']] = $r;
+        foreach (DB::all('SELECT variant_id, supplier_name, supplier_code FROM supplier_items WHERE tenant_id = ? AND supplier_id = ?', [self::tid(), $supplierId]) as $r) $o[(int)$r['variant_id']] = $r;
         return $o;
     }
 
@@ -180,7 +213,7 @@ final class Purchase
         $rows = DB::all(
             'SELECT r.*, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode
              FROM supplier_rates r JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
-             LEFT JOIN supplier_products sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
+             LEFT JOIN supplier_items sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
              WHERE r.tenant_id = ? AND r.supplier_id = ? ORDER BY i.name, v.name, r.valid_from DESC, r.id DESC', [self::tid(), $supplierId]);
         $today = date('Y-m-d');
         $seen = [];
@@ -214,7 +247,7 @@ final class Purchase
         $today = date('Y-m-d');
         $rows = DB::all(
             'SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id JOIN item_variants v ON v.id = r.variant_id
-             LEFT JOIN supplier_products sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
+             LEFT JOIN supplier_items sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
              WHERE r.tenant_id = ? AND v.item_id = ? AND s.is_active = 1 AND r.valid_from <= ? AND (r.valid_to IS NULL OR r.valid_to >= ?)
              ORDER BY r.variant_id, r.valid_from DESC, r.id DESC', [self::tid(), $itemId, $today, $today]);
         $out = [];

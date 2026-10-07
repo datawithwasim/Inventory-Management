@@ -24,12 +24,12 @@ final class LookupController extends Controller
             $rows = DB::all($sel . ' AND v.id = ?', [Auth::tenantId(), $variant]);
         } elseif ($q === '') {
             // with a supplier chosen, its own catalogue comes first
-            $first = $supplier > 0 ? 'EXISTS (SELECT 1 FROM supplier_products sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id) DESC, ' : '';
+            $first = $supplier > 0 ? 'EXISTS (SELECT 1 FROM supplier_items sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id AND sp.is_active = 1) DESC, ' : '';
             $rows = DB::all($sel . ' ORDER BY ' . $first . 'i.name, v.name LIMIT 15', [Auth::tenantId()]);
         } else {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             // the supplier's own product name / code finds the item too
-            $theirs = $supplier > 0 ? ' OR EXISTS (SELECT 1 FROM supplier_products sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id AND (sp.supplier_name LIKE ? OR sp.supplier_code LIKE ?))' : '';
+            $theirs = $supplier > 0 ? ' OR EXISTS (SELECT 1 FROM supplier_items sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id AND sp.is_active = 1 AND (sp.supplier_name LIKE ? OR sp.supplier_code LIKE ?))' : '';
             $args = [Auth::tenantId(), $like, $like, $like, $q];
             if ($supplier > 0) array_push($args, $like, $like);
             $rows = DB::all($sel . ' AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?' . $theirs . ') ORDER BY i.name, v.name LIMIT 15', $args);

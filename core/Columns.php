@@ -11,6 +11,7 @@ final class Columns
     public const LISTS = [
         'items' => ['entity' => 'item', 'route' => 'items', 'cols' => ['category' => 'Category', 'brand' => 'Brand', 'variants' => 'Variants', 'price' => 'Sale price', 'stock' => 'Stock']],
         'customers' => ['entity' => 'customer', 'route' => 'customers', 'cols' => ['group' => 'Group', 'phone' => 'Phone', 'credit' => 'Credit', 'owes' => 'Owes us']],
+        'supplier_items' => ['entity' => 'supplier_item', 'route' => 'purchase/supplier-items', 'cols' => ['code' => 'Supplier item code', 'our_item' => 'Our item', 'rate' => 'Current rate', 'moq' => 'Min order qty', 'lead' => 'Lead time', 'preferred' => 'Preferred']],
         'suppliers' => ['entity' => 'supplier', 'route' => 'suppliers', 'cols' => ['contact' => 'Contact', 'phone' => 'Phone', 'terms' => 'Terms', 'owes' => 'We owe']],
     ];
 
@@ -53,7 +54,10 @@ final class Columns
             $o .= '<div class="form-check mb-1"><input class="form-check-input" form="' . $fid . '" type="checkbox" name="cols[]" value="' . e($k) . '" id="col-' . e($list . $k) . '"' . (in_array($k, $visible, true) ? ' checked' : '') . '>'
                 . '<label class="form-check-label" for="col-' . e($list . $k) . '">' . e($label) . '</label></div>';
         }
-        return $o . '<div class="d-flex gap-2 mt-3"><button type="submit" form="' . $fid . '" class="btn btn-sm btn-primary flex-grow-1">Apply</button>'
+        $cfg = self::LISTS[$list];
+        $mine = isset(FormDesign::FIELDS[$cfg['entity']]) && can('settings.edit')
+            ? '<a class="d-block small mt-3 pt-2 border-top" href="' . e(url('settings/formdesign?form=' . $cfg['entity'] . '&return=' . rawurlencode($_SERVER['REQUEST_URI'] ?? ''))) . '"><i class="bi bi-plus-square me-1"></i>Add or remove your own columns</a>' : '';
+        return $o . $mine . '<div class="d-flex gap-2 mt-3"><button type="submit" form="' . $fid . '" class="btn btn-sm btn-primary flex-grow-1">Apply</button>'
             . '<button type="submit" form="' . $fid . '" name="reset" value="1" class="btn btn-sm btn-outline-secondary">Reset</button></div></div></div>';
     }
 }

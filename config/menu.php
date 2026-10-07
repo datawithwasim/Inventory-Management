@@ -20,6 +20,7 @@ return [
         ]],
         'purchase' => ['label' => 'Purchase', 'icon' => 'cart3', 'items' => [
             ['label' => fn() => term('suppliers'), 'icon' => 'truck', 'path' => '/suppliers', 'perm' => ['suppliers.view']],
+            ['label' => fn() => 'Supplier items', 'icon' => 'box-seam', 'path' => '/purchase/supplier-items', 'perm' => ['suppliers.view']],
             ['label' => fn() => 'Rate lists', 'icon' => 'currency-rupee', 'path' => '/purchase/rates', 'perm' => ['suppliers.view']],
             ['label' => fn() => 'Requisitions', 'icon' => 'card-checklist', 'path' => '/purchase/requisitions', 'perm' => ['purchase.view'], 'module' => 'requisitions'],
             ['label' => fn() => 'Purchase orders', 'icon' => 'cart-plus', 'path' => '/purchase/orders', 'perm' => ['purchase.view']],

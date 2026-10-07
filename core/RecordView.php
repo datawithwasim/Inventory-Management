@@ -20,7 +20,7 @@ final class RecordView
         'sales_order' => ['sales.edit', 'sales_orders', 'sales_order', 'sales/orders'], 'delivery' => ['sales.edit', 'deliveries', 'delivery', 'sales/deliveries'],
         'invoice' => ['sales.edit', 'sales_invoices', 'sales_invoice', 'sales/invoices'], 'sales_return' => ['sales.edit', 'sales_returns', 'sales_return', 'sales/returns'],
         'adjustment' => ['stock.adjust', 'stock_docs', 'stock_doc', 'stock/adjustments'], 'transfer' => ['stock.transfer', 'stock_docs', 'stock_doc', 'stock/transfers'],
-        'stocktake' => ['stock.adjust', 'stock_docs', 'stock_doc', 'stock/takes'],
+        'stocktake' => ['stock.adjust', 'stock_docs', 'stock_doc', 'stock/takes'], 'supplier_item' => ['suppliers.edit', 'supplier_items', 'supplier_item', 'purchase/supplier-items'],
     ];
     /** Fields whose value links to the record it names. */
     private const LINKS = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses'];
@@ -55,6 +55,10 @@ final class RecordView
         if ($v === null || $v === '') return '';
         if (str_ends_with($key, '_date') || $key === 'valid_until') return fdate((string)$v);
         $tables = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses', 'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'group_id' => 'customer_groups'];
+        if ($key === 'variant_id' && $entity === 'supplier_item') {
+            $o = DB::one('SELECT v.name, v.sku, i.name AS item_name FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ?', [Auth::tenantId(), (int)$v]);
+            return $o ? $o['item_name'] . ($o['name'] ? ' — ' . $o['name'] : '') . ' (' . $o['sku'] . ')' : '';
+        }
         if (isset($tables[$key])) return self::lookup($tables[$key], (int)$v);
         if ($key === 'item_type') return ItemTypes::LABELS[$v] ?? (string)$v;
         if ($key === 'supplier_type') return Purchase::SUPPLIER_TYPES[$v] ?? (string)$v;
@@ -80,6 +84,8 @@ final class RecordView
         }
         $val = self::value($entity, $k, $row, $cfValues);
         if ($val === '') return '<i class="text-muted">—</i>';
+        if ($k === 'variant_id' && $entity === 'supplier_item' && !empty($row['item_id'])) return '<a href="' . e(url('items/' . (int)$row['item_id'])) . '">' . e($val) . '</a>';
+        if ($k === 'variant_id' && $entity === 'supplier_item') return '<i class="text-muted">—</i>';
         if (isset(self::LINKS[$k]) && (int)($row[$k] ?? 0) > 0) return '<a href="' . e(url(self::LINKS[$k] . '/' . (int)$row[$k])) . '">' . e($val) . '</a>';
         return nl2br(e($val));
     }

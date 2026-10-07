@@ -28,12 +28,13 @@ final class FormFields
         'purchase_return' => ['reason' => 'Reason'],
         'adjustment' => ['note' => 'Note'],
         'transfer' => ['note' => 'Note'], 'invoice' => [], 'stocktake' => [],
+        'supplier_item' => ['supplier_code' => 'Supplier item code', 'variant_id' => 'Our item (link)', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
     ];
     public const ENTITY_LABELS = ['item' => 'Item form', 'customer' => 'Customer form', 'supplier' => 'Supplier form', 'warehouse' => 'Warehouse form', 'location' => 'Rack / location form',
         'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',
-        'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer', 'invoice' => 'Sales invoice', 'stocktake' => 'Stock-take'];
+        'purchase_order' => 'Purchase order', 'grn' => 'Goods receipt (GRN)', 'bill' => 'Supplier bill', 'purchase_return' => 'Purchase return', 'adjustment' => 'Stock adjustment', 'transfer' => 'Stock transfer', 'invoice' => 'Sales invoice', 'stocktake' => 'Stock-take', 'supplier_item' => 'Supplier item form'];
     /** Settings page sections: heading => entities. */
-    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'warehouse', 'location'], 'Sales documents' => ['sales_order', 'delivery', 'invoice', 'sales_return'],
+    public const SECTIONS = ['Master data' => ['item', 'customer', 'supplier', 'supplier_item', 'warehouse', 'location'], 'Sales documents' => ['sales_order', 'delivery', 'invoice', 'sales_return'],
         'Purchase documents' => ['requisition', 'purchase_order', 'grn', 'bill', 'purchase_return'], 'Stock documents' => ['adjustment', 'transfer', 'stocktake']];
 
     private static ?array $hidden = null;

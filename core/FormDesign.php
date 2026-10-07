@@ -31,6 +31,7 @@ final class FormDesign
         'transfer' => ['warehouse_id' => 'From warehouse', 'to_warehouse_id' => 'To warehouse', 'note' => 'Note'],
         'invoice' => ['invoice_date' => 'Invoice date', 'due_date' => 'Due date', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes (printed on the invoice)'],
         'requisition' => ['note' => 'Note'], 'location' => ['code' => 'Rack code', 'description' => 'Description'], 'stocktake' => ['warehouse_id' => 'Warehouse', 'note' => 'Note'],
+        'supplier_item' => ['supplier_id' => 'Supplier', 'supplier_name' => 'Supplier item name', 'supplier_code' => 'Supplier item code', 'variant_id' => 'Our item', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
     ];
     /** Default width (of 12 columns) each field has on the real form. */
     public const SPANS = [
@@ -51,9 +52,10 @@ final class FormDesign
         'transfer' => ['warehouse_id' => 3, 'to_warehouse_id' => 3, 'note' => 6],
         'invoice' => ['invoice_date' => 6, 'due_date' => 6, 'delivery_charge' => 6, 'installation_charge' => 6, 'notes' => 12],
         'requisition' => ['note' => 12], 'location' => ['code' => 6, 'description' => 12], 'stocktake' => ['warehouse_id' => 6, 'note' => 12],
+        'supplier_item' => ['supplier_id' => 6, 'supplier_name' => 6, 'supplier_code' => 4, 'variant_id' => 8, 'min_order_qty' => 4, 'lead_time_days' => 4, 'note' => 12],
     ];
     /** Forms that have a record detail page (Overview / Timeline) laid out from the same design. */
-    public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer', 'invoice', 'requisition', 'location', 'stocktake'];
+    public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer', 'invoice', 'requisition', 'location', 'stocktake', 'supplier_item'];
     /** Fields shown in the summary strip at the top of the detail page when the company has not chosen. */
     public const SUMMARY_DEFAULT = [
         'item' => ['item_type', 'category_id', 'unit_id', 'hsn_code'],
@@ -65,6 +67,7 @@ final class FormDesign
         'sales_order' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date'], 'delivery' => ['delivery_date', 'ship_to'], 'sales_return' => ['return_date', 'reason'],
         'adjustment' => ['warehouse_id', 'reason'], 'transfer' => ['warehouse_id', 'to_warehouse_id'],
         'invoice' => ['sys:customer', 'invoice_date', 'due_date', 'sys:balance_due'], 'requisition' => ['sys:raised', 'sys:by', 'sys:po'], 'location' => ['sys:warehouse', 'code'], 'stocktake' => ['warehouse_id', 'sys:started'],
+        'supplier_item' => ['supplier_id', 'supplier_code', 'variant_id', 'sys:rate'],
     ];
     /**
      * Record-only fields: facts the record page knows (who created it, linked documents, totals) that have no input on the form.
@@ -81,12 +84,13 @@ final class FormDesign
         'adjustment' => ['date' => 'Date', 'by' => 'By'], 'transfer' => ['date' => 'Date', 'by' => 'By'],
         'invoice' => ['customer' => '@customer', 'delivery' => 'Delivery', 'order' => 'Order', 'balance_due' => 'Balance due'],
         'requisition' => ['raised' => 'Raised', 'by' => 'By', 'po' => 'Purchase order'], 'location' => ['warehouse' => '@warehouse'], 'stocktake' => ['started' => 'Started'],
+        'supplier_item' => ['rate' => 'Current rate', 'last_paid' => 'Last paid', 'preferred' => 'Preferred source'],
     ];
     /** Cards below the sections on each record page ("related lists"): id => [label, may be hidden]. Their order and visibility are part of the layout. */
     public const RELATED = [
-        'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Supplier rates', true], 'variants' => ['Variants & stock', true], 'history' => ['Stock movements', true]],
+        'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Suppliers & rates', true], 'variants' => ['Variants & stock', true], 'history' => ['Stock movements', true]],
         'customer' => ['balance' => ['Balance', true], 'orders' => ['Orders', true], 'invoices' => ['Invoices', true]],
-        'supplier' => ['balance' => ['What we owe', true], 'products' => ['Products supplied', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
+        'supplier' => ['balance' => ['What we owe', true], 'products' => ['Items supplied', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
         'warehouse' => ['stats' => ['Overview figures', true], 'racks' => ['Racks', true], 'stock' => ['Stock here', true]],
         'location' => ['stock' => ['Stored here', true]],
         'requisition' => ['items' => ['Items', true]], 'purchase_order' => ['items' => ['Items', true], 'grns' => ['Goods received', true]],
@@ -94,6 +98,7 @@ final class FormDesign
         'bill' => ['totals' => ['Amounts', true], 'items' => ['Items', true], 'payments' => ['Payments', false]], 'purchase_return' => ['items' => ['Items returned', true]],
         'sales_order' => ['lines' => ['Items', true], 'deliveries' => ['Deliveries & advance', true]], 'delivery' => ['lines' => ['Items delivered', true]],
         'invoice' => ['totals' => ['Amounts', true], 'items' => ['Items', true], 'payments' => ['Payments', false]], 'sales_return' => ['items' => ['Items returned', true]],
+        'supplier_item' => ['rates' => ['Rates', true], 'purchases' => ['Recent purchases', true]],
         'adjustment' => ['lines' => ['Items', true]], 'transfer' => ['lines' => ['Items', true]], 'stocktake' => ['lines' => ['Counts', false]],
     ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];

@@ -137,7 +137,7 @@ final class ItemController extends Controller
         $this->view('app/items/show', [
             'title' => $item['name'], 'item' => $item, 'meta' => $meta, 'variants' => $variants, 'components' => $components,
             'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::values('item', (int)$item['id']),
-            'rates' => \App\Models\Purchase::ratesForItem((int)$item['id']),
+            'rates' => \App\Models\Purchase::suppliersForItem((int)$item['id']),
             'history' => $history, 'bundleAvailable' => $item['is_bundle'] ? Stock::bundleAvailable((int)$item['id']) : null,
         ]);
     }
