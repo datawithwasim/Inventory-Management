@@ -596,3 +596,8 @@ th.col-th { text-align: right; width: 1%; white-space: nowrap; padding-top: .3re
 .dz-sysb { background: #fef3c7; color: #92400e; }
 [data-bs-theme="dark"] .dz-sysb { background: #422006; color: #fcd34d; }
 .dz-tile.sys .dz-ico { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
+.dz-relrow { display: flex; align-items: center; gap: .6rem; padding: .45rem .7rem; border: 1px solid var(--line); border-radius: 9px; background: var(--card); margin-bottom: .4rem; }
+.dz-relrow > i { color: var(--ink-3); } .dz-relrow > span:not(.dz-lock) { flex: 1; font-weight: 600; font-size: .88rem; }
+.dz-relrow.off { opacity: .55; } .dz-relrow.off > span:not(.dz-lock) { text-decoration: line-through; }
+.dz-relrow button { border: 0; background: none; color: var(--ink-2); padding: .15rem .35rem; border-radius: 6px; } .dz-relrow button:hover:not(:disabled) { background: var(--bg-soft, rgba(127,127,127,.12)); }
+.dz-relrow button:disabled { opacity: .3; } .dz-lock { color: var(--ink-3); padding: .15rem .35rem; }

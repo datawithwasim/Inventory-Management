@@ -9,7 +9,7 @@
       <?php if ((float)$b['returned_amount'] > 0): ?><tr><td>Returned goods</td><td class="text-end">− <?= e(money($b['returned_amount'])) ?></td></tr><?php endif; ?>
       <tr><td>Paid</td><td class="text-end">− <?= e(money($b['paid_amount'])) ?></td></tr>
       <tr class="border-top"><th><?= $due < -0.004 ? 'Credit with supplier' : 'Balance due' ?></th><th class="text-end <?= $due > 0.004 ? 'text-danger' : 'text-success' ?>"><?= e(money(abs($due))) ?></th></tr>
-    </table></div></div></div>
+    </table></div></div>
 <?php if ($items): ?><div class="card mb-3" id="items"><div class="table-responsive"><table class="table mb-0"><thead><tr><th><?= e(term('item')) ?></th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Tax %</th><th class="text-end">Amount</th></tr></thead><tbody>
   <?php foreach ($items as $l): [, , $tot] = App\Models\Purchase::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['tax_rate']); ?>
     <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td><td class="text-end"><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td>

@@ -52,7 +52,7 @@
     $('dzPreview').classList.toggle('on', preview);
     $('dzNoCustom').classList.toggle('d-none', f.customFields);
     $('dzTypes').classList.toggle('off', !f.customFields);
-    renderSummary(); renderSections(); renderUnused(); renderLines(); renderRight();
+    renderSummary(); renderRelated(); renderSections(); renderUnused(); renderLines(); renderRight();
   }
 
   /* ---------------- summary strip (top of the detail page) ---------------- */
@@ -73,6 +73,24 @@
     if (i > -1) sum.splice(i, 1); else if (sum.length < 4) sum.push(key); else { alert('The summary strip holds up to four fields.'); return; }
     touch(); render();
   }
+
+  /* ---------------- related lists (cards under the sections) ---------------- */
+  function renderRelated() {
+    var f = F(), b = $('dzRel'), rel = f.related || []; b.hidden = !f.detail || !rel.length; if (b.hidden) return;
+    b.innerHTML = '<div class="dz-sec-head"><div class="dz-sec-name">Related lists</div><div class="dz-sec-tools"><span class="dz-hint">Cards shown below the sections on the detail page: change their order or hide them</span></div></div>' +
+      rel.map(function (r, i) {
+        return '<div class="dz-relrow' + (r.show ? '' : ' off') + '" data-i="' + i + '"><i class="bi bi-list-ul"></i><span>' + esc(r.label) + '</span>' +
+          (preview ? '' : '<button type="button" data-a="rel-up" title="Move up"' + (i === 0 ? ' disabled' : '') + '><i class="bi bi-arrow-up"></i></button><button type="button" data-a="rel-down" title="Move down"' + (i === rel.length - 1 ? ' disabled' : '') + '><i class="bi bi-arrow-down"></i></button>' +
+            (r.lock ? '<span class="dz-lock" title="Needed to work with this record"><i class="bi bi-lock"></i></span>' : '<button type="button" data-a="rel-eye" title="' + (r.show ? 'Hide' : 'Show') + '"><i class="bi bi-' + (r.show ? 'eye' : 'eye-slash') + '"></i></button>')) + '</div>';
+      }).join('');
+  }
+  $('dzRel').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-a]'), row = e.target.closest('.dz-relrow'); if (!b || !row || b.disabled) return;
+    var rel = F().related, i = +row.dataset.i, a = b.dataset.a;
+    if (a === 'rel-eye') rel[i].show = !rel[i].show;
+    else { var j = i + (a === 'rel-up' ? -1 : 1), t = rel[i]; rel[i] = rel[j]; rel[j] = t; }
+    touch(); render();
+  });
 
   function tileHtml(x) {
     var req = x.req ? ' req' : '';
@@ -293,6 +311,7 @@
     var sysK = (f.sysOrder || []); sysK.forEach(function (k) { f.fields[k].show = true; f.fields[k].custom_label = ''; });
     if (sysK.length) f.sections.push({ id: 'sys', title: 'Record details', cols: 2, fields: sysK.slice() });
     if (f.detail && f.summaryDefault) f.summary = f.summaryDefault.slice();
+    if (f.related && f.relatedDefault) { var byId = {}; f.related.forEach(function (r) { byId[r.id] = r; r.show = true; }); f.related = f.relatedDefault.map(function (id) { return byId[id]; }).filter(Boolean); }
     if (!f.layout) f.sections[0].fields = Object.keys(f.fields).filter(function (k) { return !f.fields[k].custom; });
     f.style = 'top'; f.lines = { disc: true, tax: true }; f.resetFlag = true; sel = null; touch(true); render();
   });
@@ -308,7 +327,7 @@
     data.forEach(function (f) {
       if (JSON.stringify(f) === initialByKey[f.key]) return;
       var o = { style: f.style, lines: f.lines, deleted: f.deleted, sections: f.sections.map(function (s) { return { title: s.title, cols: s.cols, fields: s.fields.slice() }; }), fields: {} };
-      if (f.detail) o.summary = (f.summary || []).slice();
+      if (f.detail) { o.summary = (f.summary || []).slice(); o.related = (f.related || []).map(function (r) { return { id: r.id, show: r.show }; }); }
       if (f.resetFlag) o.reset = true;
       Object.keys(f.fields).forEach(function (k) {
         var x = f.fields[k];

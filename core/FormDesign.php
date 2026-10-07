@@ -82,6 +82,20 @@ final class FormDesign
         'invoice' => ['customer' => '@customer', 'delivery' => 'Delivery', 'order' => 'Order', 'balance_due' => 'Balance due'],
         'requisition' => ['raised' => 'Raised', 'by' => 'By', 'po' => 'Purchase order'], 'location' => ['warehouse' => '@warehouse'], 'stocktake' => ['started' => 'Started'],
     ];
+    /** Cards below the sections on each record page ("related lists"): id => [label, may be hidden]. Their order and visibility are part of the layout. */
+    public const RELATED = [
+        'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Supplier rates', true], 'variants' => ['Variants & stock', true], 'history' => ['Stock movements', true]],
+        'customer' => ['balance' => ['Balance', true], 'orders' => ['Orders', true], 'invoices' => ['Invoices', true]],
+        'supplier' => ['balance' => ['What we owe', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
+        'warehouse' => ['stats' => ['Overview figures', true], 'racks' => ['Racks', true], 'stock' => ['Stock here', true]],
+        'location' => ['stock' => ['Stored here', true]],
+        'requisition' => ['items' => ['Items', true]], 'purchase_order' => ['items' => ['Items', true], 'grns' => ['Goods received', true]],
+        'grn' => ['items' => ['Items received', true], 'returns' => ['Returns', true]],
+        'bill' => ['totals' => ['Amounts', true], 'items' => ['Items', true], 'payments' => ['Payments', false]], 'purchase_return' => ['items' => ['Items returned', true]],
+        'sales_order' => ['lines' => ['Items', true], 'deliveries' => ['Deliveries & advance', true]], 'delivery' => ['lines' => ['Items delivered', true]],
+        'invoice' => ['totals' => ['Amounts', true], 'items' => ['Items', true], 'payments' => ['Payments', false]], 'sales_return' => ['items' => ['Items returned', true]],
+        'adjustment' => ['lines' => ['Items', true]], 'transfer' => ['lines' => ['Items', true]], 'stocktake' => ['lines' => ['Counts', false]],
+    ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];
 
     public const COLS = [0 => 'Original', 1 => '1 column', 2 => '2 columns', 3 => '3 columns'];
@@ -193,8 +207,16 @@ final class FormDesign
         $style = ($saved['style'] ?? 'top') === 'left' ? 'left' : 'top';
         $pickSum = isset($saved['summary']) ? (array)$saved['summary'] : (self::SUMMARY_DEFAULT[$entity] ?? []);
         $summary = array_slice(array_values(array_filter(array_unique($pickSum), fn($k) => in_array($k, $valid, true) && (str_starts_with($k, 'sys:') ? isset($seen[$k]) : $visible($k)))), 0, 4);
+        $rel = [];
+        $relDef = self::RELATED[$entity] ?? [];
+        if ($relDef) $relDef += ['notes' => ['Notes', true]];
+        foreach ((array)($saved['related'] ?? []) as $x) {
+            $id = (string)($x['id'] ?? '');
+            if (isset($relDef[$id]) && !isset($rel[$id])) $rel[$id] = ['id' => $id, 'show' => !$relDef[$id][1] || !empty($x['show'])];
+        }
+        foreach ($relDef as $id => $d) if (!isset($rel[$id])) $rel[$id] = ['id' => $id, 'show' => true];
         $lines = ['disc' => !isset($saved['lines']['disc']) || !empty($saved['lines']['disc']), 'tax' => !isset($saved['lines']['tax']) || !empty($saved['lines']['tax'])];
-        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'cf' => $cfByKey, 'summary' => $summary];
+        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'cf' => $cfByKey, 'summary' => $summary, 'related' => array_values($rel)];
     }
 
     // ---------------------------------------------------------------- rendering helpers
@@ -312,7 +334,7 @@ final class FormDesign
                 if (!$layout) $secs = [['id' => 's1', 'title' => '', 'cols' => 0, 'fields' => array_keys(array_filter($fields, fn($f) => $f['show']))]];
                 $out[] = ['key' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity], 'group' => $group, 'layout' => $layout, 'customFields' => isset(CustomFields::ENTITIES[$entity]),
                     'lineForm' => in_array($entity, self::LINE_FORMS, true), 'detail' => in_array($entity, self::DETAIL, true), 'summary' => $r['summary'], 'customised' => $r['customised'], 'style' => $r['style'], 'lines' => $r['lines'],
-                    'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'sysOrder' => self::sysKeys($entity), 'summaryDefault' => self::SUMMARY_DEFAULT[$entity] ?? [], 'fields' => $fields];
+                    'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'relatedDefault' => array_keys(isset(self::RELATED[$entity]) ? self::RELATED[$entity] + ['notes' => 1] : []), 'related' => array_map(fn($x) => $x + ['label' => (self::RELATED[$entity] + ['notes' => ['Notes', true]])[$x['id']][0], 'lock' => !(self::RELATED[$entity] + ['notes' => ['Notes', true]])[$x['id']][1]], $r['related']), 'sysOrder' => self::sysKeys($entity), 'summaryDefault' => self::SUMMARY_DEFAULT[$entity] ?? [], 'fields' => $fields];
             }
         }
         return $out;
@@ -423,9 +445,19 @@ final class FormDesign
             $sum = array_key_exists('summary', $in)
                 ? array_slice(array_values(array_unique(array_map($mapKey, array_map('strval', (array)$in['summary'])))), 0, 4)
                 : ($cfg[$entity]['summary'] ?? null);
+            $oldRel = $cfg[$entity]['related'] ?? null;
             $cfg[$entity] = ['style' => ($in['style'] ?? 'top') === 'left' ? 'left' : 'top', 'sections' => $sections, 'props' => $props,
                 'lines' => ['disc' => !isset($in['lines']['disc']) || !empty($in['lines']['disc']) ? 1 : 0, 'tax' => !isset($in['lines']['tax']) || !empty($in['lines']['tax']) ? 1 : 0], 'sys' => 1];
             if ($sum !== null) $cfg[$entity]['summary'] = $sum;
+            if (array_key_exists('related', $in)) {
+                $relOk = (self::RELATED[$entity] ?? []) + (isset(self::RELATED[$entity]) ? ['notes' => ['Notes', true]] : []);
+                $relNew = [];
+                foreach ((array)$in['related'] as $x) {
+                    $id = (string)((array)$x)['id'];
+                    if (isset($relOk[$id]) && !isset($relNew[$id])) $relNew[$id] = ['id' => $id, 'show' => !empty(((array)$x)['show']) ? 1 : 0];
+                }
+                $cfg[$entity]['related'] = array_values($relNew);
+            } elseif ($oldRel !== null) $cfg[$entity]['related'] = $oldRel;
         }
         FormFields::save($hidden, $required);
         Settings::set('forms.layout', json_encode($cfg, JSON_UNESCAPED_UNICODE));

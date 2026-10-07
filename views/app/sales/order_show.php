@@ -8,7 +8,7 @@
     <?php if ($st === 'draft' && can('sales.delete')): ?><form method="post" action="<?= url("sales/orders/{$o['id']}/delete") ?>" onsubmit="return confirm('Delete this draft?')"><?= csrf_field() ?><button class="btn btn-outline-danger">Delete draft</button></form><?php endif; ?>
   <?php $actions = ob_get_clean(); ?>
 <?php ob_start(); ?>
-<?php $doc = $o; $qtyKey = 'qty_ordered'; $withDelivered = true; require __DIR__ . '/_doc_lines.php'; ?>
+<div id="lines"><?php $doc = $o; $qtyKey = 'qty_ordered'; $withDelivered = true; require __DIR__ . '/_doc_lines.php'; ?></div>
 <div class="row g-3 mb-3" id="deliveries">
   <div class="col-lg-6"><div class="card"><div class="card-header">Deliveries &amp; invoices</div><ul class="list-group list-group-flush">
     <?php foreach ($deliveries as $d): ?><li class="list-group-item d-flex justify-content-between"><a href="<?= url("sales/deliveries/{$d['id']}") ?>"><?= e($d['delivery_no']) ?></a><span><?= e(fdate($d['delivery_date'])) ?><?= $d['invoice_id'] ? ' · <a href="' . url('sales/invoices/' . (int)$d['invoice_id']) . '">' . e($d['invoice_no']) . '</a>' : '' ?></span></li><?php endforeach; ?>

@@ -61,6 +61,33 @@ $layoutUrl = url('settings/formdesign?form=' . $E . '&return=' . rawurlencode($_
     </div>
   </div>
 </div>
+<?php $relCfg = isset(Core\FormDesign::FIELDS[$E]) && Core\FormDesign::customised($E) ? Core\FormDesign::resolve($E)['related'] : []; ?>
+<?php if ($relCfg): ?><script>
+/* the company's own order / visibility of the cards below the sections (Edit page layout) */
+(function () {
+  var cfg = <?= json_encode($relCfg, JSON_HEX_TAG | JSON_HEX_AMP) ?>, box = document.getElementById('recOverview');
+  if (!box) return;
+  var kids = Array.prototype.slice.call(box.children);
+  function top(id) { var el = document.getElementById(id); while (el && el.parentNode !== box) el = el.parentNode; return el; }
+  var groups = [];   // [{node, ids:[...], pos}] one per top-level block, in page order
+  cfg.forEach(function (c, i) {
+    var n = top(c.id); if (!n) return;
+    var g = groups.filter(function (x) { return x.node === n; })[0];
+    if (!g) groups.push(g = { node: n, ids: [], pos: i, show: false });
+    g.ids.push(c.id); if (c.show) g.show = true;
+  });
+  var slots = groups.map(function (g) { return kids.indexOf(g.node); }).sort(function (a, b) { return a - b; });
+  box.style.display = 'flex'; box.style.flexDirection = 'column';
+  kids.forEach(function (k, i) { k.style.order = i; });
+  groups.slice().sort(function (a, b) { return a.pos - b.pos; }).forEach(function (g, i) { g.node.style.order = slots[i]; if (!g.show) g.node.style.display = 'none'; });
+  var side = document.querySelector('.rec-side'), hid = {};
+  cfg.forEach(function (c) { hid[c.id] = !c.show; });
+  if (side) {
+    var links = {}; side.querySelectorAll('a[data-rel]').forEach(function (a) { links[a.dataset.rel] = a; });
+    cfg.forEach(function (c) { var a = links[c.id]; if (!a) return; side.appendChild(a); if (!c.show) a.style.display = 'none'; });
+  }
+})();
+</script><?php endif; ?>
 <script>
 (function () {
   var tabs = document.querySelectorAll('.rec-main > .rec-tabs button'), panels = document.querySelectorAll('.rec-main > .rec-panel');

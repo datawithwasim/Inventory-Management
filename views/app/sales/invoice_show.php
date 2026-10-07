@@ -15,7 +15,7 @@
     <tr class="border-top"><th>Total</th><th class="text-end"><?= e(money($i['total'])) ?></th></tr>
     <?php if ((float)$i['returned_amount'] > 0): ?><tr><td>Returns credited</td><td class="text-end">− <?= e(money($i['returned_amount'])) ?></td></tr><?php endif; ?>
     <tr><td>Received</td><td class="text-end">− <?= e(money($i['paid_amount'])) ?></td></tr>
-    <tr class="border-top"><th><?= $due < -0.004 ? 'Credit due to customer' : 'Balance due' ?></th><th class="text-end <?= $due > 0.004 ? 'text-danger' : 'text-success' ?>"><?= e(money(abs($due))) ?></th></tr></table></div></div></div>
+    <tr class="border-top"><th><?= $due < -0.004 ? 'Credit due to customer' : 'Balance due' ?></th><th class="text-end <?= $due > 0.004 ? 'text-danger' : 'text-success' ?>"><?= e(money(abs($due))) ?></th></tr></table></div></div>
 <?php if ($items): ?><div class="card mb-3" id="items"><div class="table-responsive"><?php require __DIR__ . '/_delivery_rows.php'; ?></div></div><?php endif; ?>
 <div class="row g-3" id="payments">
   <div class="col-lg-7"><div class="card"><div class="card-header">Payments received</div><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><tbody>

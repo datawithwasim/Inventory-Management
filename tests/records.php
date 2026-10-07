@@ -210,5 +210,19 @@ $h = $a->get("/locations/$loc")['body'];
 check('rack page: warehouse comes from the layout (summary), description in its section, no loose Details card', $loc > 0 && str_contains($h, 'Top shelf') && str_contains($h, 'rec-summary') && !str_contains($h, '<div class="card-header">Details</div>') && str_contains($h, 'Edit page layout'));
 check('rack edit form carries the layout link', str_contains($a->get("/locations/$loc/edit")['body'], 'form=location'));
 
+echo "Related lists: order and visibility from the layout\n";
+$ordItems = fn($h) => [strpos($h, 'id="items"'), strpos($h, 'id="grns"'), strpos($h, 'id="notes"')];
+$sec1 = [['title' => 'Order', 'cols' => 2, 'fields' => ['supplier_id', 'order_date']]];
+$a->post('/settings/formdesign', ['payload' => json_encode(['purchase_order' => ['sections' => $sec1, 'summary' => ['supplier_id'], 'related' => [['id' => 'notes', 'show' => 1], ['id' => 'items', 'show' => 0], ['id' => 'grns', 'show' => 1], ['id' => 'bogus', 'show' => 1]]]]), 'current' => 'purchase_order'], '/settings/modules');
+$h = $a->get("/purchase/orders/$po")['body'];
+check('the page carries the saved related order to its script (notes first, items hidden, unknown id dropped)', str_contains($h, '"id":"notes","show":true') && str_contains($h, '"id":"items","show":false') && !str_contains($h, 'bogus'));
+$mdl = json_decode(preg_replace('~^.*?<script type="application/json" id="dzData">(.*?)</script>.*$~s', '$1', $a->get('/settings/formdesign?form=purchase_order')['body']), true)['model'];
+$pm = array_values(array_filter($mdl, fn($f) => $f['key'] === 'purchase_order'))[0];
+check('the designer gets the related lists in that order', array_column($pm['related'], 'id') === ['notes', 'items', 'grns']);
+$a->post('/settings/formdesign', ['payload' => json_encode(['stocktake' => ['sections' => [['title' => '', 'cols' => 0, 'fields' => ['warehouse_id', 'note']]], 'related' => [['id' => 'lines', 'show' => 0], ['id' => 'notes', 'show' => 0]]]]), 'current' => 'stocktake'], '/settings/modules');
+$mdl = json_decode(preg_replace('~^.*?<script type="application/json" id="dzData">(.*?)</script>.*$~s', '$1', $a->get('/settings/formdesign?form=stocktake')['body']), true)['model'];
+$sm = array_values(array_filter($mdl, fn($f) => $f['key'] === 'stocktake'))[0];
+check('a card the work depends on (stock-take counts) cannot be hidden', array_values(array_filter($sm['related'], fn($r) => $r['id'] === 'lines'))[0]['show'] === true && array_values(array_filter($sm['related'], fn($r) => $r['id'] === 'notes'))[0]['show'] === false);
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);
