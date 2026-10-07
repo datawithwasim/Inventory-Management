@@ -173,5 +173,12 @@ $empty = json_decode($a->get('/lookup/items?q=')['body'], true);
 check('the purchase item lookup lists items even with nothing typed (the box shows something on focus)', is_array($empty) && count($empty) >= 1 && isset($empty[0]['item_name']));
 check('…and still only this company\'s items', $b->get('/lookup/items?q=')['body'] === '[]');
 
+echo "List pages: toolbar buttons\n";
+$ih = $a->get('/items')['body'];
+check('the column chooser is icon-only (no "Columns" text) and opens outside the table clip', str_contains($ih, 'class="dropdown d-inline-block col-picker"') && str_contains($ih, 'aria-label="Choose columns"') && !preg_match('~</i> Columns</button>~', $ih) && str_contains($ih, 'data-bs-popper-config'));
+check('items list still has Export / Import / Add item links for the script to lift into the heading', str_contains($ih, 'items/export') && str_contains($ih, 'items/import') && str_contains($ih, 'items/create'));
+check('customer groups link is flagged to move with the heading buttons', str_contains($a->get('/customers')['body'], 'data-page-action'));
+check('rate list page flags its three actions for the heading row', substr_count($a->get('/purchase/rates')['body'], 'data-page-action') >= 3);
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

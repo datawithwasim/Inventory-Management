@@ -577,3 +577,9 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 #lineTable td .form-text:empty { display: none; } #lineTable td .form-text { margin-top: .2rem; }
 #lineTable td.line-total, #lineTable td.text-end.line-total { line-height: 31px; padding-top: .6rem; }
 #lineTable td > .btn, #lineTable td .btn-sm { height: 31px; display: inline-flex; align-items: center; }
+
+/* ---- list pages ---- */
+.page-head.has-tools { align-items: center; }
+.col-picker-btn { width: 30px; height: 30px; padding: 0; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--ink-3); background: transparent; }
+.col-picker-btn:hover, .col-picker.show .col-picker-btn { background: var(--surface-2); border-color: var(--line); color: var(--brand-text); }
+th.col-th { text-align: right; width: 1%; white-space: nowrap; padding-top: .3rem; padding-bottom: .3rem; } th.col-th .dropdown-menu { text-align: left; text-transform: none; letter-spacing: 0; font-weight: 400; }

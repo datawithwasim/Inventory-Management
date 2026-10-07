@@ -4,7 +4,7 @@
   <div class="col-md-3"><select name="group" class="form-select"><option value="">All groups</option>
     <?php foreach ($groups as $g): ?><option value="<?= (int)$g['id'] ?>" <?= $group === (int)$g['id'] ? 'selected' : '' ?>><?= e($g['name']) ?></option><?php endforeach; ?></select></div>
   <div class="col-auto"><button class="btn btn-outline-secondary">Search</button></div>
-  <div class="col text-end"><?= Core\Columns::picker('customers', $cols) ?><a class="btn btn-outline-secondary" href="<?= url('customers/groups') ?>"><?= e(term('customer')) ?> groups</a>
+  <div class="col text-end"><?= Core\Columns::picker('customers', $cols) ?><a class="btn btn-outline-secondary" data-page-action href="<?= url('customers/groups') ?>"><?= e(term('customer')) ?> groups</a>
     <?php if (can('customers.create')): ?><a class="btn btn-primary" href="<?= url('customers/create') ?>"><i class="bi bi-plus-lg"></i> Add <?= e(term('customer', true)) ?></a><?php endif; ?></div>
 </form>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">

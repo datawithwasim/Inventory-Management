@@ -47,7 +47,7 @@ final class Columns
         // The real <form> is printed at the end of the page (see layouts/app.php) because this picker sits inside a GET filter form.
         $GLOBALS['foot_html'] = ($GLOBALS['foot_html'] ?? '') . '<form id="' . $fid . '" method="post" action="' . e(url('prefs/columns')) . '" hidden>' . csrf_field()
             . '<input type="hidden" name="list" value="' . e($list) . '"></form>';
-        $o = '<div class="dropdown d-inline-block"><button type="button" class="btn btn-outline-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"><i class="bi bi-layout-three-columns"></i> Columns</button>'
+        $o = '<div class="dropdown d-inline-block col-picker"><button type="button" class="btn btn-sm col-picker-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-popper-config=\'{"strategy":"fixed"}\' aria-expanded="false" aria-label="Choose columns" title="Choose columns"><i class="bi bi-layout-three-columns"></i></button>'
             . '<div class="dropdown-menu dropdown-menu-end p-3 shadow text-start" style="min-width:240px"><div class="fw-semibold small mb-2">Show these columns</div>';
         foreach (self::options($list) as $k => $label) {
             $o .= '<div class="form-check mb-1"><input class="form-check-input" form="' . $fid . '" type="checkbox" name="cols[]" value="' . e($k) . '" id="col-' . e($list . $k) . '"' . (in_array($k, $visible, true) ? ' checked' : '') . '>'

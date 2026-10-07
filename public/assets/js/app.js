@@ -48,6 +48,32 @@
     if (moved) slot.closest('.page-head').classList.add('has-actions');
   })();
 
+  /* ---- list pages: Add / Import / Export go beside the page heading; the column chooser becomes an icon at the table header's right end ---- */
+  (function () {
+    var slot = doc.getElementById('pageActions'); if (!slot) return;
+    var skip = '.modal, .rec-main, .palette, .dash-w, .card-header, .settings-grid, .table, .dropdown-menu, #pageActions';
+    var picks = [];
+    doc.querySelectorAll('main.content a.btn[href], main.content [data-page-action]').forEach(function (a) {
+      var forced = a.hasAttribute('data-page-action');
+      if (a.closest(forced ? '.modal, .palette, .dropdown-menu, #pageActions' : skip) || slot.contains(a)) return;
+      var h = a.getAttribute('href') || '';
+      var create = !a.classList.contains('btn-link') && /(\/create|\/import)(\?|$)/.test(h);
+      var io = a.classList.contains('btn-outline-secondary') && /\/(import|export)(\?|$)/.test(h);
+      if (create || io || forced) picks.push(a);
+    });
+    picks.sort(function (x, y) { return (x.classList.contains('btn-primary') ? 1 : 0) - (y.classList.contains('btn-primary') ? 1 : 0); });
+    picks.forEach(function (a) { var holder = a.parentNode; slot.appendChild(a); if (holder && holder.classList && !holder.children.length && !holder.textContent.trim() && holder.tagName !== 'FORM') holder.remove(); });
+    // limit notices ("Item limit reached") travel with the buttons
+    doc.querySelectorAll('main.content .text-warning.ms-2, main.content span.text-warning').forEach(function (n) { if (n.textContent.trim().length < 60 && /limit/i.test(n.textContent) && !n.closest('.alert, .table')) slot.insertBefore(n, slot.firstChild); });
+    var wrap = doc.querySelector('main.content .col-picker');
+    if (wrap) {
+      var tbl = null; doc.querySelectorAll('main.content table.table').forEach(function (t) { if (!tbl && (wrap.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)) tbl = t; });
+      var ths = tbl && tbl.querySelectorAll('thead tr:first-child th'), last = ths && ths[ths.length - 1];
+      if (last && !last.textContent.trim() && !last.querySelector('input,button')) { last.classList.add('col-th'); last.appendChild(wrap); }
+    }
+    if (picks.length && !slot.closest('.page-head').classList.contains('has-actions')) slot.closest('.page-head').classList.add('has-tools');
+  })();
+
   /* ---- sidebar ---- */
   var sb = doc.getElementById('sidebar');
   if (sb) {

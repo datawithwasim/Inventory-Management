@@ -13,10 +13,10 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
   <div class="card-header rl-head">
     <div><div class="rl-title"><i class="bi bi-currency-rupee"></i> Supplier rate lists</div><div class="rl-sub">What every <?= e(term('supplier', true)) ?> charges for each <?= e(term('item', true)) ?> · filled in automatically on purchase orders</div></div>
     <div class="rl-tools">
-      <?php if (can('reports.view')): ?><a class="btn btn-sm btn-outline-secondary" href="<?= url('reports/rate-comparison') ?>"><i class="bi bi-bar-chart"></i><span class="d-none d-md-inline"> Compare suppliers</span></a><?php endif; ?>
+      <?php if (can('reports.view')): ?><a class="btn btn-outline-secondary" data-page-action href="<?= url('reports/rate-comparison') ?>"><i class="bi bi-bar-chart"></i><span class="d-none d-md-inline"> Compare suppliers</span></a><?php endif; ?>
       <?php if ($canEdit): ?>
-        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#rlImport"><i class="bi bi-upload"></i><span class="d-none d-md-inline"> Import CSV</span></button>
-        <button class="btn btn-sm btn-primary" type="button" data-rate-new data-bs-toggle="modal" data-bs-target="#rateModal"><i class="bi bi-plus-lg"></i> Add rate</button>
+        <button class="btn btn-outline-secondary" type="button" data-page-action data-bs-toggle="modal" data-bs-target="#rlImport"><i class="bi bi-upload"></i><span class="d-none d-md-inline"> Import CSV</span></button>
+        <button class="btn btn-primary" type="button" data-page-action data-rate-new data-bs-toggle="modal" data-bs-target="#rateModal"><i class="bi bi-plus-lg"></i> Add rate</button>
       <?php endif; ?>
     </div>
   </div>
