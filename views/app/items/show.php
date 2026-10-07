@@ -16,39 +16,42 @@
     <td class="text-end fw-semibold"><?= e(money($r['net'])) ?></td><td class="text-end"><?= (float)$r['min_qty'] > 0 ? e(qty($r['min_qty'])) : '—' ?></td><td><?= $r['lead_time_days'] !== null ? (int)$r['lead_time_days'] . ' days' : '—' ?></td></tr><?php endforeach; ?>
   </tbody></table></div></div>
 <?php endif; ?>
-<div id="variants"><?php foreach ($variants as $v): ?>
-  <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between">
-      <span><strong><?= e($v['name'] ?: 'Default') ?></strong><?= ($v['colour'] || $v['size']) ? ' <span class="badge text-bg-light border fw-normal">' . e(implode(' · ', array_filter([$v['colour'], $v['size']]))) . '</span>' : '' ?> <span class="text-muted">SKU <?= e($v['sku']) ?><?= $v['barcode'] ? ' · Barcode ' . e($v['barcode']) : '' ?></span> <?= $v['is_active'] ? '' : '<span class="badge text-bg-dark">Hidden</span>' ?></span>
-      <span class="text-muted">Cost <?= e(money($v['cost_price'])) ?> · Sale <?= e(money($v['sale_price'])) ?></span>
-    </div>
-    <div class="card-body">
-      <?php if (!$item['is_bundle']): ?>
-        <div class="mb-2"><strong><?= e(qty($v['total'])) ?> <?= e($item['unit']) ?></strong> in stock
-          <?php foreach ($v['by_wh'] as $w): ?><span class="badge text-bg-light border ms-1"><?= e($w['name']) ?>: <?= e(qty($w['qty'])) ?></span><?php endforeach; ?></div>
-        <?php if ($v['by_rack']): ?>
-          <div class="mb-2 small"><i class="bi bi-geo-alt text-muted"></i> <span class="text-muted">Kept at:</span>
-            <?php foreach ($v['by_rack'] as $r): ?><span class="badge text-bg-<?= $r['rack'] === '' ? 'warning' : 'primary' ?> ms-1"><?= e($r['warehouse']) ?> · <?= e($r['rack'] !== '' ? $r['rack'] : 'No rack') ?>: <?= e(qty($r['qty'])) ?></span><?php endforeach; ?></div>
+<section class="card mb-3" id="variants"><div class="card-header d-flex justify-content-between align-items-center"><span>Variants &amp; stock <span class="act-n"><?= count($variants) ?></span></span>
+  <?php if (can('items.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("items/{$item['id']}/edit") ?>"><i class="bi bi-pencil"></i> Edit variants</a><?php endif; ?></div>
+  <div class="table-responsive"><table class="table var-table align-middle mb-0">
+    <thead><tr><th>Variant</th><th>SKU</th><th class="text-end">Cost</th><th class="text-end">Sale</th><?php if (!$item['is_bundle']): ?><th class="text-end">In stock</th><th>Where</th><?php endif; ?></tr></thead><tbody>
+    <?php foreach ($variants as $v): ?>
+      <tr class="<?= $v['is_active'] ? '' : 'text-muted' ?>">
+        <td><strong><?= e($v['name'] ?: 'Default') ?></strong><?= ($v['colour'] || $v['size']) ? ' <span class="badge text-bg-light border fw-normal">' . e(implode(' · ', array_filter([$v['colour'], $v['size']]))) . '</span>' : '' ?><?= $v['is_active'] ? '' : ' <span class="badge text-bg-dark">Hidden</span>' ?></td>
+        <td class="small"><?= e($v['sku']) ?><?= $v['barcode'] ? '<div class="text-muted">' . e($v['barcode']) . '</div>' : '' ?></td>
+        <td class="text-end"><?= e(money($v['cost_price'])) ?></td><td class="text-end"><?= e(money($v['sale_price'])) ?></td>
+        <?php if (!$item['is_bundle']): ?>
+          <td class="text-end fw-semibold"><?= e(qty($v['total'])) ?> <span class="text-muted fw-normal"><?= e($item['unit']) ?></span></td>
+          <td class="small">
+            <?php foreach ($v['by_wh'] as $w): ?><span class="badge text-bg-light border fw-normal me-1"><?= e($w['name']) ?>: <?= e(qty($w['qty'])) ?></span><?php endforeach; ?>
+            <?php foreach ($v['by_rack'] as $r): ?><span class="badge text-bg-<?= $r['rack'] === '' ? 'warning' : 'primary-subtle text-primary-emphasis' ?> fw-normal me-1"><i class="bi bi-geo-alt"></i> <?= e($r['rack'] !== '' ? $r['rack'] : 'No rack') ?>: <?= e(qty($r['qty'])) ?></span><?php endforeach; ?>
+            <?php if (!$v['by_wh']): ?><span class="text-muted">—</span><?php endif; ?>
+          </td>
         <?php endif; ?>
-        <?php if ($item['track_batch']): ?>
-          <table class="table table-sm mb-0"><thead><tr><th><?= e(term('batch')) ?></th><th><?= e(term('supplier')) ?> lot</th><th>Received</th><th class="text-end">Roll size</th><th class="text-end">Balance</th><th>Status</th></tr></thead><tbody>
-            <?php foreach ($v['batches'] as $b): $st = App\Models\Stock::batchStatus((float)$b['balance'], (float)$b['received_qty']); ?>
-              <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e(fdate($b['received_date'])) ?></td>
-                <td class="text-end"><?= e(qty($b['received_qty'])) ?></td><td class="text-end"><?= e(qty($b['balance'])) ?></td><td><?= e($st) ?></td></tr>
-            <?php endforeach; ?>
-            <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No <?= e(term('rolls', true)) ?> yet.</td></tr><?php endif; ?>
-          </tbody></table>
-        <?php endif; ?>
+      </tr>
+      <?php if (!$item['is_bundle'] && $item['track_batch']): ?>
+        <tr class="var-rolls-row"><td colspan="6" class="p-0 border-0">
+          <details class="var-rolls"><summary><i class="bi bi-layers"></i> <?= count($v['batches']) ?> <?= e(term('rolls', true)) ?><?= $v['batches'] ? ' · ' . e(qty(array_sum(array_column($v['batches'], 'balance')))) . ' ' . e($item['unit']) . ' left' : '' ?></summary>
+            <table class="table table-sm mb-0"><thead><tr><th><?= e(term('batch')) ?></th><th><?= e(term('supplier')) ?> lot</th><th>Received</th><th class="text-end">Roll size</th><th class="text-end">Balance</th><th>Status</th></tr></thead><tbody>
+              <?php foreach ($v['batches'] as $b): $st = App\Models\Stock::batchStatus((float)$b['balance'], (float)$b['received_qty']); ?>
+                <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e(fdate($b['received_date'])) ?></td>
+                  <td class="text-end"><?= e(qty($b['received_qty'])) ?></td><td class="text-end"><?= e(qty($b['balance'])) ?></td><td><?= e($st) ?></td></tr>
+              <?php endforeach; ?>
+              <?php if (!$v['batches']): ?><tr><td colspan="6" class="text-muted">No <?= e(term('rolls', true)) ?> yet.</td></tr><?php endif; ?>
+            </tbody></table></details></td></tr>
       <?php endif; ?>
-    </div>
-  </div>
-<?php endforeach; ?></div>
-
+    <?php endforeach; ?>
+    </tbody></table></div></section>
 <?php if (!$item['is_bundle']): ?>
 <div class="card mb-3" id="history"><div class="card-header">Recent stock movements</div>
   <div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th>SKU</th><th><?= e(term('warehouse')) ?></th><th><?= e(term('rack')) ?></th><th><?= e(term('batch')) ?></th><th class="text-end">Qty</th><th>Note</th></tr></thead><tbody>
   <?php foreach ($history as $h): ?>
-    <tr><td class="text-nowrap"><?= e($h['created_at']) ?></td><td><?= e(stock_type($h['type'])) ?></td><td><?= e($h['sku']) ?></td><td><?= e($h['warehouse']) ?></td><td><?= e($h['rack'] ?? '') ?></td>
+    <tr><td class="text-nowrap"><?= e(fdate(substr((string)$h['created_at'], 0, 10))) ?> <span class="text-muted"><?= e(substr((string)$h['created_at'], 11, 5)) ?></span></td><td><?= e(stock_type($h['type'])) ?></td><td><?= e($h['sku']) ?></td><td><?= e($h['warehouse']) ?></td><td><?= e($h['rack'] ?? '') ?></td>
       <td><?= $h['batch_no'] ? e($h['batch_no']) : '' ?></td>
       <td class="text-end <?= $h['qty_change'] < 0 ? 'text-danger' : 'text-success' ?>"><?= $h['qty_change'] > 0 ? '+' : '' ?><?= e(qty($h['qty_change'])) ?></td><td><?= e($h['note'] ?? '') ?></td></tr>
   <?php endforeach; ?>

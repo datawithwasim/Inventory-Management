@@ -137,7 +137,7 @@ $nr = $a->get('/stock/racks?q=-')['body'];
 check('"no rack" filter shows only unassigned stock', str_contains($nr, 'No rack') && !str_contains($nr, 'Velvet'));
 check('search by item shows its racks', str_contains($a->get('/stock/racks?q=velvet')['body'], 'B-03'));
 $item = $a->get("/items/" . $val('SELECT item_id FROM item_variants WHERE id = ?', [$tbl]))['body'];
-check('item page says where it is kept', str_contains($item, 'Kept at') && str_contains($item, 'A-01') && str_contains($item, 'Showroom'));
+check('item page says where it is kept', str_contains($item, 'A-01') && str_contains($item, 'Showroom'));
 check('stock page shows rack badges', str_contains($a->get('/stock')['body'], 'A-01: 2'));
 check('batch page shows the rack and its moves', str_contains($a->get("/stock/batches/$roll")['body'], 'B-03') && str_contains($a->get("/stock/batches/$roll")['body'], 'B-02'));
 check('ledger shows and searches racks', str_contains($a->get('/stock/ledger?q=B-03')['body'], 'B-03'));

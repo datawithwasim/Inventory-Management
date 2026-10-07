@@ -35,6 +35,26 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     </div>
   </div></div>
 
+  </div>
+  <div class="col-lg-4"><div class="card mb-3"><div class="card-body">
+    <?php if (!$item): ?>
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="is_bundle" value="1" id="isBundle" <?= $isBundle ? 'checked' : '' ?>>
+        <label class="form-check-label" for="isBundle">Bundle / set <small class="text-muted d-block">e.g. dining table + 6 chairs sold as one</small></label></div>
+    <?php else: ?><input type="hidden" id="isBundle" value="<?= (int)$isBundle ?>"><?php endif; ?>
+    <div id="batchBox" <?= $isBundle ? 'hidden' : '' ?>>
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="track_batch" value="1" id="trk" <?= old('track_batch', $item['track_batch'] ?? 0) ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>>
+        <label class="form-check-label" for="trk">Track by <?= e(term('batch', true)) ?> (one roll = one batch)
+          <small class="text-muted d-block">Each purchased roll becomes its own <?= e(term('batch', true)) ?>, and every sale is traced to it. Use for fabric.</small></label></div>
+      <?php if ($locked): ?><input type="hidden" name="track_batch" value="<?= (int)$item['track_batch'] ?>"><small class="text-muted">Locked: stock has already moved.</small><?php endif; ?>
+    </div>
+    <hr>
+    <div class="mb-2"><label class="form-label">Reorder level</label><input name="reorder_level" type="number" step="0.001" min="0" class="form-control" value="<?= $v('reorder_level', 0) ?>"></div>
+    <div class="mb-2"><label class="form-label">Reorder quantity</label><input name="reorder_qty" type="number" step="0.001" min="0" class="form-control" value="<?= $v('reorder_qty', 0) ?>"></div>
+    <?php if ($item): ?><div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="is_active" value="1" id="isActive" <?= $item['is_active'] ? 'checked' : '' ?>><label class="form-check-label" for="isActive">Active</label></div><?php endif; ?>
+  </div></div>
+  <button class="btn btn-primary">Save <?= e(term('item', true)) ?></button> <a class="btn btn-link" href="<?= $item ? url("items/{$item['id']}") : url('items') ?>">Cancel</a></div>
+</div>
+<div class="mt-3">
   <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center">
     <span id="variantsTitle"><?= $isBundle ? 'Bundle SKU & price' : 'Variants' ?></span>
     <button type="button" class="btn btn-sm btn-outline-primary" id="addVariant" <?= $isBundle ? 'hidden' : '' ?>><i class="bi bi-plus-lg"></i> Add variant</button></div>
@@ -66,26 +86,8 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
           <td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td>
         </tr>
       <?php endforeach; ?></tbody></table></div></div>
-  </div>
-
-  <div class="col-lg-4"><div class="card mb-3"><div class="card-body">
-    <?php if (!$item): ?>
-      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="is_bundle" value="1" id="isBundle" <?= $isBundle ? 'checked' : '' ?>>
-        <label class="form-check-label" for="isBundle">Bundle / set <small class="text-muted d-block">e.g. dining table + 6 chairs sold as one</small></label></div>
-    <?php else: ?><input type="hidden" id="isBundle" value="<?= (int)$isBundle ?>"><?php endif; ?>
-    <div id="batchBox" <?= $isBundle ? 'hidden' : '' ?>>
-      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="track_batch" value="1" id="trk" <?= old('track_batch', $item['track_batch'] ?? 0) ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>>
-        <label class="form-check-label" for="trk">Track by <?= e(term('batch', true)) ?> (one roll = one batch)
-          <small class="text-muted d-block">Each purchased roll becomes its own <?= e(term('batch', true)) ?>, and every sale is traced to it. Use for fabric.</small></label></div>
-      <?php if ($locked): ?><input type="hidden" name="track_batch" value="<?= (int)$item['track_batch'] ?>"><small class="text-muted">Locked: stock has already moved.</small><?php endif; ?>
-    </div>
-    <hr>
-    <div class="mb-2"><label class="form-label">Reorder level</label><input name="reorder_level" type="number" step="0.001" min="0" class="form-control" value="<?= $v('reorder_level', 0) ?>"></div>
-    <div class="mb-2"><label class="form-label">Reorder quantity</label><input name="reorder_qty" type="number" step="0.001" min="0" class="form-control" value="<?= $v('reorder_qty', 0) ?>"></div>
-    <?php if ($item): ?><div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="is_active" value="1" id="isActive" <?= $item['is_active'] ? 'checked' : '' ?>><label class="form-check-label" for="isActive">Active</label></div><?php endif; ?>
-  </div></div>
-  <button class="btn btn-primary">Save <?= e(term('item', true)) ?></button> <a class="btn btn-link" href="<?= $item ? url("items/{$item['id']}") : url('items') ?>">Cancel</a></div>
 </div>
+
 </form>
 <script>
 (function () {

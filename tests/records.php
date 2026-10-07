@@ -93,7 +93,7 @@ $savePayload(['supplier' => ['summary' => []]]);
 check('an empty summary hides the strip', !str_contains($a->get("/suppliers/$s1")['body'], 'rec-summary'));
 $savePayload(['supplier' => ['summary' => ['city'], 'fields' => ['city' => ['show' => true], 'notes' => ['show' => false]], 'sections' => [['title' => 'Basics', 'cols' => 1, 'fields' => ['name', 'phone', 'city']], ['title' => 'Money', 'cols' => 3, 'fields' => ['payment_terms_days', 'credit_limit']]]]]);
 $h = $a->get("/suppliers/$s1")['body'];
-check('the page follows the designed sections and titles (Basics, Money) in order', preg_match('/Basics.*?Supplier name.*?City.*?Money.*?Payment terms.*?Credit limit/s', $h) === 1 && str_contains($h, 'rec-grid c1') && str_contains($h, 'rec-grid c3'));
+check('the page follows the designed sections and titles (Basics, Money) in order', preg_match('/Basics.*?Supplier name.*?Phone.*?Money.*?Payment terms.*?Credit limit/s', $h) === 1 && !preg_match('/rec-sec.*?<span>City<\/span>.*?Money/s', preg_replace('/<div class="card rec-summary">.*?<\/div><\/div>/s', '', $h)) && str_contains($h, 'rec-grid c1') && str_contains($h, 'rec-grid c3'));
 check('a field hidden in the designer disappears from the detail page too', !preg_match('/<span>Notes<\/span>/', $h) && !str_contains($txt($h), 'Reliable'));
 $savePayload(['supplier' => ['summary' => ['notes', 'city'], 'fields' => ['notes' => ['show' => false]], 'sections' => [['title' => '', 'cols' => 0, 'fields' => ['name', 'city']]]]]);
 $h = $a->get("/suppliers/$s1")['body'];
@@ -105,7 +105,7 @@ $savePayload(['supplier' => ['sections' => [['title' => '', 'cols' => 0, 'fields
 $cf = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Loom count'", [$tA]);
 $a->post("/suppliers/$s1", ['name' => 'Rec Mills', 'is_active' => 1, 'city' => 'Surat', 'cf' => [$cf => '48']], "/suppliers/$s1/edit");
 $h = $a->get("/suppliers/$s1")['body'];
-check('a custom field value shows in the sections and in the summary (new field keyed in the summary)', str_contains($h, 'Loom count') && substr_count($h, '<b>48</b>') >= 2);
+check('a custom field value shows once, in the summary (not repeated in the sections) (new field keyed in the summary)', str_contains($h, 'Loom count') && substr_count($h, '<b>48</b>') >= 1);
 $savePayload(['supplier' => ['reset' => true]]);
 
 echo "Timeline\n";

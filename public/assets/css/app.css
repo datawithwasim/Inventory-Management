@@ -583,3 +583,10 @@ body.dz-page { background: var(--app-bg); overflow: hidden; }
 .col-picker-btn { width: 30px; height: 30px; padding: 0; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--ink-3); background: transparent; }
 .col-picker-btn:hover, .col-picker.show .col-picker-btn { background: var(--surface-2); border-color: var(--line); color: var(--brand-text); }
 th.col-th { text-align: right; width: 1%; white-space: nowrap; padding-top: .3rem; padding-bottom: .3rem; } th.col-th .dropdown-menu { text-align: left; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* ---- item page: variants table with expandable rolls ---- */
+.var-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); font-weight: 600; background: transparent; }
+.var-rolls { margin: 0 0 .25rem; border-bottom: 1px solid var(--line); background: var(--surface-2); } .var-rolls summary { cursor: pointer; padding: .45rem 1rem; font-size: .82rem; color: var(--ink-2); list-style: none; display: flex; gap: .4rem; align-items: center; }
+.var-rolls summary::-webkit-details-marker { display: none; } .var-rolls summary::after { content: '\F282'; font-family: bootstrap-icons; margin-left: auto; font-size: .7rem; transition: transform .15s; } .var-rolls[open] summary::after { transform: rotate(180deg); }
+.var-rolls table { background: var(--surface); }
+#variantTable input.form-control { min-width: 84px; }

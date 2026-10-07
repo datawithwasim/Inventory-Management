@@ -97,6 +97,7 @@ final class RecordView
         $o = '';
         $first = true;
         foreach ($r['sections'] as $s) {
+            $s['fields'] = array_values(array_diff($s['fields'], $r['summary']));   // the summary strip already shows these
             if (!$s['fields']) continue;
             $title = $s['title'] !== '' ? $s['title'] : ($first ? (FormFields::ENTITY_LABELS[$entity] ?? 'Details') : 'More details');
             $title = $s['title'] === '' && $first ? preg_replace('/ form$/i', '', $title) . ' information' : $title;
