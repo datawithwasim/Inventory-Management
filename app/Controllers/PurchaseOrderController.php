@@ -26,7 +26,7 @@ final class PurchaseOrderController extends PurchaseBase
     private function items(int $poId): array
     {
         return DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, u.short_name AS unit
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, u.short_name AS unit' . Purchase::theirCols('SELECT supplier_id FROM purchase_orders WHERE id = l.po_id') . '
              FROM purchase_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              WHERE l.tenant_id = ? AND l.po_id = ? ORDER BY l.id', [$this->tid(), $poId]);
     }

@@ -32,7 +32,7 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
     <?php foreach ($rows as $r): $name = $r['item_name'] . ($r['vname'] ? ' — ' . $r['vname'] : ''); $lowest = $r['is_current'] && isset($low[$r['variant_id']]) && abs($r['net'] - $low[$r['variant_id']]) < 0.005; ?>
       <tr class="<?= $r['is_current'] ? '' : 'rl-old' ?>">
         <td><a class="fw-medium" href="<?= url("items/{$r['item_id']}") ?>"><?= e($name) ?></a> <span class="text-muted small"><?= e($r['sku']) ?></span><?= $r['is_current'] ? '' : ' <span class="badge text-bg-light border fw-normal">Earlier</span>' ?></td>
-        <td><a href="<?= url("suppliers/{$r['supplier_id']}#rates") ?>"><?= e($r['supplier_name']) ?></a><?= $r['supplier_code'] ? ' <span class="text-muted small">' . e($r['supplier_code']) . '</span>' : '' ?></td>
+        <td><a href="<?= url("suppliers/{$r['supplier_id']}#rates") ?>"><?= e($r['supplier_name']) ?></a><?= $r['scode'] ? ' <span class="text-muted small">' . e($r['scode']) . '</span>' : '' ?><?= !empty($r['sname']) ? '<div class="small text-muted">' . e($r['sname']) . '</div>' : '' ?></td>
         <td class="text-end"><?= e(money($r['rate'])) ?></td>
         <td class="text-end"><?= (float)$r['discount_pct'] > 0 ? e($d($r['discount_pct'])) . '%' : '<span class="text-muted">—</span>' ?></td>
         <td class="text-end fw-semibold"><?= e(money($r['net'])) ?><?= $lowest ? ' <span class="badge text-bg-success fw-normal" title="Cheapest current rate for this item">Lowest</span>' : '' ?></td>
@@ -40,7 +40,7 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
         <td class="small text-nowrap d-none d-lg-table-cell"><?= e(fdate($r['valid_from'])) ?> <span class="text-muted">→</span> <?= $r['valid_to'] ? e(fdate($r['valid_to'])) : '<span class="text-muted">open</span>' ?></td>
         <td class="text-end text-nowrap">
           <?php if ($canEdit): ?>
-            <?php if ($r['is_current']): ?><button type="button" class="btn btn-sm btn-outline-primary" data-rate-revise data-supplier="<?= (int)$r['supplier_id'] ?>" data-variant="<?= (int)$r['variant_id'] ?>" data-name="<?= e($name . ' (' . $r['sku'] . ')') ?>" data-rate="<?= e($r['rate']) ?>" data-disc="<?= e($r['discount_pct']) ?>" data-min="<?= e($r['min_qty']) ?>" data-code="<?= e($r['supplier_code'] ?? '') ?>" data-lead="<?= e($r['lead_time_days'] ?? '') ?>" data-bs-toggle="modal" data-bs-target="#rateModal">Revise</button><?php endif; ?>
+            <?php if ($r['is_current']): ?><button type="button" class="btn btn-sm btn-outline-primary" data-rate-revise data-supplier="<?= (int)$r['supplier_id'] ?>" data-variant="<?= (int)$r['variant_id'] ?>" data-name="<?= e($name . ' (' . $r['sku'] . ')') ?>" data-rate="<?= e($r['rate']) ?>" data-disc="<?= e($r['discount_pct']) ?>" data-min="<?= e($r['min_qty']) ?>" data-code="<?= e($r['scode'] ?? '') ?>" data-sname="<?= e($r['sname'] ?? '') ?>" data-lead="<?= e($r['lead_time_days'] ?? '') ?>" data-bs-toggle="modal" data-bs-target="#rateModal">Revise</button><?php endif; ?>
             <form class="d-inline" method="post" action="<?= url("suppliers/{$r['supplier_id']}/rates/{$r['id']}/delete") ?>" onsubmit="return confirm('Remove this rate?')"><?= csrf_field() ?><input type="hidden" name="return" value="<?= e($self) ?>"><button class="btn btn-sm btn-link text-danger px-1" title="Remove" aria-label="Remove rate"><i class="bi bi-trash"></i></button></form>
           <?php endif; ?>
         </td></tr>
@@ -70,6 +70,7 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
       <div class="col-4"><label class="form-label">Min. qty</label><input name="min_qty" id="rMin" type="number" step="0.001" min="0" class="form-control" placeholder="0"></div>
       <div class="col-4"><label class="form-label">Lead time</label><div class="input-group"><input name="lead_time_days" id="rLead" type="number" min="0" max="365" class="form-control"><span class="input-group-text">days</span></div></div>
       <div class="col-4"><label class="form-label">Their code</label><input name="supplier_code" id="rCode" maxlength="60" class="form-control"></div>
+      <div class="col-12"><label class="form-label">Their product name <span class="text-muted fw-normal">(optional)</span></label><input name="supplier_name" id="rSName" maxlength="150" class="form-control"></div>
     </div>
     <div class="form-text mt-3"><i class="bi bi-info-circle"></i> A newer rate closes the old one on its start date; the old rate stays under “With earlier rates”.</div>
   </div>
@@ -83,7 +84,7 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
     <div class="mb-3"><label class="form-label"><?= e(term('supplier')) ?></label><select id="iSupplier" class="form-select" required><option value="">Choose…</option>
       <?php foreach ($suppliers as $s): ?><option value="<?= (int)$s['id'] ?>" <?= $supplier === (int)$s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?></option><?php endforeach; ?></select></div>
     <input type="file" name="file" accept=".csv,text/csv" class="form-control" required>
-    <div class="form-text mt-2">Columns: <code>sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, valid_from</code>. Only <b>sku</b> and <b>rate</b> are needed.</div>
+    <div class="form-text mt-2">Columns: <code>sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, supplier_name, valid_from</code>. Only <b>sku</b> and <b>rate</b> are needed.</div>
     <a class="btn btn-sm btn-outline-secondary mt-3 disabled" id="iTemplate" href="#"><i class="bi bi-download"></i> Download the template</a>
   </div>
   <div class="modal-footer"><button type="button" class="btn btn-link text-muted" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary">Import</button></div>
@@ -100,7 +101,7 @@ $self = 'purchase/rates' . ($_SERVER['QUERY_STRING'] ?? '' ? '?' . preg_replace(
     b.addEventListener('click', function () {
       reset('Revise rate'); sup.value = b.dataset.supplier; setAction(); vid.value = b.dataset.variant; q.value = b.dataset.name; q.readOnly = true;
       document.getElementById('rRate').value = b.dataset.rate; document.getElementById('rDisc').value = parseFloat(b.dataset.disc) || '';
-      document.getElementById('rMin').value = parseFloat(b.dataset.min) || ''; document.getElementById('rCode').value = b.dataset.code; document.getElementById('rLead').value = b.dataset.lead;
+      document.getElementById('rMin').value = parseFloat(b.dataset.min) || ''; document.getElementById('rCode').value = b.dataset.code; document.getElementById('rSName').value = b.dataset.sname || ''; document.getElementById('rLead').value = b.dataset.lead;
       sup.disabled = true;   // fixed while revising; the form action already carries the supplier
     });
   });

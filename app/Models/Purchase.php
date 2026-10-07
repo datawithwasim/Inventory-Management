@@ -95,6 +95,65 @@ final class Purchase
              WHERE l.tenant_id = ? AND g.supplier_id = ? AND l.variant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [self::tid(), $supplierId, $variantId]);
     }
 
+    // ------------------------------------------------------------ supplier product master
+
+    /** The supplier's own name / code for one variant, or null when it is not in their catalogue. */
+    public static function productOf(int $supplierId, int $variantId): ?array
+    {
+        return DB::one('SELECT * FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [self::tid(), $supplierId, $variantId]);
+    }
+
+    /**
+     * Puts a variant in a supplier's catalogue (or updates it). Blank name / code never wipe what is already saved unless $overwrite.
+     * @return int id of the catalogue row
+     */
+    public static function saveProduct(int $supplierId, int $variantId, ?string $name, ?string $code, ?string $note = null, bool $overwrite = false): int
+    {
+        $t = self::tid();
+        $name = $name !== null && trim($name) !== '' ? mb_substr(trim($name), 0, 150) : null;
+        $code = $code !== null && trim($code) !== '' ? mb_substr(trim($code), 0, 60) : null;
+        $note = $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 150) : null;
+        $have = self::productOf($supplierId, $variantId);
+        if (!$have) return DB::insert('supplier_products', ['tenant_id' => $t, 'supplier_id' => $supplierId, 'variant_id' => $variantId, 'supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]);
+        $set = $overwrite ? ['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]
+            : array_filter(['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note], fn($v) => $v !== null);
+        if ($set) DB::run('UPDATE supplier_products SET ' . implode(',', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE tenant_id = ? AND id = ?', [...array_values($set), $t, $have['id']]);
+        return (int)$have['id'];
+    }
+
+    /** A supplier's catalogue with item names, the rate in force today and what we last paid. */
+    public static function productsOf(int $supplierId): array
+    {
+        $rows = DB::all(
+            'SELECT p.*, v.sku, v.name AS vname, v.is_active AS v_active, i.name AS item_name, i.id AS item_id, i.item_type, u.short_name AS unit
+             FROM supplier_products p JOIN item_variants v ON v.id = p.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+             WHERE p.tenant_id = ? AND p.supplier_id = ? ORDER BY i.name, v.name', [self::tid(), $supplierId]);
+        foreach ($rows as &$r) {
+            $cur = self::currentRate($supplierId, (int)$r['variant_id']);
+            $r['rate_row'] = $cur;
+            $r['net'] = $cur ? self::netRate($cur) : null;
+            $last = self::lastPaid($supplierId, (int)$r['variant_id']);
+            $r['last_paid'] = $last ? (float)$last['unit_price'] : null;
+            $r['last_on'] = $last['received_date'] ?? null;
+        }
+        return $rows;
+    }
+
+    /** SQL columns sup_name / sup_code: the supplier's own name and code for a line's variant. $supplierSql names the supplier id (an expression using the line alias l). */
+    public static function theirCols(string $supplierSql): string
+    {
+        $sub = fn($c) => "(SELECT sp.$c FROM supplier_products sp WHERE sp.tenant_id = l.tenant_id AND sp.supplier_id = ($supplierSql) AND sp.variant_id = l.variant_id)";
+        return ', ' . $sub('supplier_name') . ' AS sup_name, ' . $sub('supplier_code') . ' AS sup_code';
+    }
+
+    /** variant_id => [supplier_name, supplier_code] for one supplier. */
+    public static function productMap(int $supplierId): array
+    {
+        $o = [];
+        foreach (DB::all('SELECT variant_id, supplier_name, supplier_code FROM supplier_products WHERE tenant_id = ? AND supplier_id = ?', [self::tid(), $supplierId]) as $r) $o[(int)$r['variant_id']] = $r;
+        return $o;
+    }
+
     /** Adds a rate. A newer rate closes the one before it, so the old one stays as history. */
     public static function addRate(int $supplierId, int $variantId, array $d): int
     {
@@ -119,7 +178,9 @@ final class Purchase
     public static function ratesOf(int $supplierId): array
     {
         $rows = DB::all(
-            'SELECT r.*, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id FROM supplier_rates r JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
+            'SELECT r.*, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode
+             FROM supplier_rates r JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
+             LEFT JOIN supplier_products sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
              WHERE r.tenant_id = ? AND r.supplier_id = ? ORDER BY i.name, v.name, r.valid_from DESC, r.id DESC', [self::tid(), $supplierId]);
         $today = date('Y-m-d');
         $seen = [];
@@ -152,7 +213,8 @@ final class Purchase
     {
         $today = date('Y-m-d');
         $rows = DB::all(
-            'SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id JOIN item_variants v ON v.id = r.variant_id
+            'SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id JOIN item_variants v ON v.id = r.variant_id
+             LEFT JOIN supplier_products sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
              WHERE r.tenant_id = ? AND v.item_id = ? AND s.is_active = 1 AND r.valid_from <= ? AND (r.valid_to IS NULL OR r.valid_to >= ?)
              ORDER BY r.variant_id, r.valid_from DESC, r.id DESC', [self::tid(), $itemId, $today, $today]);
         $out = [];

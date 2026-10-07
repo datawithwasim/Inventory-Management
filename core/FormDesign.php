@@ -86,7 +86,7 @@ final class FormDesign
     public const RELATED = [
         'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Supplier rates', true], 'variants' => ['Variants & stock', true], 'history' => ['Stock movements', true]],
         'customer' => ['balance' => ['Balance', true], 'orders' => ['Orders', true], 'invoices' => ['Invoices', true]],
-        'supplier' => ['balance' => ['What we owe', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
+        'supplier' => ['balance' => ['What we owe', true], 'products' => ['Products supplied', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
         'warehouse' => ['stats' => ['Overview figures', true], 'racks' => ['Racks', true], 'stock' => ['Stock here', true]],
         'location' => ['stock' => ['Stored here', true]],
         'requisition' => ['items' => ['Items', true]], 'purchase_order' => ['items' => ['Items', true], 'grns' => ['Goods received', true]],

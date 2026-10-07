@@ -23,13 +23,21 @@ final class LookupController extends Controller
         if ($variant > 0) {
             $rows = DB::all($sel . ' AND v.id = ?', [Auth::tenantId(), $variant]);
         } elseif ($q === '') {
-            $rows = DB::all($sel . ' ORDER BY i.name, v.name LIMIT 15', [Auth::tenantId()]);
+            // with a supplier chosen, its own catalogue comes first
+            $first = $supplier > 0 ? 'EXISTS (SELECT 1 FROM supplier_products sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id) DESC, ' : '';
+            $rows = DB::all($sel . ' ORDER BY ' . $first . 'i.name, v.name LIMIT 15', [Auth::tenantId()]);
         } else {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $rows = DB::all($sel . ' AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?) ORDER BY i.name, v.name LIMIT 15', [Auth::tenantId(), $like, $like, $like, $q]);
+            // the supplier's own product name / code finds the item too
+            $theirs = $supplier > 0 ? ' OR EXISTS (SELECT 1 FROM supplier_products sp WHERE sp.tenant_id = v.tenant_id AND sp.supplier_id = ' . $supplier . ' AND sp.variant_id = v.id AND (sp.supplier_name LIKE ? OR sp.supplier_code LIKE ?))' : '';
+            $args = [Auth::tenantId(), $like, $like, $like, $q];
+            if ($supplier > 0) array_push($args, $like, $like);
+            $rows = DB::all($sel . ' AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?' . $theirs . ') ORDER BY i.name, v.name LIMIT 15', $args);
         }
         if ($supplier > 0 && $rows && DB::val('SELECT 1 FROM suppliers WHERE tenant_id = ? AND id = ?', [Auth::tenantId(), $supplier])) {
             foreach ($rows as &$r) {
+                $prod = Purchase::productOf($supplier, (int)$r['id']);
+                if ($prod) { $r['sup_name'] = (string)($prod['supplier_name'] ?? ''); $r['sup_code'] = (string)($prod['supplier_code'] ?? ''); }
                 $cur = Purchase::currentRate($supplier, (int)$r['id']);
                 if ($cur) {
                     $r['rate'] = Purchase::netRate($cur);

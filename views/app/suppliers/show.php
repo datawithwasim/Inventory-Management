@@ -6,6 +6,7 @@
 </div></div>
 <?php if ($contacts): ?><div class="card mb-3" id="contacts"><div class="card-header">Contact people</div><ul class="list-group list-group-flush">
   <?php foreach ($contacts as $c): ?><li class="list-group-item"><b><?= e($c['name']) ?></b><?= $c['role'] ? ' <span class="text-muted">· ' . e($c['role']) . '</span>' : '' ?><div class="small text-muted"><?= e(implode(' · ', array_filter([$c['phone'], $c['email']]))) ?></div></li><?php endforeach; ?></ul></div><?php endif; ?>
+<?php require __DIR__ . '/_products.php'; ?>
 <?php require __DIR__ . '/_rates.php'; ?>
 <?php
 $actTabs = [
@@ -21,7 +22,7 @@ require dirname(__DIR__) . '/_activity.php';
 $body = ob_get_clean();
 $rec = ['entity' => 'supplier', 'row' => $s, 'name' => $s['name'], 'back' => 'suppliers', 'cfValues' => $cfValues, 'body' => $body,
     'badges' => ($s['is_active'] ? '' : '<span class="badge text-bg-dark">Inactive</span> ') . ($s['supplier_type'] ? '<span class="badge text-bg-secondary">' . e(App\Models\Purchase::SUPPLIER_TYPES[$s['supplier_type']] ?? '') . '</span>' : ''),
-    'related' => ['balance' => 'What we owe', 'rates' => 'Rate list', 'orders' => 'Purchase orders', 'bills' => 'Bills'],
+    'related' => ['balance' => 'What we owe', 'products' => 'Products supplied', 'rates' => 'Rate list', 'orders' => 'Purchase orders', 'bills' => 'Bills'],
     'actions' => (can('suppliers.edit') ? '<a class="btn btn-sm btn-primary" href="' . url("suppliers/{$s['id']}/edit") . '">Edit</a> ' : ''),
     'menu' => (can('purchase.create') ? '<li><a class="dropdown-item" href="' . url('purchase/orders/create?supplier=' . (int)$s['id']) . '"><i class="bi bi-cart-plus me-2 text-muted"></i>New purchase order</a></li>' : '')
         . (can('suppliers.delete') ? '<li><form method="post" action="' . url("suppliers/{$s['id']}/delete") . '" onsubmit="return confirm(\'Delete this supplier?\')">' . csrf_field() . '<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete</button></form></li>' : '')];

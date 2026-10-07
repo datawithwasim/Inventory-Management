@@ -240,5 +240,40 @@ DB::insert('users', ['tenant_id' => $tA, 'role_id' => $r2, 'name' => 'NS', 'emai
 $noPerm->post('/login', ['email' => "ns-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('a user without supplier permission gets 403 and no menu entry', $noPerm->get('/purchase/rates')['status'] === 403 && !str_contains($noPerm->get('/dashboard')['body'], 'Rate lists'));
 
+echo "Supplier product master (their name / code)\n";
+$pr = $a->post("/suppliers/$s1/products", ['variant_id' => $v1, 'supplier_name' => 'Maroon Royal 54', 'supplier_code' => 'MR-54', 'rate' => '310', 'valid_from' => '2026-03-01'], "/suppliers/$s1");
+$spRow = DB::one('SELECT * FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]);
+check('adding a product saves their name + code and the optional first rate together', $pr['status'] === 302 && ($spRow['supplier_name'] ?? '') === 'Maroon Royal 54' && ($spRow['supplier_code'] ?? '') === 'MR-54' && (float)$val('SELECT rate FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? ORDER BY id DESC LIMIT 1', [$tA, $s1, $v1]) === 310.0);
+$a->post("/suppliers/$s1/products", ['variant_id' => $v1, 'supplier_name' => '', 'supplier_code' => 'MR-55'], "/suppliers/$s1");
+check('adding the same variant again updates it (one row per supplier + variant) and a blank name does not wipe the saved name', (int)$val('SELECT COUNT(*) FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) === 1 && $val('SELECT supplier_name FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) === 'Maroon Royal 54' && $val('SELECT supplier_code FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) === 'MR-55');
+$a->post("/suppliers/$s1/products", ['variant_id' => $v1, 'edit' => 1, 'supplier_name' => 'Maroon Royal 54', 'supplier_code' => ''], "/suppliers/$s1");
+check('editing can clear the code (edit mode overwrites)', $val('SELECT supplier_code FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) === null);
+$a->post("/suppliers/$s1/products", ['variant_id' => $v1, 'edit' => 1, 'supplier_name' => 'Maroon Royal 54', 'supplier_code' => 'MR-54'], "/suppliers/$s1");
+$h = $a->get("/suppliers/$s1")['body'];
+check('the supplier page lists the product under "Products supplied" with their name, code and our item', str_contains($h, 'id="products"') && str_contains($h, 'Maroon Royal 54') && str_contains($h, 'MR-54') && str_contains($h, 'Royal Velvet'));
+check('a bad variant, an over-long name and another company\'s item are refused', (function () use ($a, $s1, $tA, $val, $v1, $b, $tB) {
+    $a->post("/suppliers/$s1/products", ['variant_id' => 99999999, 'supplier_name' => 'X'], "/suppliers/$s1");
+    $a->post("/suppliers/$s1/products", ['variant_id' => $v1, 'supplier_name' => str_repeat('n', 151)], "/suppliers/$s1");
+    return !$val('SELECT 1 FROM supplier_products WHERE tenant_id = ? AND supplier_name LIKE ?', [$tA, 'X']) && !$val('SELECT 1 FROM supplier_products WHERE tenant_id = ? AND CHAR_LENGTH(supplier_name) > 150', [$tA]);
+})());
+$lk = json_decode($a->get('/lookup/items?q=' . urlencode('MR-54') . "&supplier=$s1")['body'], true);
+check('the picker finds the item by the supplier\'s own code and returns their name + code', count($lk) === 1 && (int)$lk[0]['id'] === $v1 && $lk[0]['sup_name'] === 'Maroon Royal 54' && $lk[0]['sup_code'] === 'MR-54');
+$lk2 = json_decode($a->get('/lookup/items?q=' . urlencode('MR-54'))['body'], true);
+check('without a supplier the same code finds nothing (their codes belong to them)', count($lk2) === 0);
+$lk3 = json_decode($a->get("/lookup/items?q=&supplier=$s1")['body'], true);
+$ids = array_map(fn($r) => (int)$r['id'], $lk3);
+$nonCat = array_values(array_filter($ids, fn($id) => !$val('SELECT 1 FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $id])));
+$lastCat = max(array_keys(array_filter($ids, fn($id) => $val('SELECT 1 FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $id]))));
+check('with a supplier and no search text, its own catalogue comes first', in_array($v1, $ids, true) && (!$nonCat || array_search($nonCat[0], $ids, true) > $lastCat));
+$po = DB::insert('purchase_orders', ['tenant_id' => $tA, 'po_no' => 'PO-8001', 'supplier_id' => $s1, 'warehouse_id' => (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]), 'order_date' => date('Y-m-d'), 'status' => 'draft']);
+DB::insert('purchase_order_items', ['tenant_id' => $tA, 'po_id' => $po, 'variant_id' => $v1, 'qty_ordered' => 5, 'unit_price' => 310, 'tax_rate' => 0]);
+check('the PO page shows "Their: code · name" under the item', str_contains($a->get("/purchase/orders/$po")['body'], 'Their: MR-54 · Maroon Royal 54'));
+check('and so does the printed PO', str_contains($a->get("/purchase/orders/$po/print")['body'], 'Their: MR-54 · Maroon Royal 54'));
+check('the rate list page shows their name next to the supplier', str_contains($a->get("/suppliers/$s1")['body'], 'Maroon Royal 54') && str_contains($a->get('/purchase/rates')['body'], 'Maroon Royal 54'));
+check('another company sees none of it and cannot add to this supplier', !str_contains($b->get('/purchase/rates')['body'], 'Maroon Royal 54') && $b->post("/suppliers/$s1/products", ['variant_id' => $v1, 'supplier_name' => 'Spy'], '/purchase/rates')['status'] === 404 && !$val('SELECT 1 FROM supplier_products WHERE supplier_name = ?', ['Spy']));
+$rid = (int)$val('SELECT id FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]);
+$a->post("/suppliers/$s1/products/$rid/delete", [], "/suppliers/$s1");
+check('removing a product keeps its rate history', !$val('SELECT 1 FROM supplier_products WHERE id = ?', [$rid]) && (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) >= 1);
+
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

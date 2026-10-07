@@ -16,16 +16,16 @@ final class SupplierRateController extends PurchaseBase
     }
 
     /** Where to go afterwards: a relative path the form asked for (e.g. the global rate list), else the supplier's rate card. */
-    private function back(int $supplierId): never
+    private function back(int $supplierId, string $anchor = 'rates'): never
     {
         $r = trim((string)($this->input()['return'] ?? ''));
-        redirect(preg_match('~^[a-z0-9_/-]+(\?[A-Za-z0-9_=&%.\-]*)?$~i', $r) === 1 ? $r : "suppliers/$supplierId#rates");
+        redirect(preg_match('~^[a-z0-9_/-]+(\?[A-Za-z0-9_=&%.\-]*)?$~i', $r) === 1 ? $r : "suppliers/$supplierId#$anchor");
     }
 
-    private function fail(string $msg, int $supplierId): never
+    private function fail(string $msg, int $supplierId, string $anchor = 'rates'): never
     {
         flash('danger', $msg);
-        $this->back($supplierId);
+        $this->back($supplierId, $anchor);
     }
 
     /** Checks one rate row; returns the clean values or an error string. */
@@ -61,9 +61,45 @@ final class SupplierRateController extends PurchaseBase
         $row = $this->clean($d);
         if (is_string($row)) $this->fail($row, (int)$s['id']);
         Purchase::addRate((int)$s['id'], $vid, $row);
+        Purchase::saveProduct((int)$s['id'], $vid, (string)($d['supplier_name'] ?? ''), $row['supplier_code']);
         Audit::log('supplier_rate_add', 'supplier', (int)$s['id'], 'variant ' . $vid . ' @ ' . $row['rate']);
         flash('success', 'Rate saved.');
         $this->back((int)$s['id']);
+    }
+
+    /** Adds / updates a product in the supplier's catalogue: their name and code, optionally with a first rate in the same step. */
+    public function product(string $id): void
+    {
+        $s = $this->supplier($id);
+        $sid = (int)$s['id'];
+        $d = $this->input();
+        $vid = (int)($d['variant_id'] ?? 0);
+        if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ? AND i.is_bundle = 0', [$this->tid(), $vid])) $this->fail('Pick an item from the list.', $sid, 'products');
+        $name = trim((string)($d['supplier_name'] ?? ''));
+        $code = trim((string)($d['supplier_code'] ?? ''));
+        $note = trim((string)($d['note'] ?? ''));
+        if (mb_strlen($name) > 150) $this->fail("Their product name is too long (150 characters at most).", $sid, 'products');
+        if (mb_strlen($code) > 60) $this->fail("Their code is too long (60 characters at most).", $sid, 'products');
+        if (mb_strlen($note) > 150) $this->fail('The note is too long (150 characters at most).', $sid, 'products');
+        $editing = !empty($d['edit']);
+        Purchase::saveProduct($sid, $vid, $name, $code, $note, $editing);
+        if (trim((string)($d['rate'] ?? '')) !== '') {
+            $row = $this->clean($d + ['supplier_code' => $code]);
+            if (is_string($row)) $this->fail('The product was saved, but the rate was not: ' . $row, $sid, 'products');
+            Purchase::addRate($sid, $vid, $row);
+        }
+        Audit::log('supplier_product_save', 'supplier', $sid, 'variant ' . $vid);
+        flash('success', $editing ? 'Product updated.' : 'Product added to this ' . term('supplier', true) . "'s list.");
+        $this->back($sid, 'products');
+    }
+
+    public function productDestroy(string $id, string $productId): void
+    {
+        $s = $this->supplier($id);
+        DB::run('DELETE FROM supplier_products WHERE tenant_id = ? AND supplier_id = ? AND id = ?', [$this->tid(), $s['id'], (int)$productId]);
+        Audit::log('supplier_product_delete', 'supplier', (int)$s['id'], 'product ' . (int)$productId);
+        flash('success', 'Product removed from the list. Its rates stay in the rate history.');
+        $this->back((int)$s['id'], 'products');
     }
 
     public function destroy(string $id, string $rateId): void
@@ -80,7 +116,7 @@ final class SupplierRateController extends PurchaseBase
         $this->supplier($id);
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="supplier-rates-template.csv"');
-        echo "sku,rate,discount_pct,min_qty,lead_time_days,supplier_code,valid_from\nCURTAIN-001,285.00,5,100,7,D-4471," . date('Y-m-d') . "\n";
+        echo "sku,rate,discount_pct,min_qty,lead_time_days,supplier_code,supplier_name,valid_from\nCURTAIN-001,285.00,5,100,7,D-4471,Royal Velvet 54," . date('Y-m-d') . "\n";
         exit;
     }
 
@@ -112,6 +148,7 @@ final class SupplierRateController extends PurchaseBase
                 $row = $this->clean($d);
                 if (is_string($row)) { $bad[] = "Row $line: $row"; continue; }
                 Purchase::addRate($sid, $vid, $row);
+                Purchase::saveProduct($sid, $vid, (string)($d['supplier_name'] ?? ''), $row['supplier_code']);
                 $ok++;
             }
         });

@@ -601,3 +601,4 @@ th.col-th { text-align: right; width: 1%; white-space: nowrap; padding-top: .3re
 .dz-relrow.off { opacity: .55; } .dz-relrow.off > span:not(.dz-lock) { text-decoration: line-through; }
 .dz-relrow button { border: 0; background: none; color: var(--ink-2); padding: .15rem .35rem; border-radius: 6px; } .dz-relrow button:hover:not(:disabled) { background: var(--bg-soft, rgba(127,127,127,.12)); }
 .dz-relrow button:disabled { opacity: .3; } .dz-lock { color: var(--ink-3); padding: .15rem .35rem; }
+.rl-modal-sep { margin: 1.1rem 0 .8rem; padding-top: .9rem; border-top: 1px solid var(--line); font-weight: 650; font-size: .86rem; }

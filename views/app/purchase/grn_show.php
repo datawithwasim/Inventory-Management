@@ -7,7 +7,7 @@
 <div class="card mb-3" id="items"><div class="table-responsive"><table class="table mb-0 align-middle">
   <thead><tr><th><?= e(term('item')) ?></th><th><?= e(term('batch')) ?></th><th><?= e(term('rack')) ?></th><th class="text-end">Qty</th><th class="text-end">Returned</th><th class="text-end">Price</th><th class="text-end">Stock cost</th></tr></thead><tbody>
   <?php foreach ($items as $l): ?>
-    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td>
+    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small><?= their_line($l) ?></td>
       <td><?= $l['batch_no'] ? '<a href="' . url('stock/batches/' . (int)$l['batch_id']) . '">' . e($l['batch_no']) . '</a>' . ($l['supplier_lot'] ? '<br><small class="text-muted">lot ' . e($l['supplier_lot']) . '</small>' : '') : '—' ?></td>
       <td><?= e($l['rack'] ?? 'No rack') ?></td><td class="text-end"><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td><td class="text-end"><?= (float)$l['qty_returned'] > 0 ? e(qty($l['qty_returned'])) : '' ?></td>
       <td class="text-end"><?= e(money($l['unit_price'])) ?></td><td class="text-end"><?= e(number_format((float)$l['landed_unit_cost'], 2)) ?></td></tr>

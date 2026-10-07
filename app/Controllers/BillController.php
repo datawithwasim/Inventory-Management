@@ -83,7 +83,7 @@ final class BillController extends PurchaseBase
         $this->view('app/purchase/bill_show', [
             'title' => $b['bill_no'], 'b' => $b, 'due' => Purchase::outstanding($b), 'status' => Purchase::payStatus($b),
             'items' => $b['grn_id'] ? DB::all(
-                'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit FROM grn_items l
+                'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit' . Purchase::theirCols('SELECT supplier_id FROM grns WHERE id = l.grn_id') . ' FROM grn_items l
                  JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
                  WHERE l.tenant_id = ? AND l.grn_id = ? ORDER BY l.id', [$t, $b['grn_id']]) : [],
             'payments' => DB::all('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.tenant_id = ? AND p.bill_id = ? ORDER BY p.paid_on, p.id', [$t, $b['id']]),

@@ -27,17 +27,17 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
     <thead><tr><th><?= e(term('item')) ?></th><th class="text-end">Rate</th><th class="text-end">Disc.</th><th class="text-end">Net rate</th><th class="text-end d-none d-md-table-cell">Min qty</th><th class="d-none d-lg-table-cell">Valid</th><th class="d-none d-lg-table-cell">Code</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rates as $r): $name = $r['item_name'] . ($r['vname'] ? ' — ' . $r['vname'] : ''); ?>
-      <tr class="<?= $r['is_current'] ? '' : 'rl-old' ?>" <?= $r['is_current'] ? '' : 'hidden' ?> data-search="<?= e(mb_strtolower($name . ' ' . $r['sku'] . ' ' . ($r['supplier_code'] ?? ''))) ?>">
+      <tr class="<?= $r['is_current'] ? '' : 'rl-old' ?>" <?= $r['is_current'] ? '' : 'hidden' ?> data-search="<?= e(mb_strtolower($name . ' ' . $r['sku'] . ' ' . ($r['scode'] ?? '') . ' ' . ($r['sname'] ?? ''))) ?>">
         <td><a class="fw-medium" href="<?= url("items/{$r['item_id']}") ?>"><?= e($name) ?></a> <span class="text-muted small"><?= e($r['sku']) ?></span><?= $r['is_current'] ? '' : ' <span class="badge text-bg-light border fw-normal">Earlier</span>' ?></td>
         <td class="text-end"><?= e(money($r['rate'])) ?></td>
         <td class="text-end"><?= (float)$r['discount_pct'] > 0 ? e($d($r['discount_pct'])) . '%' : '<span class="text-muted">—</span>' ?></td>
         <td class="text-end fw-semibold"><?= e(money($r['net'])) ?></td>
         <td class="text-end d-none d-md-table-cell"><?= (float)$r['min_qty'] > 0 ? e(qty($r['min_qty'])) : '<span class="text-muted">—</span>' ?></td>
         <td class="small text-nowrap d-none d-lg-table-cell"><?= e(fdate($r['valid_from'])) ?> <span class="text-muted">→</span> <?= $r['valid_to'] ? e(fdate($r['valid_to'])) : '<span class="text-muted">open</span>' ?></td>
-        <td class="small d-none d-lg-table-cell"><?= e($r['supplier_code'] ?? '') ?></td>
+        <td class="small d-none d-lg-table-cell"><?= e($r['scode'] ?? '') ?><?= !empty($r['sname']) ? '<div class="text-muted">' . e($r['sname']) . '</div>' : '' ?></td>
         <td class="text-end text-nowrap">
           <?php if ($canEdit): ?>
-            <?php if ($r['is_current']): ?><button type="button" class="btn btn-sm btn-outline-primary" data-rate-revise data-variant="<?= (int)$r['variant_id'] ?>" data-name="<?= e($name . ' (' . $r['sku'] . ')') ?>" data-rate="<?= e($r['rate']) ?>" data-disc="<?= e($r['discount_pct']) ?>" data-min="<?= e($r['min_qty']) ?>" data-code="<?= e($r['supplier_code'] ?? '') ?>" data-lead="<?= e($r['lead_time_days'] ?? '') ?>" data-bs-toggle="modal" data-bs-target="#rateModal">Revise</button><?php endif; ?>
+            <?php if ($r['is_current']): ?><button type="button" class="btn btn-sm btn-outline-primary" data-rate-revise data-variant="<?= (int)$r['variant_id'] ?>" data-name="<?= e($name . ' (' . $r['sku'] . ')') ?>" data-rate="<?= e($r['rate']) ?>" data-disc="<?= e($r['discount_pct']) ?>" data-min="<?= e($r['min_qty']) ?>" data-code="<?= e($r['scode'] ?? '') ?>" data-sname="<?= e($r['sname'] ?? '') ?>" data-lead="<?= e($r['lead_time_days'] ?? '') ?>" data-bs-toggle="modal" data-bs-target="#rateModal">Revise</button><?php endif; ?>
             <form class="d-inline" method="post" action="<?= url("suppliers/{$s['id']}/rates/{$r['id']}/delete") ?>" onsubmit="return confirm('Remove this rate?')"><?= csrf_field() ?><button class="btn btn-sm btn-link text-danger px-1" title="Remove" aria-label="Remove rate"><i class="bi bi-trash"></i></button></form>
           <?php endif; ?>
         </td></tr>
@@ -66,6 +66,7 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
       <div class="col-4"><label class="form-label">Min. qty</label><input name="min_qty" id="rMin" type="number" step="0.001" min="0" class="form-control" placeholder="0"></div>
       <div class="col-4"><label class="form-label">Lead time</label><div class="input-group"><input name="lead_time_days" id="rLead" type="number" min="0" max="365" class="form-control" placeholder="<?= (int)$s['lead_time_days'] ?>"><span class="input-group-text">days</span></div></div>
       <div class="col-4"><label class="form-label">Their code</label><input name="supplier_code" id="rCode" maxlength="60" class="form-control"></div>
+      <div class="col-12"><label class="form-label">Their product name <span class="text-muted fw-normal">(optional)</span></label><input name="supplier_name" id="rSName" maxlength="150" class="form-control"></div>
     </div>
     <div class="form-text mt-3"><i class="bi bi-info-circle"></i> A newer rate closes the old one on its start date. The old rate stays in the list under “Show earlier rates”.</div>
   </div>
@@ -77,7 +78,7 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
   <div class="modal-header"><h2 class="modal-title h5" id="rateImportTitle">Import rates from a CSV file</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
   <div class="modal-body">
     <input type="file" name="file" accept=".csv,text/csv" class="form-control" required>
-    <div class="form-text mt-2">Columns: <code>sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, valid_from</code>. Only <b>sku</b> and <b>rate</b> are needed; a blank date means today. Rows are matched by SKU.</div>
+    <div class="form-text mt-2">Columns: <code>sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, supplier_name, valid_from</code>. Only <b>sku</b> and <b>rate</b> are needed; a blank date means today. Rows are matched by SKU.</div>
     <a class="btn btn-sm btn-outline-secondary mt-3" href="<?= url("suppliers/{$s['id']}/rates/template") ?>"><i class="bi bi-download"></i> Download the template</a>
   </div>
   <div class="modal-footer"><button type="button" class="btn btn-link text-muted" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary">Import</button></div>
@@ -100,7 +101,7 @@ $d = fn($v) => rtrim(rtrim(number_format((float)$v, 2), '0'), '.');
     b.addEventListener('click', function () {
       reset('Revise rate'); vid.value = b.dataset.variant; q.value = b.dataset.name; q.readOnly = true;
       document.getElementById('rRate').value = b.dataset.rate; document.getElementById('rDisc').value = parseFloat(b.dataset.disc) || '';
-      document.getElementById('rMin').value = parseFloat(b.dataset.min) || ''; document.getElementById('rCode').value = b.dataset.code; document.getElementById('rLead').value = b.dataset.lead;
+      document.getElementById('rMin').value = parseFloat(b.dataset.min) || ''; document.getElementById('rCode').value = b.dataset.code; document.getElementById('rSName').value = b.dataset.sname || ''; document.getElementById('rLead').value = b.dataset.lead;
     });
   });
   modal.addEventListener('shown.bs.modal', function () { (q.readOnly ? document.getElementById('rRate') : q).focus(); });

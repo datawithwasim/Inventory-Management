@@ -6,7 +6,7 @@
   <div class="col-6"><div class="small text-muted">Deliver to</div><strong><?= e($po['warehouse']) ?></strong></div></div>
 <table class="table table-sm align-middle doc-table"><thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th><?= !empty($tpl['show_tax']) ? '<th class="text-end">Tax %</th>' : '' ?><th class="text-end">Amount</th></tr></thead><tbody>
   <?php foreach ($items as $l): [$net, , $tot] = App\Models\Purchase::line((float)$l['qty_ordered'], (float)$l['unit_price'], (float)$l['tax_rate']); ?>
-    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td><td class="text-end"><?= e(qty($l['qty_ordered'])) ?> <?= e($l['unit']) ?></td>
+    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small><?= their_line($l) ?></td><td class="text-end"><?= e(qty($l['qty_ordered'])) ?> <?= e($l['unit']) ?></td>
       <td class="text-end"><?= e(money($l['unit_price'])) ?></td><?= !empty($tpl['show_tax']) ? '<td class="text-end">' . e(qty($l['tax_rate'])) . '</td>' : '' ?><td class="text-end"><?= e(money(!empty($tpl['show_tax']) ? $net : $tot)) ?></td></tr>
   <?php endforeach; ?></tbody></table>
 <div class="row justify-content-end"><div class="col-md-5"><table class="table table-sm table-borderless">

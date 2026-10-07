@@ -12,7 +12,7 @@
     </table></div></div>
 <?php if ($items): ?><div class="card mb-3" id="items"><div class="table-responsive"><table class="table mb-0"><thead><tr><th><?= e(term('item')) ?></th><th class="text-end">Qty</th><th class="text-end">Price</th><th class="text-end">Tax %</th><th class="text-end">Amount</th></tr></thead><tbody>
   <?php foreach ($items as $l): [, , $tot] = App\Models\Purchase::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['tax_rate']); ?>
-    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td><td class="text-end"><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td>
+    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small><?= their_line($l) ?></td><td class="text-end"><?= e(qty($l['qty'])) ?> <?= e($l['unit']) ?></td>
       <td class="text-end"><?= e(money($l['unit_price'])) ?></td><td class="text-end"><?= e(qty($l['tax_rate'])) ?></td><td class="text-end"><?= e(money($tot)) ?></td></tr>
   <?php endforeach; ?></tbody></table></div></div><?php endif; ?>
 <div class="row g-3" id="payments">

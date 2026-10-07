@@ -270,3 +270,10 @@ function fflines(string $entity): string
     $h = Core\FormDesign::hiddenLineCols($entity);
     return $h === '' ? '' : ' data-hide-cols="' . e($h) . '"';
 }
+
+/** "Their: CODE · name" line under an item on purchase documents, when the supplier has its own name / code for it (already-escaped HTML). */
+function their_line(array $l): string
+{
+    $bits = array_filter([trim((string)($l['sup_code'] ?? '')), trim((string)($l['sup_name'] ?? ''))], fn($x) => $x !== '');
+    return $bits ? '<div class="small text-muted">Their: ' . e(implode(' · ', $bits)) . '</div>' : '';
+}

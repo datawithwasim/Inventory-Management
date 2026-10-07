@@ -15,7 +15,7 @@
 <div class="card mb-3" id="items"><div class="table-responsive"><table class="table mb-0 align-middle">
   <thead><tr><th><?= e(term('item')) ?></th><th class="text-end">Ordered</th><th class="text-end">Received</th><th class="text-end">Still due</th><th class="text-end">Price</th><th class="text-end">Tax %</th><th class="text-end">Total</th></tr></thead><tbody>
   <?php foreach ($items as $l): [, , $tot] = App\Models\Purchase::line((float)$l['qty_ordered'], (float)$l['unit_price'], (float)$l['tax_rate']); $due = max(0, (float)$l['qty_ordered'] - (float)$l['qty_received']); ?>
-    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small></td>
+    <tr><td><?= e($l['item_name']) ?><?= $l['vname'] ? ' — ' . e($l['vname']) : '' ?> <small class="text-muted"><?= e($l['sku']) ?></small><?= their_line($l) ?></td>
       <td class="text-end"><?= e(qty($l['qty_ordered'])) ?> <?= e($l['unit']) ?></td><td class="text-end"><?= e(qty($l['qty_received'])) ?></td><td class="text-end"><?= e(qty($due)) ?></td>
       <td class="text-end"><?= e(money($l['unit_price'])) ?></td><td class="text-end"><?= e(qty($l['tax_rate'])) ?></td><td class="text-end"><?= e(money($tot)) ?></td></tr>
   <?php endforeach; ?>

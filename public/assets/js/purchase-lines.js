@@ -112,6 +112,7 @@
     }
     function showHint(v) {
       var parts = [];
+      if (v.sup_name || v.sup_code) parts.push('Their: ' + [v.sup_code, v.sup_name].filter(Boolean).join(' · '));
       if (v.rate_note) parts.push(v.rate_note); else if (supSel && supSel.value) parts.push('No rate listed for this supplier — using item cost');
       if (v.last_note) parts.push(v.last_note);
       var cur = parseFloat(price.value);
@@ -138,7 +139,7 @@
       ItemPicker.attach({ input: search, list: list, host: tr, emptyOk: true,
         url: function (q) { return lookupUrl + '?q=' + encodeURIComponent(q) + supQ(); },
         onType: function () { vId.value = ''; },
-        render: function (v) { return { title: v.item_name + (v.name ? ' — ' + v.name : ''), sub: v.sku + (v.rate_note ? ' · ' + v.rate_note : ''), tag: v.track_batch ? 'Roll' : '', right: v.rate != null ? parseFloat(v.rate).toFixed(2) : (parseFloat(v.cost_price) ? parseFloat(v.cost_price).toFixed(2) : '') }; },
+        render: function (v) { var ours = v.item_name + (v.name ? ' — ' + v.name : ''), th = v.sup_name || v.sup_code; return { title: th ? th + (v.sup_name && v.sup_code ? ' (' + v.sup_code + ')' : '') : ours, sub: (th ? ours + ' · ' : '') + v.sku + (v.rate_note ? ' · ' + v.rate_note : ''), tag: v.track_batch ? 'Roll' : '', right: v.rate != null ? parseFloat(v.rate).toFixed(2) : (parseFloat(v.cost_price) ? parseFloat(v.cost_price).toFixed(2) : '') }; },
         pick: choose });
     }
     [qty, price, tax].forEach(function (el) { el.addEventListener('input', recalc); });

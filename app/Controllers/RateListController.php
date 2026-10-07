@@ -20,12 +20,13 @@ final class RateListController extends PurchaseBase
         if ($supplier) { $where .= ' AND r.supplier_id = ?'; $p[] = $supplier; }
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR r.supplier_code LIKE ? OR i.design_no LIKE ?)';
-            array_push($p, $like, $like, $like, $like, $like);
+            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR r.supplier_code LIKE ? OR sp.supplier_code LIKE ? OR sp.supplier_name LIKE ? OR i.design_no LIKE ?)';
+            array_push($p, $like, $like, $like, $like, $like, $like, $like);
         }
         $rows = Purchase::markCurrent(DB::all(
-            "SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id
+            "SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode
              FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
+             LEFT JOIN supplier_products sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
              WHERE $where ORDER BY i.name, v.name, r.variant_id, r.supplier_id, r.valid_from DESC, r.id DESC LIMIT 3000", $p));
         // lowest current net per variant (across the suppliers shown)
         $low = [];

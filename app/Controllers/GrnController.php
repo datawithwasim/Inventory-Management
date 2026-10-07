@@ -185,7 +185,7 @@ final class GrnController extends PurchaseBase
     {
         $g = $this->load($id);
         $items = DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no, r.code AS rack
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no, r.code AS rack' . Purchase::theirCols('SELECT supplier_id FROM grns WHERE id = l.grn_id') . '
              FROM grn_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations r ON r.id = l.location_id AND l.location_id > 0
              WHERE l.tenant_id = ? AND l.grn_id = ? ORDER BY l.id', [$this->tid(), $g['id']]);

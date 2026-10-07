@@ -126,7 +126,7 @@ final class SupplierController extends PurchaseBase
             'pos' => DB::all('SELECT id, po_no, order_date, status, total FROM purchase_orders WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
             'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
             'contacts' => DB::all('SELECT * FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ? ORDER BY id', [$t, $s['id']]),
-            'rates' => Purchase::ratesOf((int)$s['id']),
+            'rates' => Purchase::ratesOf((int)$s['id']), 'products' => Purchase::productsOf((int)$s['id']),
             'bills' => DB::all('SELECT * FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 20', [$t, $s['id']]),
         ]);
     }

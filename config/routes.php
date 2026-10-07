@@ -115,6 +115,8 @@ $router->get('/suppliers', $A . 'SupplierController@index', ['auth', 'perm:suppl
 $router->get('/suppliers/create', $A . 'SupplierController@create', ['auth', 'perm:suppliers.create']);
 $router->post('/suppliers', $A . 'SupplierController@store', ['auth', 'perm:suppliers.create']);
 $router->post('/suppliers/{id}/rates', $A . 'SupplierRateController@store', ['auth', 'perm:suppliers.edit']);
+$router->post('/suppliers/{id}/products', $A . 'SupplierRateController@product', ['auth', 'perm:suppliers.edit']);
+$router->post('/suppliers/{id}/products/{productId}/delete', $A . 'SupplierRateController@productDestroy', ['auth', 'perm:suppliers.edit']);
 $router->post('/suppliers/{id}/rates/import', $A . 'SupplierRateController@import', ['auth', 'perm:suppliers.edit']);
 $router->get('/suppliers/{id}/rates/template', $A . 'SupplierRateController@template', ['auth', 'perm:suppliers.edit']);
 $router->post('/suppliers/{id}/rates/{rateId}/delete', $A . 'SupplierRateController@destroy', ['auth', 'perm:suppliers.edit']);
