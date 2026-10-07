@@ -27,6 +27,8 @@ final class RecordView
     private const MONEY = ['credit_limit', 'cost_price', 'sale_price', 'delivery_charge', 'installation_charge', 'extra_cost', 'other_charges'];
     private const DAYS = ['payment_terms_days' => 'Immediate', 'credit_days' => 'Immediate', 'lead_time_days' => ''];
     private static array $lookups = [];
+    /** Record-only facts of the page being drawn: key => [label, html]. */
+    private static array $facts = [];
 
     private static function lookup(string $table, int $id): string
     {
@@ -65,12 +67,17 @@ final class RecordView
     {
         if (isset($r['cf'][$key])) return (string)$r['cf'][$key]['label'];
         $custom = (string)($r['props'][$key]['label'] ?? '');
-        return $custom !== '' ? $custom : (FormDesign::FIELDS[$entity][$key] ?? $key);
+        if ($custom !== '') return $custom;
+        return str_starts_with($key, 'sys:') ? FormDesign::sysLabel($entity, $key) : (FormDesign::FIELDS[$entity][$key] ?? $key);
     }
 
     /** One value as safe HTML: linked to its record when it names one, a dash when empty. */
     private static function cell(string $entity, string $k, array $row, array $cfValues): string
     {
+        if (str_starts_with($k, 'sys:')) {
+            $h = self::$facts[substr($k, 4)][1] ?? '';
+            return $h === '' || $h === null ? '<i class="text-muted">—</i>' : (string)$h;
+        }
         $val = self::value($entity, $k, $row, $cfValues);
         if ($val === '') return '<i class="text-muted">—</i>';
         if (isset(self::LINKS[$k]) && (int)($row[$k] ?? 0) > 0) return '<a href="' . e(url(self::LINKS[$k] . '/' . (int)$row[$k])) . '">' . e($val) . '</a>';
@@ -78,8 +85,9 @@ final class RecordView
     }
 
     /** The strip of key fields at the top of the detail page. */
-    public static function summary(string $entity, array $row, array $cfValues): string
+    public static function summary(string $entity, array $row, array $cfValues, array $facts = []): string
     {
+        self::$facts = $facts;
         if (!isset(FormDesign::FIELDS[$entity])) return '';
         $r = FormDesign::resolve($entity);
         $o = '';
@@ -90,8 +98,9 @@ final class RecordView
     }
 
     /** All sections of the design as read-only label / value cards. */
-    public static function sections(string $entity, array $row, array $cfValues): string
+    public static function sections(string $entity, array $row, array $cfValues, array $facts = []): string
     {
+        self::$facts = $facts;
         if (!isset(FormDesign::FIELDS[$entity])) return '';
         $r = FormDesign::resolve($entity);
         $o = '';

@@ -30,5 +30,5 @@
 $rec = ['entity' => 'sales_order', 'row' => $o, 'name' => $o['order_no'], 'back' => 'sales/orders', 'cfValues' => $cfValues ?? [], 'body' => $body, 'actions' => $actions,
     'badges' => sale_badge('order', $st) . ($o['allow_backorder'] ? ' <span class="badge text-bg-light border">back-order allowed</span>' : ''),
     'related' => ['lines' => 'Items', 'deliveries' => 'Deliveries & advance'],
-    'facts' => [['Created by', e($o['user_name'] ?? '—')], ['Total', e(money($o['total']))]]];
+    'facts' => ['created_by' => ['Created by', e($o['user_name'] ?? '—')], 'total' => ['Total', e(money($o['total']))]]];
 require dirname(__DIR__) . '/_record.php';

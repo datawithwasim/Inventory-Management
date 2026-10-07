@@ -13,5 +13,5 @@
 $ent = $doc['to_warehouse'] ? 'transfer' : 'adjustment';
 $viewRow = $doc; if ($doc['reason']) $viewRow['reason'] = $reasons[$doc['reason']] ?? $doc['reason'];
 $rec = ['entity' => $ent, 'row' => $viewRow, 'name' => $doc['doc_no'], 'back' => $back, 'body' => $body, 'badges' => '<span class="badge text-bg-light border">' . e($heading) . '</span>', 'related' => ['lines' => 'Items'],
-    'facts' => [['Date', e(fdate(substr((string)$doc['created_at'], 0, 10))) . ' ' . e(substr((string)$doc['created_at'], 11, 5))], ['By', e($doc['user_name'] ?? '—')]]];
+    'facts' => ['date' => ['Date', e(fdate(substr((string)$doc['created_at'], 0, 10))) . ' ' . e(substr((string)$doc['created_at'], 11, 5))], 'by' => ['By', e($doc['user_name'] ?? '—')]]];
 require dirname(__DIR__) . '/_record.php';

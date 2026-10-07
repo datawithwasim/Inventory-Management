@@ -2,7 +2,7 @@
 /**
  * Zoho-style record page: header, left "Related list", Overview / Timeline tabs, notes.
  * @var array $rec entity, row, name, back, badges (html), actions (html: buttons), menu (html: dropdown items), related [anchor => label], body (html), cfValues,
- *            facts [[label, html]] (extra details such as linked documents), warnTitle
+ *            facts [key => [label, html]] (extra details such as linked documents), warnTitle
  */
 $GLOBALS['rec_shell'] = true;
 $E = $rec['entity'];
@@ -39,9 +39,9 @@ $layoutUrl = url('settings/formdesign?form=' . $E . '&return=' . rawurlencode($_
     <div class="rec-main">
       <div class="rec-tabs" role="tablist"><button type="button" class="on" data-tab="recOverview">Overview</button><button type="button" data-tab="recTimeline">Timeline</button></div>
       <div id="recOverview" class="rec-panel">
-        <?= Core\RecordView::summary($E, $row, $rec['cfValues'] ?? []) ?>
-        <?= Core\RecordView::sections($E, $row, $rec['cfValues'] ?? []) ?>
-        <?php if (!empty($rec['facts'])): ?><section class="card rec-sec"><div class="card-header"><?= e($rec['factsTitle'] ?? 'Details') ?></div><div class="card-body"><div class="rec-grid c2">
+        <?= Core\RecordView::summary($E, $row, $rec['cfValues'] ?? [], $rec['facts'] ?? []) ?>
+        <?= Core\RecordView::sections($E, $row, $rec['cfValues'] ?? [], $rec['facts'] ?? []) ?>
+        <?php if (!empty($rec['facts']) && !isset(Core\FormDesign::FIELDS[$E])): ?><section class="card rec-sec"><div class="card-header"><?= e($rec['factsTitle'] ?? 'Details') ?></div><div class="card-body"><div class="rec-grid c2">
           <?php foreach ($rec['facts'] as [$fl, $fv]): ?><div class="rec-kv"><span><?= e($fl) ?></span><b><?= $fv !== '' && $fv !== null ? $fv : '<i class="text-muted">—</i>' ?></b></div><?php endforeach; ?>
         </div></div></section><?php endif; ?>
         <?= $rec['body'] ?? '' ?>

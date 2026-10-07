@@ -36,6 +36,6 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'bill', 'row' => $b, 'name' => $b['bill_no'], 'back' => 'purchase/bills', 'body' => $body, 'actions' => $actions, 'badges' => pay_badge($status),
     'related' => array_filter(['totals' => 'Amounts', 'items' => $items ? 'Items' : null, 'payments' => 'Payments']),
-    'facts' => [[term('supplier'), '<a href="' . url('suppliers/' . (int)$b['supplier_id']) . '">' . e($b['supplier']) . '</a>'],
-        ['Goods receipt', $b['grn_id'] ? '<a href="' . url('purchase/grns/' . (int)$b['grn_id']) . '">' . e($b['grn_no']) . '</a>' : ''], ['Balance due', e(money(max(0, $due)))]]];
+    'facts' => ['supplier' => [term('supplier'), '<a href="' . url('suppliers/' . (int)$b['supplier_id']) . '">' . e($b['supplier']) . '</a>'],
+        'grn' => ['Goods receipt', $b['grn_id'] ? '<a href="' . url('purchase/grns/' . (int)$b['grn_id']) . '">' . e($b['grn_no']) . '</a>' : ''], 'balance_due' => ['Balance due', e(money(max(0, $due)))]]];
 require dirname(__DIR__) . '/_record.php';

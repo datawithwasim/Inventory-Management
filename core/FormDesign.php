@@ -61,6 +61,20 @@ final class FormDesign
         'sales_order' => ['customer_id', 'warehouse_id', 'order_date', 'expected_date'], 'delivery' => ['delivery_date', 'ship_to'], 'sales_return' => ['return_date', 'reason'],
         'adjustment' => ['warehouse_id', 'reason'], 'transfer' => ['warehouse_id', 'to_warehouse_id'],
     ];
+    /**
+     * Record-only fields: facts the record page knows (who created it, linked documents, totals) that have no input on the form.
+     * They live in the layout like any field (key "sys:<name>") so one canvas arranges the whole detail page; the edit form skips them.
+     */
+    public const SYS = [
+        'purchase_order' => ['created_by' => 'Created by', 'approved_by' => 'Approved by', 'total' => 'Total'],
+        'grn' => ['supplier' => '@supplier', 'po' => 'Purchase order', 'bill' => 'Bill', 'received_by' => 'Received by'],
+        'bill' => ['supplier' => '@supplier', 'grn' => 'Goods receipt', 'balance_due' => 'Balance due'],
+        'purchase_return' => ['supplier' => '@supplier', 'grn' => 'Goods receipt', 'bill' => 'Bill', 'by' => 'By', 'total' => 'Total (incl. tax)'],
+        'sales_order' => ['created_by' => 'Created by', 'total' => 'Total'],
+        'delivery' => ['customer' => '@customer', 'order' => 'Order', 'invoice' => 'Invoice', 'by' => 'By'],
+        'sales_return' => ['customer' => '@customer', 'invoice' => 'Invoice', 'by' => 'By', 'total' => 'Total credit (incl. tax)'],
+        'adjustment' => ['date' => 'Date', 'by' => 'By'], 'transfer' => ['date' => 'Date', 'by' => 'By'],
+    ];
     public const WIDTHS = ['' => 'Default', '25' => '¼ width', '33' => '⅓ width', '50' => '½ width', '66' => '⅔ width', '75' => '¾ width', '100' => 'Full width'];
 
     public const COLS = [0 => 'Original', 1 => '1 column', 2 => '2 columns', 3 => '3 columns'];
@@ -99,6 +113,18 @@ final class FormDesign
         return array_keys(self::FIELDS[$entity] ?? []);
     }
 
+    /** Layout keys of a form's record-only fields. */
+    public static function sysKeys(string $entity): array
+    {
+        return array_map(fn($k) => 'sys:' . $k, array_keys(self::SYS[$entity] ?? []));
+    }
+
+    public static function sysLabel(string $entity, string $key): string
+    {
+        $l = self::SYS[$entity][preg_replace('/^sys:/', '', $key)] ?? $key;
+        return $l[0] === '@' ? ucfirst(term(substr($l, 1))) : $l;
+    }
+
     private static function cfKey(array $f): string
     {
         return 'cf:' . (int)$f['id'];
@@ -116,7 +142,8 @@ final class FormDesign
         $cfs = Auth::user() && isset(CustomFields::ENTITIES[$entity]) ? CustomFields::fields($entity, false) : [];
         $cfByKey = [];
         foreach ($cfs as $f) $cfByKey[self::cfKey($f)] = $f;
-        $valid = array_merge($std, array_keys($cfByKey));
+        $sysK = self::sysKeys($entity);
+        $valid = array_merge($std, $sysK, array_keys($cfByKey));
         $visible = function (string $k) use ($entity, $cfByKey): bool {
             if (isset($cfByKey[$k])) return (bool)$cfByKey[$k]['is_active'];
             return !isset(FormFields::REGISTRY[$entity][$k]) || FormFields::shown($entity, $k);
@@ -138,7 +165,13 @@ final class FormDesign
             if ($saved === null) $sections[] = ['id' => 's2', 'title' => 'Additional details', 'cols' => 0, 'fields' => $extra];
             else $sections[count($sections) - 1]['fields'] = array_merge($sections[count($sections) - 1]['fields'], $extra);
         }
-        $unused = array_values(array_filter($valid, fn($k) => !$visible($k)));
+        // record-only fields: first time they go into their own section; once the designer has saved, an unplaced one is "unused"
+        $sysUnplaced = array_values(array_filter($sysK, fn($k) => !isset($seen[$k])));
+        if ($sysUnplaced && empty($saved['sys'])) {
+            $sections[] = ['id' => 'sys', 'title' => 'Record details', 'cols' => 2, 'fields' => $sysUnplaced];
+            foreach ($sysUnplaced as $k) $seen[$k] = 1;
+        }
+        $unused = array_values(array_filter($valid, fn($k) => in_array($k, $sysK, true) ? !isset($seen[$k]) : !$visible($k)));
         $props = [];
         foreach ($valid as $k) {
             $p = (array)($saved['props'][$k] ?? []);
@@ -152,7 +185,7 @@ final class FormDesign
         }
         $style = ($saved['style'] ?? 'top') === 'left' ? 'left' : 'top';
         $pickSum = isset($saved['summary']) ? (array)$saved['summary'] : (self::SUMMARY_DEFAULT[$entity] ?? []);
-        $summary = array_slice(array_values(array_filter(array_unique($pickSum), fn($k) => in_array($k, $valid, true) && $visible($k))), 0, 4);
+        $summary = array_slice(array_values(array_filter(array_unique($pickSum), fn($k) => in_array($k, $valid, true) && (str_starts_with($k, 'sys:') ? isset($seen[$k]) : $visible($k)))), 0, 4);
         $lines = ['disc' => !isset($saved['lines']['disc']) || !empty($saved['lines']['disc']), 'tax' => !isset($saved['lines']['tax']) || !empty($saved['lines']['tax'])];
         return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'cf' => $cfByKey, 'summary' => $summary];
     }
@@ -203,7 +236,7 @@ final class FormDesign
         $r = self::resolve($entity);
         $o = '';
         if ($r['customised']) {
-            foreach ($r['sections'] as $s) if ($s['title'] !== '' && $s['fields']) $o .= '<div class="ff-section" style="order:' . $s['order'] . '"><span>' . htmlspecialchars($s['title'], ENT_QUOTES) . '</span></div>';
+            foreach ($r['sections'] as $s) if ($s['title'] !== '' && array_filter($s['fields'], fn($k) => !str_starts_with($k, 'sys:'))) $o .= '<div class="ff-section" style="order:' . $s['order'] . '"><span>' . htmlspecialchars($s['title'], ENT_QUOTES) . '</span></div>';
         } elseif ($cfFields) {
             $o .= '<div class="ff-section" style="order:900"><span>Additional details</span></div>';
         }
@@ -248,7 +281,7 @@ final class FormDesign
                 $layout = isset(self::FIELDS[$entity]);
                 $r = self::resolve($entity);
                 $fields = [];
-                $keys = array_merge(self::stdKeys($entity), array_keys($r['cf']));
+                $keys = array_merge(self::stdKeys($entity), self::sysKeys($entity), array_keys($r['cf']));
                 if (!$layout) $keys = array_keys(FormFields::REGISTRY[$entity] ?? []);
                 foreach ($keys as $k) {
                     if (isset($r['cf'][$k])) {
@@ -256,6 +289,11 @@ final class FormDesign
                         $fields[$k] = ['key' => $k, 'label' => $c['label'], 'kind' => self::typeIcon($c['type']), 'optional' => true, 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'],
                             'options' => implode("\n", $c['choices']), 'show' => (bool)$c['is_active'], 'req' => (bool)$c['is_required'], 'unique' => (bool)$c['is_unique'], 'inList' => (bool)$c['show_in_list'],
                             'w' => $r['props'][$k]['w'], 'help' => $r['props'][$k]['help'], 'span' => 4];
+                        continue;
+                    }
+                    if (str_starts_with($k, 'sys:')) {
+                        $fields[$k] = ['key' => $k, 'label' => self::sysLabel($entity, $k), 'kind' => 'info-circle', 'optional' => true, 'custom' => false, 'sys' => true, 'show' => !in_array($k, $r['unused'], true), 'req' => false,
+                            'w' => $r['props'][$k]['w'] ?? '', 'help' => '', 'custom_label' => $r['props'][$k]['label'] ?? '', 'span' => 6];
                         continue;
                     }
                     $opt = isset(FormFields::REGISTRY[$entity][$k]);
@@ -267,7 +305,7 @@ final class FormDesign
                 if (!$layout) $secs = [['id' => 's1', 'title' => '', 'cols' => 0, 'fields' => array_keys(array_filter($fields, fn($f) => $f['show']))]];
                 $out[] = ['key' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity], 'group' => $group, 'layout' => $layout, 'customFields' => isset(CustomFields::ENTITIES[$entity]),
                     'lineForm' => in_array($entity, self::LINE_FORMS, true), 'detail' => in_array($entity, self::DETAIL, true), 'summary' => $r['summary'], 'customised' => $r['customised'], 'style' => $r['style'], 'lines' => $r['lines'],
-                    'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'fields' => $fields];
+                    'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'sysOrder' => self::sysKeys($entity), 'summaryDefault' => self::SUMMARY_DEFAULT[$entity] ?? [], 'fields' => $fields];
             }
         }
         return $out;
@@ -360,13 +398,13 @@ final class FormDesign
             $props = [];
             foreach ($fieldsIn as $k => $f) {
                 $f = (array)$f; $k = $mapKey((string)$k);
-                if (!isset(self::FIELDS[$entity][$k]) && !(str_starts_with($k, 'cf:') && (isset($existing[$k]) || in_array($k, $map, true)))) continue;
+                if (!isset(self::FIELDS[$entity][$k]) && !in_array($k, self::sysKeys($entity), true) && !(str_starts_with($k, 'cf:') && (isset($existing[$k]) || in_array($k, $map, true)))) continue;
                 $w = (string)($f['w'] ?? '');
                 $help = mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags((string)($f['help'] ?? ''))) ?? ''), 0, 140);
                 $label = '';
                 if (!str_starts_with($k, 'cf:')) {
                     $label = trim(preg_replace('/\s+/', ' ', strip_tags((string)($f['custom_label'] ?? $f['label'] ?? ''))) ?? '');
-                    if ($label === (self::FIELDS[$entity][$k] ?? '')) $label = '';
+                    if ($label === (str_starts_with($k, 'sys:') ? self::sysLabel($entity, $k) : (self::FIELDS[$entity][$k] ?? ''))) $label = '';
                     $label = mb_substr($label, 0, 60);
                 }
                 $row = [];
@@ -379,7 +417,7 @@ final class FormDesign
                 ? array_slice(array_values(array_unique(array_map($mapKey, array_map('strval', (array)$in['summary'])))), 0, 4)
                 : ($cfg[$entity]['summary'] ?? null);
             $cfg[$entity] = ['style' => ($in['style'] ?? 'top') === 'left' ? 'left' : 'top', 'sections' => $sections, 'props' => $props,
-                'lines' => ['disc' => !isset($in['lines']['disc']) || !empty($in['lines']['disc']) ? 1 : 0, 'tax' => !isset($in['lines']['tax']) || !empty($in['lines']['tax']) ? 1 : 0]];
+                'lines' => ['disc' => !isset($in['lines']['disc']) || !empty($in['lines']['disc']) ? 1 : 0, 'tax' => !isset($in['lines']['tax']) || !empty($in['lines']['tax']) ? 1 : 0], 'sys' => 1];
             if ($sum !== null) $cfg[$entity]['summary'] = $sum;
         }
         FormFields::save($hidden, $required);

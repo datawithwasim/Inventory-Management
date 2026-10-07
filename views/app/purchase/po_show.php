@@ -28,5 +28,5 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'purchase_order', 'row' => $po, 'name' => $po['po_no'], 'back' => 'purchase/orders', 'cfValues' => $cfValues ?? [], 'body' => $body, 'actions' => $actions, 'badges' => po_badge($st),
     'related' => array_filter(['items' => 'Items', 'grns' => $grns ? 'Goods received' : null]),
-    'facts' => [['Created by', e($po['created_name'] ?? '—')], ['Approved by', $po['approved_name'] ? e($po['approved_name']) . ' on ' . e(substr((string)$po['approved_at'], 0, 10)) : ''], ['Total', e(money($po['total']))]]];
+    'facts' => ['created_by' => ['Created by', e($po['created_name'] ?? '—')], 'approved_by' => ['Approved by', $po['approved_name'] ? e($po['approved_name']) . ' on ' . e(substr((string)$po['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(money($po['total']))]]];
 require dirname(__DIR__) . '/_record.php';

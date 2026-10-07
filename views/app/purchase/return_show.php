@@ -8,6 +8,6 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'purchase_return', 'row' => $r, 'name' => $r['return_no'], 'back' => 'purchase/returns', 'body' => $body, 'badges' => '',
     'related' => ['items' => 'Items returned'],
-    'facts' => [[term('supplier'), e($r['supplier'])], ['Goods receipt', '<a href="' . url('purchase/grns/' . (int)$r['grn_id']) . '">' . e($r['grn_no']) . '</a>'],
-        ['Bill', $r['bill_id'] ? '<a href="' . url('purchase/bills/' . (int)$r['bill_id']) . '">' . e($r['bill_no']) . '</a>' : ''], ['By', e($r['user_name'] ?? '—')], ['Total (incl. tax)', e(money($r['total']))]]];
+    'facts' => ['supplier' => [term('supplier'), e($r['supplier'])], 'grn' => ['Goods receipt', '<a href="' . url('purchase/grns/' . (int)$r['grn_id']) . '">' . e($r['grn_no']) . '</a>'],
+        'bill' => ['Bill', $r['bill_id'] ? '<a href="' . url('purchase/bills/' . (int)$r['bill_id']) . '">' . e($r['bill_no']) . '</a>' : ''], 'by' => ['By', e($r['user_name'] ?? '—')], 'total' => ['Total (incl. tax)', e(money($r['total']))]]];
 require dirname(__DIR__) . '/_record.php';

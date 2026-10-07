@@ -7,5 +7,5 @@
   </tbody><tfoot><tr><th colspan="4" class="text-end">Total credit (incl. tax)</th><th class="text-end"><?= e(money($r['total'])) ?></th></tr></tfoot></table></div></div>
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'sales_return', 'row' => $r, 'name' => $r['return_no'], 'back' => 'sales/returns', 'body' => $body, 'badges' => '', 'related' => ['items' => 'Items returned'],
-    'facts' => [[term('customer'), e($r['customer'])], ['Invoice', '<a href="' . url('sales/invoices/' . (int)$r['invoice_id']) . '">' . e($r['invoice_no']) . '</a>'], ['By', e($r['user_name'] ?? '—')], ['Total credit (incl. tax)', e(money($r['total']))]]];
+    'facts' => ['customer' => [term('customer'), e($r['customer'])], 'invoice' => ['Invoice', '<a href="' . url('sales/invoices/' . (int)$r['invoice_id']) . '">' . e($r['invoice_no']) . '</a>'], 'by' => ['By', e($r['user_name'] ?? '—')], 'total' => ['Total credit (incl. tax)', e(money($r['total']))]]];
 require dirname(__DIR__) . '/_record.php';

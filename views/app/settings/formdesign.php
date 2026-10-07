@@ -32,16 +32,9 @@
     </aside>
 
     <main class="dz-center">
-      <div class="dz-tabs" id="dzTabs"><button type="button" class="on" data-tab="edit">Edit page</button><button type="button" data-tab="detail" id="dzTabDetail">Detail page</button></div>
-      <div class="dz-paper" id="dzDetail" hidden>
-        <div class="dz-paper-head"><h2 id="dzDetailTitle">Detail page</h2></div>
-        <p class="text-muted small mb-3">The record page shows every section and field exactly as arranged on the Edit page. Here you choose the <b>summary</b> — up to four key fields shown in a strip at the top.</p>
-        <div id="dzSumPreview" class="dz-sumprev"></div>
-        <div class="dz-box-title mb-2">Fields in the summary <span class="dz-count" id="dzSumCount">0</span></div>
-        <div id="dzSumList" class="dz-sumlist"></div>
-      </div>
       <div class="dz-paper" id="dzPaper">
         <div class="dz-paper-head"><h2 id="dzPaperTitle"></h2><span class="dz-mock-buttons"><span>Cancel</span><span class="p">Save</span></span></div>
+        <div class="dz-sumbar" id="dzSum" hidden></div>
         <div id="dzSections"></div>
         <div id="dzLines" class="dz-lines" hidden></div>
       </div>

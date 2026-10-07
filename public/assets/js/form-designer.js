@@ -52,42 +52,34 @@
     $('dzPreview').classList.toggle('on', preview);
     $('dzNoCustom').classList.toggle('d-none', f.customFields);
     $('dzTypes').classList.toggle('off', !f.customFields);
-    if (!f.detail) tab = 'edit';
-    $('dzTabDetail').hidden = !f.detail;
-    document.querySelectorAll('#dzTabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
-    $('dz').classList.toggle('detail-tab', tab === 'detail');
-    $('dzPaper').hidden = tab === 'detail'; $('dzDetail').hidden = tab !== 'detail';
-    if (tab === 'detail') { renderDetail(); return; }
-    renderSections(); renderUnused(); renderLines(); renderRight();
+    renderSummary(); renderSections(); renderUnused(); renderLines(); renderRight();
   }
 
-  /* ---------------- detail page tab ---------------- */
-  var tab = 'edit';
-  document.querySelectorAll('#dzTabs button').forEach(function (b) { b.addEventListener('click', function () { tab = b.dataset.tab; sel = null; render(); }); });
-  function renderDetail() {
-    var f = F(), sum = f.summary || (f.summary = []);
-    $('dzDetailTitle').textContent = f.title.replace(/ form$/, '') + ' — detail page';
-    var keys = []; f.sections.forEach(function (s) { s.fields.forEach(function (k) { if (f.fields[k] && f.fields[k].show !== false) keys.push(k); }); });
-    $('dzSumCount').textContent = sum.length + ' / 4';
-    $('dzSumPreview').innerHTML = sum.length ? sum.map(function (k) { return '<div><span>' + esc(labelOf(fld(k))) + '</span><b>—</b></div>'; }).join('') : '<em class="text-muted small">Nothing chosen — the page opens straight on the sections.</em>';
-    $('dzSumList').innerHTML = keys.map(function (k) {
-      var on = sum.indexOf(k) > -1, x = fld(k);
-      return '<label class="dz-sumrow' + (on ? ' on' : '') + '"><input type="checkbox" data-k="' + esc(k) + '"' + (on ? ' checked' : '') + (!on && sum.length >= 4 ? ' disabled' : '') + '> <i class="bi bi-' + esc(x.kind) + '"></i> ' + esc(labelOf(x)) + '</label>';
-    }).join('');
-    $('dzSumList').querySelectorAll('input').forEach(function (c) {
-      c.addEventListener('change', function () {
-        var i = sum.indexOf(c.dataset.k);
-        if (c.checked && i < 0 && sum.length < 4) sum.push(c.dataset.k); else if (!c.checked && i > -1) sum.splice(i, 1);
-        touch(); renderDetail();
-      });
+  /* ---------------- summary strip (top of the detail page) ---------------- */
+  function renderSummary() {
+    var f = F(), box = $('dzSum'); box.hidden = !f.detail; if (!f.detail) return;
+    var sum = f.summary || (f.summary = []);
+    var h = '<div class="dz-sum-head"><b>Summary strip</b><span>Key fields shown at the top of the detail page · up to 4 · not on the edit form</span>' +
+      (preview || sum.length >= 4 ? '' : '<button type="button" data-a="sum-add"><i class="bi bi-plus-lg"></i> Add field</button>') + '</div><div class="dz-sum-row">';
+    sum.forEach(function (k) {
+      var x = fld(k); if (!x) return;
+      h += '<div class="dz-sum-chip"><span>' + esc(labelOf(x)) + '</span><b>—</b>' + (preview ? '' : '<button type="button" data-a="sum-del" data-key="' + esc(k) + '" title="Remove from the strip"><i class="bi bi-x"></i></button>') + '</div>';
     });
+    if (!sum.length) h += '<em class="text-muted small">Empty — the page opens straight on the sections. Drag a field here or use Add field.</em>';
+    box.innerHTML = h + '</div>';
+  }
+  function sumToggle(key) {
+    var f = F(), sum = f.summary || (f.summary = []), i = sum.indexOf(key);
+    if (i > -1) sum.splice(i, 1); else if (sum.length < 4) sum.push(key); else { alert('The summary strip holds up to four fields.'); return; }
+    touch(); render();
   }
 
   function tileHtml(x) {
     var req = x.req ? ' req' : '';
-    return '<div class="dz-tile' + (x.key === sel ? ' sel' : '') + req + (F().layout ? '' : ' fixed') + '" draggable="' + (F().layout && !preview) + '" data-key="' + esc(x.key) + '" tabindex="0">' +
+    var pinned = F().detail && (F().summary || []).indexOf(x.key) > -1;
+    return '<div class="dz-tile' + (x.key === sel ? ' sel' : '') + req + (x.sys ? ' sys' : '') + (F().layout ? '' : ' fixed') + '" draggable="' + (F().layout && !preview) + '" data-key="' + esc(x.key) + '" tabindex="0">' +
       '<i class="bi bi-grip-vertical dz-grip"></i><span class="dz-ico"><i class="bi bi-' + esc(x.kind) + '"></i></span>' +
-      '<span class="dz-name">' + esc(labelOf(x)) + (x.req ? '<b class="dz-star"> *</b>' : '') + (x.custom ? '<em class="dz-cf">custom</em>' : '') + '</span>' +
+      '<span class="dz-name">' + esc(labelOf(x)) + (x.req ? '<b class="dz-star"> *</b>' : '') + (x.custom ? '<em class="dz-cf">custom</em>' : '') + (x.sys ? '<em class="dz-cf dz-sysb">detail page only</em>' : '') + (pinned ? '<i class="bi bi-pin-angle-fill dz-pin" title="Shown in the summary strip"></i>' : '') + '</span>' +
       '<button type="button" class="dz-more" data-a="menu" title="More"><i class="bi bi-three-dots"></i></button>' +
       '<span class="dz-faux">' + (x.help ? '<small>' + esc(x.help) + '</small>' : '') + '</span></div>';
   }
@@ -96,7 +88,7 @@
     var f = F(), box = $('dzSections'), h = '';
     f.sections.forEach(function (s, si) {
       h += '<section class="dz-sec" data-i="' + si + '"><div class="dz-sec-head">' +
-        (preview ? '<div class="dz-sec-name">' + esc(s.title) + '</div>' : '<input class="dz-sec-title" data-a="title" value="' + esc(s.title) + '" placeholder="Section title (optional)" maxlength="60">') +
+        (preview ? '<div class="dz-sec-name">' + esc(s.title) + '</div>' : '<input class="dz-sec-title" data-a="title" value="' + esc(s.title) + '" placeholder="' + esc(si === 0 ? f.title.replace(/ form$/, '') + ' information' : 'More details') + '" maxlength="60">') +
         '<div class="dz-sec-tools"><button type="button" data-a="cols" title="Columns in this section"><i class="bi bi-layout-three-columns"></i> ' + (s.cols ? s.cols + ' col' : 'Original') + '</button>' +
         '<button type="button" data-a="sec-up" title="Move section up"><i class="bi bi-arrow-up"></i></button><button type="button" data-a="sec-down" title="Move section down"><i class="bi bi-arrow-down"></i></button>' +
         '<button type="button" data-a="sec-del" title="Delete section"><i class="bi bi-trash"></i></button></div></div>' +
@@ -129,7 +121,7 @@
     var x = sel && fld(sel), r = $('dzRight');
     r.hidden = !x; if (!x) return;
     $('pIcon').className = 'bi bi-' + x.kind; $('pName').textContent = labelOf(x);
-    $('pKind').textContent = x.custom ? 'Custom field · ' + (TYPES[x.type] || x.type) : (x.optional ? 'Standard field (optional)' : 'Standard field (essential)');
+    $('pKind').textContent = x.sys ? 'Record detail · detail page only' : x.custom ? 'Custom field · ' + (TYPES[x.type] || x.type) : (x.optional ? 'Standard field (optional)' : 'Standard field (essential)');
     var lab = $('pLabel'); if (document.activeElement !== lab) lab.value = x.custom ? x.label : x.custom_label; lab.placeholder = x.custom ? 'Field name' : x.label;
     var hp = $('pHelp'); if (document.activeElement !== hp) hp.value = x.help;
     $('pTypeBox').hidden = !x.custom; $('pType').value = x.type || 'text'; $('pType').disabled = !x.isNew;
@@ -140,6 +132,7 @@
     $('pReqRow').hidden = !x.optional || x.type === 'checkbox'; $('pReq').checked = !!x.req;
     $('pUniqRow').hidden = !(x.custom && UNIQ[x.type]); $('pUniq').checked = !!x.unique;
     $('pListRow').hidden = !x.custom; $('pList').checked = !!x.inList;
+    ['pHelp', 'pWidth'].forEach(function (id) { $(id).hidden = !!x.sys; if ($(id).previousElementSibling) $(id).previousElementSibling.hidden = !!x.sys; });
     $('pCore').hidden = x.optional; $('pHide').hidden = !x.optional; $('pDelete').hidden = !x.custom;
   }
 
@@ -184,10 +177,23 @@
     pop.style.top = (r.bottom + 6 + window.scrollY) + 'px'; pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px';
     pop.onclick = function (e) { var b = e.target.closest('[data-p]'); if (!b) return; pop.hidden = true; onClick(b.dataset.p); };
   }
-  document.addEventListener('mousedown', function (e) { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('[data-a=menu],[data-a=cols]')) pop.hidden = true; });
+  document.addEventListener('mousedown', function (e) { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('[data-a=menu],[data-a=cols],[data-a=sum-add]')) pop.hidden = true; });
 
   /* ---------------- events ---------------- */
   var secs = $('dzSections');
+  $('dzSum').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-a]'); if (!b) return;
+    if (b.dataset.a === 'sum-del') sumToggle(b.dataset.key);
+    if (b.dataset.a === 'sum-add') {
+      var f = F(), sum = f.summary || [], opts = [];
+      f.sections.forEach(function (s) { s.fields.forEach(function (k) { if (fld(k) && sum.indexOf(k) < 0) opts.push(k); }); });
+      if (!opts.length) return;
+      openPop(b, opts.map(function (k) { return '<button data-p="' + esc(k) + '"><i class="bi bi-' + esc(fld(k).kind) + '"></i> ' + esc(labelOf(fld(k))) + '</button>'; }).join(''), function (k) { sumToggle(k); });
+    }
+  });
+  $('dzSum').addEventListener('dragover', function (e) { if (drag && drag.kind === 'tile') { e.preventDefault(); $('dzSum').classList.add('drop-into'); } });
+  $('dzSum').addEventListener('dragleave', function () { $('dzSum').classList.remove('drop-into'); });
+  $('dzSum').addEventListener('drop', function (e) { $('dzSum').classList.remove('drop-into'); if (!drag || drag.kind !== 'tile') return; e.preventDefault(); var k = drag.key; drag = null; var sum = F().summary || (F().summary = []); if (sum.indexOf(k) < 0) { if (sum.length >= 4) { alert('The summary strip holds up to four fields.'); return; } sum.push(k); touch(); render(); } });
   secs.addEventListener('click', function (e) {
     var tile = e.target.closest('.dz-tile'), btn = e.target.closest('[data-a]'), sec = e.target.closest('.dz-sec');
     var a = btn && btn.dataset.a;
@@ -195,10 +201,12 @@
       var x = fld(tile.dataset.key);
       openPop(btn, '<button data-p="edit"><i class="bi bi-pencil"></i> Edit properties</button>' +
         (x.optional && x.type !== 'checkbox' ? '<button data-p="req"><i class="bi bi-asterisk"></i> ' + (x.req ? 'Make optional' : 'Make mandatory') + '</button>' : '') +
+        (F().detail ? '<button data-p="sum"><i class="bi bi-pin-angle"></i> ' + ((F().summary || []).indexOf(x.key) > -1 ? 'Remove from summary strip' : 'Show in summary strip') + '</button>' : '') +
         '<button data-p="up"><i class="bi bi-arrow-up"></i> Move earlier</button><button data-p="down"><i class="bi bi-arrow-down"></i> Move later</button>' +
         (x.optional ? '<button data-p="hide"><i class="bi bi-eye-slash"></i> Move to unused</button>' : '') + (x.custom ? '<button data-p="del" class="danger"><i class="bi bi-trash"></i> Delete field</button>' : ''),
         function (p) {
           if (p === 'edit') { sel = x.key; render(); }
+          if (p === 'sum') sumToggle(x.key);
           if (p === 'req') { x.req = !x.req; touch(); render(); }
           if (p === 'up') move(x.key, -1); if (p === 'down') move(x.key, 1);
           if (p === 'hide') { hideField(x.key); touch(); render(); }
@@ -282,6 +290,9 @@
     Object.keys(f.fields).forEach(function (k) { var x = f.fields[k]; x.w = ''; x.help = ''; if (!x.custom) { x.custom_label = ''; x.show = true; x.req = false; } else x.show = true; });
     f.sections = [{ id: 's1', title: '', cols: 0, fields: f.layout ? std : [] }];
     if (cfs.length) f.sections.push({ id: 's2', title: 'Additional details', cols: 0, fields: cfs });
+    var sysK = (f.sysOrder || []); sysK.forEach(function (k) { f.fields[k].show = true; f.fields[k].custom_label = ''; });
+    if (sysK.length) f.sections.push({ id: 'sys', title: 'Record details', cols: 2, fields: sysK.slice() });
+    if (f.detail && f.summaryDefault) f.summary = f.summaryDefault.slice();
     if (!f.layout) f.sections[0].fields = Object.keys(f.fields).filter(function (k) { return !f.fields[k].custom; });
     f.style = 'top'; f.lines = { disc: true, tax: true }; f.resetFlag = true; sel = null; touch(true); render();
   });

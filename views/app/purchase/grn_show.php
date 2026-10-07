@@ -17,7 +17,7 @@
 <?php $body = ob_get_clean();
 $rec = ['entity' => 'grn', 'row' => $g, 'name' => $g['grn_no'], 'back' => 'purchase/grns', 'body' => $body, 'actions' => $actions, 'badges' => '',
     'related' => array_filter(['items' => 'Items received', 'returns' => $returns ? 'Returns' : null]),
-    'facts' => [[term('supplier'), '<a href="' . url('suppliers/' . (int)$g['supplier_id']) . '">' . e($g['supplier']) . '</a>'],
-        ['Purchase order', $g['po_id'] ? '<a href="' . url('purchase/orders/' . (int)$g['po_id']) . '">' . e($g['po_no']) . '</a>' : ''],
-        ['Bill', $g['bill_id'] ? '<a href="' . url('purchase/bills/' . (int)$g['bill_id']) . '">' . e($g['bill_no']) . '</a>' : ''], ['Received by', e($g['user_name'] ?? '—')]]];
+    'facts' => ['supplier' => [term('supplier'), '<a href="' . url('suppliers/' . (int)$g['supplier_id']) . '">' . e($g['supplier']) . '</a>'],
+        'po' => ['Purchase order', $g['po_id'] ? '<a href="' . url('purchase/orders/' . (int)$g['po_id']) . '">' . e($g['po_no']) . '</a>' : ''],
+        'bill' => ['Bill', $g['bill_id'] ? '<a href="' . url('purchase/bills/' . (int)$g['bill_id']) . '">' . e($g['bill_no']) . '</a>' : ''], 'received_by' => ['Received by', e($g['user_name'] ?? '—')]]];
 require dirname(__DIR__) . '/_record.php';

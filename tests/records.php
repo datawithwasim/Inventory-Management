@@ -77,7 +77,7 @@ check('a user without settings.edit sees no "Edit page layout" anywhere', !str_c
 
 echo "Detail page tab in the designer (summary strip)\n";
 $m = $a->get('/settings/formdesign?form=supplier')['body'];
-check('designer has Edit page / Detail page tabs and the summary pane', str_contains($m, 'data-tab="detail"') && str_contains($m, 'id="dzSumList"'));
+check('designer is one canvas: no separate Detail tab, the summary strip sits inside it', !str_contains($m, 'data-tab="detail"') && !str_contains($m, 'dzSumList') && str_contains($m, 'id="dzSum"'));
 preg_match('/<script type="application\/json" id="dzData">(.*?)<\/script>/s', $m, $mm);
 $dz = json_decode($mm[1] ?? '{}', true);
 $sup = array_values(array_filter($dz['model'] ?? [], fn($x) => $x['key'] === 'supplier'))[0] ?? [];
@@ -179,6 +179,24 @@ check('the column chooser is icon-only (no "Columns" text) and opens outside the
 check('items list still has Export / Import / Add item links for the script to lift into the heading', str_contains($ih, 'items/export') && str_contains($ih, 'items/import') && str_contains($ih, 'items/create'));
 check('customer groups link is flagged to move with the heading buttons', str_contains($a->get('/customers')['body'], 'data-page-action'));
 check('rate list page flags its three actions for the heading row', substr_count($a->get('/purchase/rates')['body'], 'data-page-action') >= 3);
+
+echo "One layout for edit form and detail page (record-only fields)\n";
+$wh = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]);
+$sup = (int)$val('SELECT id FROM suppliers WHERE tenant_id = ? LIMIT 1', [$tA]);
+$po = DB::insert('purchase_orders', ['tenant_id' => $tA, 'po_no' => 'PO-9001', 'supplier_id' => $sup, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'status' => 'draft', 'total' => 125, 'subtotal' => 125]);
+$h = $a->get("/purchase/orders/$po")['body'];
+check('PO page has no loose "Details" card: Created by / Total come from the layout sections', preg_match('~<div class="card-header">Details</div>~', $h) === 0 && str_contains($h, 'Created by') && str_contains($h, 'Record details'));
+$mdl = json_decode(preg_replace('~^.*?<script type="application/json" id="dzData">(.*?)</script>.*$~s', '$1', $a->get('/settings/formdesign?form=purchase_order')['body']), true)['model'];
+$pm = array_values(array_filter($mdl, fn($f) => $f['key'] === 'purchase_order'))[0];
+check('the designer model carries those fields as detail-page-only tiles inside the sections', !empty($pm['fields']['sys:created_by']['sys']) && in_array('sys:total', $pm['sections'][count($pm['sections']) - 1]['fields'], true));
+check('the PO edit form does not draw a heading for a section that only has record details', !str_contains($a->get('/purchase/orders/create')['body'], 'Record details'));
+$sec = array_map(fn($s) => ['title' => $s['title'], 'cols' => $s['cols'], 'fields' => array_values(array_filter($s['fields'], fn($k) => $k !== 'sys:created_by'))], $pm['sections']);
+$sec[0]['fields'][] = 'sys:created_by';
+$a->post('/settings/formdesign', ['payload' => json_encode(['purchase_order' => ['sections' => [['title' => 'Order', 'cols' => 2, 'fields' => ['supplier_id', 'order_date', 'sys:total']], ['title' => 'Audit', 'cols' => 1, 'fields' => ['notes', 'sys:created_by']]], 'summary' => ['supplier_id', 'sys:total']]]), 'current' => 'purchase_order'], '/settings/modules');
+$h = $a->get("/purchase/orders/$po")['body'];
+$sm = preg_replace('/\s+/', ' ', strip_tags(preg_replace('~^.*?class="card rec-summary">(.*?)</div></div>.*$~s', '$1', $h), '<span><b>'));
+check('the summary strip can hold a record-only field (Total) picked in the same canvas', str_contains($sm, '<span>Total</span><b>125') );
+check('sections and titles on the page match the canvas: Order, Audit with Created by; Approved by is unused so absent', preg_match('~>Order<.*?Order date.*?>Audit<.*?Notes.*?Created by~s', $h) === 1 && !str_contains($h, 'Approved by'));
 
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);
