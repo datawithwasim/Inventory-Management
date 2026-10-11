@@ -53,6 +53,7 @@ function flashes(): array
 
 function with_old(array $data): void
 {
+    if (Core\Api::on()) return;   // the React app keeps what was typed itself
     unset($data['password'], $data['password_confirm'], $data['_csrf']);
     $_SESSION['_old'] = $data;
 }

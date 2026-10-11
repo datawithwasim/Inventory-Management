@@ -68,6 +68,7 @@ final class Api
     public static function view(string $view, array $data): never
     {
         unset($data['content']);
+        clear_old();
         self::send(['ok' => true, 'view' => $view, 'data' => self::clean($data), 'messages' => flashes()]);
     }
 

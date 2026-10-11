@@ -9,7 +9,7 @@ export type Session = {
   tenant?: { name: string; plan: string; status: string; expires: string | null; logo: string | null };
   perms?: string[]; menu?: { dashboard: MenuItem; groups: Record<string, { label: string; icon: string; items: MenuItem[] }>; account: MenuItem[] };
   fmt?: { decimals: number; grouping: string; symbol: string; position: string; date: string };
-  quick?: MenuItem[]; terms?: Record<string, [string, string]>; supportMode?: boolean; themeCss?: string;
+  stockTypes?: Record<string, string>; quick?: MenuItem[]; terms?: Record<string, [string, string]>; supportMode?: boolean; themeCss?: string;
   theme?: { brand: string; sidebar: string; density: string; mode: string };
 };
 

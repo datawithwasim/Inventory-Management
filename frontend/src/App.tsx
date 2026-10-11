@@ -12,6 +12,9 @@ import SupplierForm from './pages/suppliers/Form';
 import SupplierItemList from './pages/supplierItems/List';
 import SupplierItemDetail from './pages/supplierItems/Detail';
 import SupplierItemForm from './pages/supplierItems/Form';
+import ItemList from './pages/items/List';
+import ItemDetail from './pages/items/Detail';
+import ItemForm from './pages/items/Form';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -40,6 +43,10 @@ export default function App() {
         <Route path="/purchase/supplier-items/create" element={<SupplierItemForm />} />
         <Route path="/purchase/supplier-items/:id" element={<SupplierItemDetail />} />
         <Route path="/purchase/supplier-items/:id/edit" element={<SupplierItemForm />} />
+        <Route path="/items" element={<ItemList />} />
+        <Route path="/items/create" element={<ItemForm />} />
+        <Route path="/items/:id" element={<ItemDetail />} />
+        <Route path="/items/:id/edit" element={<ItemForm />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>
