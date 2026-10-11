@@ -44,6 +44,15 @@ final class ApiController extends Controller
     }
 
     /** The column picker of a list page: every choice and the ones switched on. */
+    /** Is a platform administrator signed in? Safe signed-out too (the Super Admin sign-in page asks first). */
+    public function adminSession(): void
+    {
+        $a = Auth::admin();
+        $out = ['ok' => true, 'authenticated' => (bool)$a, 'csrf' => csrf_token()];
+        if ($a) $out += ['admin' => ['name' => $a['name'], 'email' => $a['email'] ?? ''], 'pending' => count(\Core\Migrator::pending())];
+        Api::send($out);
+    }
+
     public function columns(string $list): void
     {
         if (!isset(\Core\Columns::LISTS[$list])) $this->notFound();

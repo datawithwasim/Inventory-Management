@@ -45,7 +45,7 @@ export default function Layout() {
   const toggleCollapse = () => { const v = !collapsed; setCollapsed(v); document.documentElement.classList.toggle('sb-collapsed', v); try { localStorage.setItem('inv-sb', v ? '1' : '0'); } catch { /* ignore */ } };
   const logout = async () => { await post('/logout'); await reload(); nav('/login'); };
   const chooseMode = (m: string) => { setMode(m); setModeState(m); };
-  const stopSupport = async () => { await post('/impersonate/stop'); window.location.href = legacyUrl('/admin'); };
+  const stopSupport = async () => { await post('/impersonate/stop'); nav('/admin/tenants'); await reload(); };
 
   return (
     <>

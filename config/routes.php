@@ -11,6 +11,7 @@ $router->post('/install', $A . 'InstallController@run');
 // ---- Company app ----
 $router->get('/', $A . 'AuthController@home');
 $router->get('/session', $A . 'ApiController@session');
+$router->get('/admin/session', $A . 'ApiController@adminSession');
 $router->get('/columns/{list}', $A . 'ApiController@columns', ['auth']);
 $router->get('/schema/{entity}', $A . 'ApiController@schema', ['auth']);
 $router->get('/options/{source}', $A . 'ApiController@options', ['auth']);

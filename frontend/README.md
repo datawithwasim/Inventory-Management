@@ -53,7 +53,8 @@ Upload `public/ui/` to the server after a build.
 | Sales: orders (list, form with customer prices / discount / tax and live totals, confirm & reserve, advance, close, cancel), deliveries (against an order with the roll and rack suggested per line and shade warning, split lines, or direct; creates the invoice), invoices (payments, edit details), sales returns (pick invoice, put back on a rack or not) | done (delivery note / invoice / receipt printing stays on the PHP print pages) |
 | Reports: picker, and one viewer for all 18 reports (filter bar from each report's definition, table, totals, Excel / CSV download, print page; low stock turns ticked rows into draft POs) | done |
 | Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile | done (the page-layout designer / custom fields and the print pages stay PHP) |
-| Everything else (super admin) | still the PHP pages |
+| Super Admin (sign-in, dashboard, companies with open-as-owner support mode, plans, system updates and backup, audit log) at `/app/admin` | done |
+| Everything else | the PHP page layout designer and print pages only |
 | Layout designer, print pages (invoice, voucher, delivery note) | stay PHP for now |
 
-Suggested order (remaining): Super admin.
+Remaining: the page layout designer and the print pages (invoice, delivery note, voucher), which stay PHP.

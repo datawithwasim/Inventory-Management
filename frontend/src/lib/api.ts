@@ -7,6 +7,7 @@ export class ApiError extends Error {
 const base = (document.querySelector('meta[name="app-base"]') as HTMLMetaElement | null)?.content ?? '';
 let csrf = '';
 export const setCsrf = (t: string) => { csrf = t; };
+export const getCsrf = () => csrf;
 /** Address of a legacy (PHP-rendered) page: used for screens not rebuilt in React yet. */
 export const legacyUrl = (path: string) => base + (path.startsWith('/') ? path : '/' + path);
 export const appBase = base + '/app';

@@ -39,6 +39,7 @@ import { SettingsLayout, SettingsHome, CompanyTab, PreferencesTab, NumberingTab,
 import { UserList, UserForm, RoleList, RoleForm } from './pages/settings/Team';
 import { MasterList, MasterForm } from './pages/settings/Masters';
 import Profile from './pages/settings/Profile';
+import { AdminLogin, AdminLayout, AdminDashboard, TenantList, TenantForm, PlanList, PlanForm, AdminSystem, AdminAudit } from './pages/admin/Admin';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -52,6 +53,18 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="tenants" element={<TenantList />} />
+        <Route path="tenants/create" element={<TenantForm />} />
+        <Route path="tenants/:id/edit" element={<TenantForm />} />
+        <Route path="plans" element={<PlanList />} />
+        <Route path="plans/create" element={<PlanForm />} />
+        <Route path="plans/:id/edit" element={<PlanForm />} />
+        <Route path="system" element={<AdminSystem />} />
+        <Route path="audit" element={<AdminAudit />} />
+      </Route>
       <Route element={<Protected />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />

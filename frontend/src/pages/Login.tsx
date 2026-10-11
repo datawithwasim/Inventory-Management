@@ -23,7 +23,7 @@ export default function Login() {
       <section className="auth-hero">
         <div className="auth-logo"><span className="sb-mark"><i className="bi bi-box-seam" /></span>Inventory</div>
         <div><h2>Know exactly what you have, where it is, and what is selling.</h2>
-          <ul><li><i className="bi bi-check-circle-fill" />Roll-by-roll fabric tracking with rack locations</li><li><i className="bi bi-check-circle-fill" />Purchase, sales, returns and counter billing</li><li><i className="bi bi-check-circle-fill" />Reports, barcode labels and your own settings</li></ul></div>
+          <ul><li><i className="bi bi-check-circle-fill" />Roll-by-roll fabric tracking with rack locations</li><li><i className="bi bi-check-circle-fill" />Purchase, sales, returns and stock by roll and rack</li><li><i className="bi bi-check-circle-fill" />Reports, barcode labels and your own settings</li></ul></div>
         <div className="small opacity-75">&copy; {new Date().getFullYear()} Inventory</div>
       </section>
       <section className="auth-pane"><div className="auth-card"><div className="card"><div className="card-body p-4">
