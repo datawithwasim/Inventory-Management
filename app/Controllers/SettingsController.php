@@ -68,20 +68,31 @@ final class SettingsController extends Controller
         switch ($tab) {
             case 'company':
                 $data['tenantName'] = Auth::user()['tenant_name'];
+                $data['values'] = ['name' => $data['tenantName'], 'logo' => company_logo_url()];
+                foreach (['legal_name', 'address', 'phone', 'email', 'website', 'tax_no', 'bank'] as $k) $data['values'][$k] = Settings::get('company.' . $k);
                 break;
             case 'preferences':
                 $data['dateFormats'] = self::DATE_FORMATS;
+                $data['values'] = ['symbol' => Settings::get('currency.symbol'), 'position' => Settings::get('currency.position'), 'decimals' => (string)Settings::get('currency.decimals'),
+                    'grouping' => Settings::get('number.grouping'), 'date_format' => Settings::get('date.format')];
+                $data['today'] = [];
+                foreach (self::DATE_FORMATS as $k => $l) $data['today'][$k] = date($k);
                 break;
             case 'numbering':
                 $data['docs'] = [];
                 foreach (Numbering::DOCS as $code => $label) {
                     $cfg = Numbering::config($this->tid(), $code);
                     $next = (int)DB::val('SELECT next_no FROM counters WHERE tenant_id = ? AND prefix = ?', [$this->tid(), $code . ($cfg['year'] ? date('y') : '')]) ?: 1;
-                    $data['docs'][$code] = ['label' => $label, 'cfg' => $cfg, 'next' => $next];
+                    $data['docs'][$code] = ['label' => $label, 'cfg' => $cfg, 'next' => $next, 'sample' => Numbering::format($cfg, $next)];
                 }
                 break;
             case 'appearance':
                 $data += ['brands' => Theme::BRANDS, 'sidebars' => Theme::SIDEBARS, 'densities' => Theme::DENSITY, 'modes' => Theme::MODES];
+                $data['values'] = ['brand' => strtolower((string)Theme::get('appearance.brand')), 'sidebar' => Theme::get('appearance.sidebar'), 'density' => Theme::get('appearance.density'), 'mode' => Theme::get('appearance.mode')];
+                break;
+            case 'workflow':
+                $data['values'] = ['po_approval' => Settings::get('po_approval'), 'negative_stock' => Settings::get('negative_stock'), 'require_rack' => Settings::get('require_rack'),
+                    'shade_rule' => Settings::get('shade_rule'), 'max_discount' => Settings::get('max_discount')];
                 break;
             case 'modules':
                 $data['modules'] = Modules::ALL;

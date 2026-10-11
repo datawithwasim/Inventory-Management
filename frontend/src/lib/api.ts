@@ -29,3 +29,13 @@ export async function api<T = any>(method: 'GET' | 'POST', path: string, body?: 
 
 export const get = <T = any>(path: string) => api<T>('GET', path);
 export const post = <T = any>(path: string, body: unknown = {}) => api<T>('POST', path, body);
+
+/** A form with a file in it (company logo): sent as multipart, the way a browser form does. */
+export async function postForm<T = any>(path: string, form: FormData): Promise<Reply<T>> {
+  const res = await fetch(`${base}/api/v1${path}`, { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) }, body: form });
+  let json: Reply<T> | null = null;
+  try { json = await res.json(); } catch { /* not JSON */ }
+  if (!json) throw new ApiError(res.status, [], 'The server sent an unexpected answer. Please try again.');
+  if (!res.ok && res.status !== 422) throw new ApiError(res.status, json.messages ?? [], json.error ?? 'Something went wrong.');
+  return json;
+}

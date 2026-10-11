@@ -35,6 +35,10 @@ import { DeliveryList, DeliveryForm, DeliveryDetail } from './pages/sales/Delive
 import { InvoiceList, InvoiceDetail, InvoiceForm } from './pages/sales/InvoicePages';
 import { SalesReturnList, SalesReturnCreate, SalesReturnDetail } from './pages/sales/ReturnPages';
 import { ReportIndex, ReportShow } from './pages/reports/Reports';
+import { SettingsLayout, SettingsHome, CompanyTab, PreferencesTab, NumberingTab, AppearanceTab, ModulesTab, LabelsTab, WorkflowTab, TemplatesTab } from './pages/settings/Settings';
+import { UserList, UserForm, RoleList, RoleForm } from './pages/settings/Team';
+import { MasterList, MasterForm } from './pages/settings/Masters';
+import Profile from './pages/settings/Profile';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -122,6 +126,29 @@ export default function App() {
         <Route path="/sales/returns/:id" element={<SalesReturnDetail />} />
         <Route path="/reports" element={<ReportIndex />} />
         <Route path="/reports/:slug" element={<ReportShow />} />
+        <Route path="/settings" element={<SettingsLayout />}>
+          <Route index element={<SettingsHome />} />
+          <Route path="company" element={<CompanyTab />} />
+          <Route path="preferences" element={<PreferencesTab />} />
+          <Route path="numbering" element={<NumberingTab />} />
+          <Route path="appearance" element={<AppearanceTab />} />
+          <Route path="modules" element={<ModulesTab />} />
+          <Route path="labels" element={<LabelsTab />} />
+          <Route path="templates" element={<TemplatesTab />} />
+          <Route path="workflow" element={<WorkflowTab />} />
+          <Route path="*" element={<NotBuilt />} />
+        </Route>
+        <Route path="/users" element={<UserList />} />
+        <Route path="/users/create" element={<UserForm />} />
+        <Route path="/users/:id/edit" element={<UserForm />} />
+        <Route path="/roles" element={<RoleList />} />
+        <Route path="/roles/create" element={<RoleForm />} />
+        <Route path="/roles/:id/edit" element={<RoleForm />} />
+        <Route path="/masters" element={<Navigate to="/masters/categories" replace />} />
+        <Route path="/masters/:type" element={<MasterList />} />
+        <Route path="/masters/:type/create" element={<MasterForm />} />
+        <Route path="/masters/:type/:id/edit" element={<MasterForm />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>

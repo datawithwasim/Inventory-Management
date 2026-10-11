@@ -27,6 +27,17 @@ final class J
         curl_close($ch);
         return ['status' => $st, 'json' => json_decode($raw, true), 'raw' => $raw];
     }
+    /** A multipart form (file upload), the way a browser sends it. */
+    public function form(string $path, array $fields): array
+    {
+        $ch = curl_init($this->base . '/api/v1' . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar,
+            CURLOPT_HTTPHEADER => ['Accept: application/json', 'X-CSRF-Token: ' . $this->csrf], CURLOPT_POSTFIELDS => $fields]);
+        $raw = (string)curl_exec($ch);
+        $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['status' => $st, 'json' => json_decode($raw, true), 'raw' => $raw];
+    }
     public function session(): array { $r = $this->call('GET', '/session'); $this->csrf = (string)($r['json']['csrf'] ?? ''); return $r; }
 }
 
@@ -375,6 +386,111 @@ $ex = $a->call('GET', '/reports/stock-summary/export/csv?q=ARL-1');
 check('the CSV export is still the plain download', $ex['status'] === 200 && str_contains($ex['raw'], 'ARL-1') && $ex['json'] === null);
 $r = $a->call('POST', '/reports/low-stock/create-pos', ['pick' => []]);
 check('creating orders from low stock with nothing low explains itself', $r['status'] === 200 && str_contains(json_encode($r['json']['messages'] ?? []), 'Nothing'));
+
+echo "Settings, users, roles, masters and profile through the API\n";
+$r = $a->call('GET', '/settings/company');
+check('the company tab data carries the saved values', $r['status'] === 200 && isset($r['json']['data']['values']['legal_name']) && ($r['json']['data']['values']['name'] ?? '') !== '');
+$r = $a->call('POST', '/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => 'Apia HF Pvt', 'address' => '12 Mill Road', 'phone' => '999', 'email' => 'bad-email', 'website' => '', 'tax_no' => '', 'bank' => '']);
+check('an invalid company email is refused', $r['status'] === 422);
+$r = $a->call('POST', '/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => 'Apia HF Pvt', 'address' => '12 Mill Road', 'phone' => '999', 'email' => 'hello@apia.test', 'website' => '', 'tax_no' => 'GST1', 'bank' => '']);
+check('the company profile saves', $r['status'] === 200 && (string)DB::val('SELECT name FROM tenants WHERE id = ?', [$tA]) === 'Apia Home Furnishing' && ($a->call('GET', '/settings/company')['json']['data']['values']['tax_no'] ?? '') === 'GST1');
+$png = tempnam(sys_get_temp_dir(), 'lg') . '.png';
+file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+$r = $a->form('/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => '', 'address' => '', 'phone' => '', 'email' => '', 'website' => '', 'tax_no' => 'GST1', 'bank' => '', 'logo' => new CURLFile($png, 'image/png', 'logo.png')]);
+check('a logo uploaded as a multipart form is stored', $r['status'] === 200 && str_contains((string)($a->call('GET', '/settings/company')['json']['data']['values']['logo'] ?? ''), 'company/logo'));
+$a->form('/settings/company', ['name' => 'Apia Home Furnishing', 'tax_no' => 'GST1', 'remove_logo' => '1']);
+check('and it can be removed again', ($a->call('GET', '/settings/company')['json']['data']['values']['logo'] ?? null) === null);
+$r = $a->call('POST', '/settings/preferences', ['symbol' => '₹', 'position' => 'before', 'decimals' => '9', 'grouping' => 'indian', 'date_format' => 'Y-m-d']);
+check('an impossible number of decimals is refused', $r['status'] === 422);
+$a->call('POST', '/settings/preferences', ['symbol' => 'Rs', 'position' => 'after', 'decimals' => '1', 'grouping' => 'indian', 'date_format' => 'd/m/Y']);
+check('currency and dates save and the session carries the new formats', ($a->session()['json']['fmt']['symbol'] ?? '') === 'Rs' && ($a->session()['json']['fmt']['position'] ?? '') === 'after' && (string)($a->session()['json']['fmt']['decimals'] ?? '') === '1');
+$a->call('POST', '/settings/preferences', ['symbol' => '', 'position' => 'before', 'decimals' => '2', 'grouping' => 'intl', 'date_format' => 'Y-m-d']);
+$r = $a->call('POST', '/settings/numbering', ['num' => ['SO' => ['prefix' => 'bad prefix!', 'pad' => '4']]]);
+check('a bad document prefix is refused', $r['status'] === 422);
+$docs = $a->call('GET', '/settings/numbering')['json']['data']['docs'];
+$num = []; foreach ($docs as $k => $x) $num[$k] = ['prefix' => $x['cfg']['prefix'], 'pad' => $x['cfg']['pad'], 'year' => $x['cfg']['year'] ? 1 : ''];
+$num['SO'] = ['prefix' => 'ORD', 'pad' => '5', 'year' => ''];
+$a->call('POST', '/settings/numbering', ['num' => $num]);
+check('document numbering saves and shows how the next number looks', ($a->call('GET', '/settings/numbering')['json']['data']['docs']['SO']['sample'] ?? '') === sprintf('ORD-%05d', $docs['SO']['next']));
+$num['SO'] = ['prefix' => 'SO', 'pad' => '4', 'year' => '']; $a->call('POST', '/settings/numbering', ['num' => $num]);
+$r = $a->call('POST', '/settings/workflow', ['po_approval' => '', 'negative_stock' => '', 'require_rack' => '1', 'shade_rule' => 'block', 'max_discount' => '150']);
+check('a discount limit above 100 is refused', $r['status'] === 422);
+$a->call('POST', '/settings/workflow', ['po_approval' => '', 'negative_stock' => '', 'require_rack' => '', 'shade_rule' => 'block', 'max_discount' => '25']);
+check('workflow rules save and come back', ($a->call('GET', '/settings/workflow')['json']['data']['values']['shade_rule'] ?? '') === 'block' && (float)$a->call('GET', '/settings/workflow')['json']['data']['values']['max_discount'] === 25.0);
+$a->call('POST', '/settings/workflow', ['po_approval' => '', 'negative_stock' => '', 'require_rack' => '', 'shade_rule' => 'warn', 'max_discount' => '0']);
+$a->call('POST', '/settings/labels', ['label' => ['supplier' => ['Vendor', 'Vendors']]]);
+check('own words for screens save and the session uses them', ($a->session()['json']['terms']['supplier'][0] ?? '') === 'Vendor' && ($a->session()['json']['terms']['customer'][0] ?? '') === 'Customer');
+$a->call('POST', '/settings/labels', ['label' => []]);
+check('empty words go back to the standard ones', ($a->session()['json']['terms']['supplier'][0] ?? '') === 'Supplier');
+$r = $a->call('POST', '/settings/appearance', ['brand' => 'red', 'sidebar' => 'dark', 'density' => 'compact', 'mode' => 'light']);
+check('a made-up brand colour is refused', $r['status'] === 422);
+$a->call('POST', '/settings/appearance', ['brand' => '#0d9488', 'sidebar' => 'light', 'density' => 'compact', 'mode' => 'dark']);
+check('appearance saves and the session carries the theme', ($a->session()['json']['theme']['brand'] ?? '') === '#0d9488' && ($a->session()['json']['theme']['density'] ?? '') === 'compact');
+$a->call('POST', '/settings/appearance', ['brand' => '#4f46e5', 'sidebar' => 'dark', 'density' => 'comfortable', 'mode' => 'light']);
+$mods = $a->call('GET', '/settings/modules')['json']['data'];
+check('the modules tab lists the switchable parts', isset($mods['modules']['pos']) && is_array($mods['off']));
+$menuPaths = fn() => array_column(array_merge(...array_column(array_values($a->session()['json']['menu']['groups'] ?? []), 'items')), 'path');
+$posOn = in_array('/pos', $menuPaths(), true);
+$a->call('POST', '/settings/modules', ['on' => array_values(array_diff(array_keys($mods['modules']), ['pos']))]);
+check('switching a part off hides its menu entry', $posOn && !in_array('/pos', $menuPaths(), true));
+$a->call('POST', '/settings/modules', ['on' => array_keys($mods['modules'])]);
+check('and everything switches back on', ($a->call('GET', '/settings/modules')['json']['data']['off'] ?? ['x']) === []);
+$r = $a->call('GET', '/settings/templates?doc=receipt');
+check('the print template tab lists the fields of the chosen document', ($r['json']['data']['doc'] ?? '') === 'receipt' && isset($r['json']['data']['fields']['accent']) && isset($r['json']['data']['docs']['invoice']));
+$r = $a->call('POST', '/settings/templates', ['doc' => 'invoice', 'title' => 'TAX INVOICE', 'show_logo' => 1, 'show_company' => 1, 'accent' => 'blue']);
+check('a bad accent colour is refused', $r['status'] === 422);
+$a->call('POST', '/settings/templates', ['doc' => 'invoice', 'title' => 'TAX INVOICE', 'show_logo' => 1, 'show_company' => 1, 'accent' => '#112233']);
+check('a print template saves', ($a->call('GET', '/settings/templates?doc=invoice')['json']['data']['values']['title'] ?? '') === 'TAX INVOICE');
+check('an unknown settings tab is a 404 JSON', $a->call('GET', '/settings/nothing')['status'] === 404);
+
+$r = $a->call('GET', '/masters/categories');
+check('the master list comes with its definition and the other tabs', isset($r['json']['data']['def']['fields']) && isset($r['json']['data']['tabs']['units']));
+$a->call('POST', '/masters/categories', ['name' => 'Curtains']);
+$catId = (int)DB::val("SELECT id FROM categories WHERE tenant_id = ? AND name = 'Curtains'", [$tA]);
+check('a category is added', $catId > 0);
+check('a duplicate name is refused', $a->call('POST', '/masters/categories', ['name' => 'Curtains'])['status'] === 422);
+$a->call('POST', '/masters/units', ['name' => 'Dozen', 'short_name' => 'doz', 'allow_decimal' => '0']);
+check('a unit saves with its decimals switch', (int)DB::val("SELECT allow_decimal FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]) === 0);
+$a->call('POST', '/masters/units/' . (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]), ['name' => 'Dozen', 'short_name' => 'doz', 'allow_decimal' => '1']);
+check('and it can be changed', (int)DB::val("SELECT allow_decimal FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]) === 1);
+$r = $a->call('POST', "/masters/units/$unit/delete");
+check('a unit in use cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM units WHERE id = ?', [$unit]));
+$a->call('POST', "/masters/categories/$catId/delete");
+check('an unused category can be deleted', !DB::val('SELECT 1 FROM categories WHERE id = ?', [$catId]));
+check('an unknown master type is a 404 JSON', $a->call('GET', '/masters/nothing')['status'] === 404);
+
+$r = $a->call('GET', '/roles/create');
+check('the role form lists modules with their possible actions', isset($r['json']['data']['modules']['items']['actions']) && $r['json']['data']['granted'] === []);
+$a->call('POST', '/roles', ['name' => 'Counter staff', 'perms' => ['items.view', 'sales.view', 'sales.create']]);
+$roleId = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Counter staff'", [$tA]);
+check('a role is created with its permissions', $roleId > 0 && (int)DB::val('SELECT COUNT(*) FROM role_permissions WHERE role_id = ?', [$roleId]) === 3);
+check('its permissions come back on the edit form', count($a->call('GET', "/roles/$roleId/edit")['json']['data']['granted']) === 3);
+check('a duplicate role name is refused', $a->call('POST', '/roles', ['name' => 'Counter staff', 'perms' => []])['status'] === 422);
+$r = $a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'short', 'role_id' => $roleId]);
+check('a short password for a new user is refused', $r['status'] === 422);
+$a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId]);
+$uid = (int)DB::val("SELECT id FROM users WHERE tenant_id = ? AND email = ?", [$tA, 'sita-' . $sfx . '@test.local']);
+check('a user is added on that role', $uid > 0 && (int)DB::val('SELECT role_id FROM users WHERE id = ?', [$uid]) === $roleId);
+check('a duplicate email is refused', $a->call('POST', '/users', ['name' => 'Sita 2', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId])['status'] === 422);
+$r = $a->call('GET', "/users/$uid/edit");
+check('the user form data has the user and the roles they may be given', ($r['json']['data']['user']['name'] ?? '') === 'Sita' && count($r['json']['data']['roles']) >= 2 && !str_contains($r['raw'], 'password_hash'));
+check('the user list shows role names', in_array('Counter staff', array_column($a->call('GET', '/users')['json']['data']['users'], 'role_name'), true));
+$a->call('POST', "/users/$uid/toggle");
+check('a user can be disabled', (int)DB::val('SELECT is_active FROM users WHERE id = ?', [$uid]) === 0);
+$myId = (int)DB::val('SELECT id FROM users WHERE tenant_id = ? ORDER BY id LIMIT 1', [$tA]);
+check('you cannot disable or delete yourself', $a->call('POST', "/users/$myId/toggle")['status'] === 422 && $a->call('POST', "/users/$myId/delete")['status'] === 422);
+$r = $a->call('POST', "/roles/$roleId/delete");
+check('a role with users cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM roles WHERE id = ?', [$roleId]));
+$a->call('POST', "/users/$uid/delete");
+$a->call('POST', "/roles/$roleId/delete");
+check('after the user is gone the role can be deleted', !DB::val('SELECT 1 FROM users WHERE id = ?', [$uid]) && !DB::val('SELECT 1 FROM roles WHERE id = ?', [$roleId]));
+
+$r = $a->call('GET', '/profile');
+check('the profile data has name and email but never the password hash', ($r['json']['data']['me']['email'] ?? '') !== '' && !str_contains($r['raw'], 'password_hash'));
+check('a wrong current password is refused', $a->call('POST', '/profile/password', ['current_password' => 'nope', 'password' => 'NewPassword1', 'password_confirm' => 'NewPassword1'])['status'] === 422);
+check('a mismatched confirmation is refused', $a->call('POST', '/profile/password', ['current_password' => 'Password123', 'password' => 'NewPassword1', 'password_confirm' => 'Different1'])['status'] === 422);
+$a->call('POST', '/profile', ['name' => 'Apia Owner', 'email' => (string)DB::val('SELECT email FROM users WHERE id = ?', [$myId])]);
+check('the profile name saves', (string)DB::val('SELECT name FROM users WHERE id = ?', [$myId]) === 'Apia Owner');
 
 echo "Isolation and secrets\n";
 $b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
