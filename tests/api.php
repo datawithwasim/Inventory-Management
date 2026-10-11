@@ -267,6 +267,98 @@ $r = $a->call('POST', "/warehouses/$wh2/default");
 check('a warehouse can be made the default', $r['status'] === 200 && (int)DB::val('SELECT is_default FROM warehouses WHERE id = ?', [$wh2]) === 1);
 $a->call('POST', "/warehouses/$wh/default");
 
+echo "Sales documents through the API\n";
+check('the session names the sales order statuses', ($a->session()['json']['soStatus']['confirmed'][0] ?? '') === 'Confirmed');
+$r = $a->call('GET', '/sales/orders/create');
+check('the order form data has customers and warehouses', $r['status'] === 200 && count($r['json']['data']['customers']) >= 1 && count($r['json']['data']['warehouses']) >= 2);
+$r = $a->call('GET', "/lookup/sale-items?q=ARL-1&customer=$cid&warehouse=$wh");
+check('the sale item search returns price, tax, free stock and roll flags', (int)($r['json'][0]['id'] ?? 0) === $rv && (float)$r['json'][0]['price'] === 300.0 && (float)$r['json'][0]['available'] === 30.0 && (int)$r['json'][0]['track_batch'] === 1);
+$r = $a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'delivery_charge' => '100', 'notes' => 'API order',
+    'lines' => [['variant_id' => $rv, 'qty' => '10', 'unit_price' => '300', 'discount_pct' => '10', 'tax_rate' => '5'], ['variant_id' => $v2, 'qty' => '2', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0']]]);
+$soId = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+check('a sales order saves as a draft with totals worked out by the server', $r['status'] === 200 && $soId > 0 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'draft' && (float)DB::val('SELECT total FROM sales_orders WHERE id = ?', [$soId]) === 3235.0);
+$r = $a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => []]);
+check('an order with no items is refused', $r['status'] === 422);
+$r = $a->call('GET', "/sales/orders/$soId/edit");
+check('the edit form data carries the lines back', count($r['json']['data']['oldLines'] ?? []) === 2 && (float)$r['json']['data']['oldLines'][0]['discount_pct'] === 10.0);
+$r = $a->call('GET', "/sales/orders/$soId");
+check('the order page data has items with free stock, deliveries and advances', count($r['json']['data']['items']) === 2 && isset($r['json']['data']['items'][0]['free']) && is_array($r['json']['data']['advances']) && (float)$r['json']['data']['remaining'] === 12.0);
+$r = $a->call('POST', "/sales/orders/$soId/advance", ['amount' => '500', 'paid_on' => date('Y-m-d'), 'method' => 'cash', 'reference' => 'ADV1']);
+check('an advance is recorded on the order', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE order_id = ? AND invoice_id IS NULL', [$soId]) === 500.0);
+$r = $a->call('POST', "/sales/orders/$soId/confirm");
+check('confirming reserves the stock (order is confirmed)', $r['status'] === 200 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'confirmed');
+$r = $a->call('GET', "/sales/orders/$soId/deliver");
+$dl = $r['json']['data']['oldLines'] ?? [];
+$byV = []; foreach ($dl as $l) $byV[(int)$l['variant_id']] = $l;
+check('the delivery form suggests the roll and rack for each line', count($dl) >= 2 && (int)$byV[$rv]['batch_id'] === $bid2 && (int)$byV[$rv]['location_id'] === $rack1 && (float)$byV[$rv]['left'] === 10.0 && !empty($byV[$rv]['order_item_id']));
+$r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
+    ['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '4', 'batch_id' => $bid2, 'location_id' => $rack1],
+    ['order_item_id' => $byV[$v2]['order_item_id'], 'variant_id' => $v2, 'qty' => '0', 'batch_id' => '0', 'location_id' => '0']]]);
+$dlv1 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+$inv1 = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $dlv1]);
+check('a part delivery takes the roll quantity out and makes an invoice', $r['status'] === 200 && $inv1 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 26.0 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'partial');
+check('the 500 advance went onto that invoice', (float)DB::val("SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE invoice_id = ? AND method = 'advance'", [$inv1]) > 0);
+$r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '99', 'batch_id' => $bid2, 'location_id' => $rack1]]]);
+check('delivering more than is due is refused', $r['status'] === 422);
+$r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '1', 'batch_id' => '0', 'location_id' => '0']]]);
+check('a roll item without a roll chosen is refused', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'roll'));
+$r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
+    ['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '6', 'batch_id' => $bid2, 'location_id' => $rack1],
+    ['order_item_id' => $byV[$v2]['order_item_id'], 'variant_id' => $v2, 'qty' => '2', 'batch_id' => '0', 'location_id' => '0']]]);
+$dlv2 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+check('the rest is delivered and the order is delivered', $r['status'] === 200 && $dlv2 !== $dlv1 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'delivered' && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 20.0);
+$r = $a->call('GET', "/sales/deliveries/$dlv1");
+check('the delivery page data lists the roll and rack of each line', ($r['json']['data']['items'][0]['batch_no'] ?? '') !== '' && ($r['json']['data']['items'][0]['rack'] ?? '') === 'AP-01' && ($r['json']['data']['d']['invoice_no'] ?? '') !== '');
+$rec = $a->call('GET', "/record/delivery/$dlv1");
+check('the delivery record page links customer, order and invoice', str_contains(json_encode($rec['json']), 'sales\\/orders\\/' . $soId) && str_contains(json_encode($rec['json']), 'sales\\/invoices\\/' . $inv1) && str_contains(json_encode($rec['json']), 'customers\\/' . $cid));
+
+$r = $a->call('GET', "/sales/invoices/$inv1");
+$due1 = (float)($r['json']['data']['due'] ?? -1);
+check('the invoice page data has lines, payments and the amount due', count($r['json']['data']['items']) >= 1 && $due1 > 0 && isset($r['json']['data']['returns']));
+$r = $a->call('POST', "/sales/invoices/$inv1/payments", ['amount' => (string)($due1 + 100), 'paid_on' => date('Y-m-d'), 'method' => 'cash']);
+check('receiving more than the balance is refused', $r['status'] === 422);
+$r = $a->call('POST', "/sales/invoices/$inv1/payments", ['amount' => '100', 'paid_on' => date('Y-m-d'), 'method' => 'upi', 'reference' => 'UTR5']);
+$payId = (int)DB::val("SELECT MAX(id) FROM customer_payments WHERE invoice_id = ? AND method = 'upi'", [$inv1]);
+check('a payment is recorded on the invoice', $r['status'] === 200 && $payId > 0 && (float)DB::val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$inv1]) > 100);
+$a->call('POST', "/sales/invoices/$inv1/payments/$payId/delete");
+check('a payment can be removed again', !DB::val('SELECT 1 FROM customer_payments WHERE id = ?', [$payId]));
+$r = $a->call('GET', "/sales/invoices/$inv1/edit");
+check('the invoice edit form data comes back', ($r['json']['data']['i']['invoice_no'] ?? '') !== '');
+$r = $a->call('POST', "/sales/invoices/$inv1", ['invoice_date' => date('Y-m-d'), 'due_date' => date('Y-m-d', strtotime('+15 days')), 'delivery_charge' => '150', 'installation_charge' => '0', 'notes' => 'API note']);
+check('invoice details save and the total follows the charges', $r['status'] === 200 && (float)DB::val('SELECT delivery_charge FROM sales_invoices WHERE id = ?', [$inv1]) === 150.0 && DB::val('SELECT notes FROM sales_invoices WHERE id = ?', [$inv1]) === 'API note');
+$rec = $a->call('GET', "/record/invoice/$inv1");
+check('the invoice record page has customer, delivery and balance facts', str_contains(json_encode($rec['json']), 'sales\\/deliveries\\/' . $dlv1) && str_contains(json_encode($rec['json']), 'Balance due'));
+$r = $a->call('GET', '/sales/invoices?status=unpaid');
+check('the invoice list filters and totals the balance due', $r['status'] === 200 && isset($r['json']['data']['totalDue']) && (float)$r['json']['data']['totalDue'] > 0);
+
+$r = $a->call('GET', "/sales/returns/create?invoice=$inv1");
+$ri = $r['json']['data']['items'][0] ?? null;
+check('the sales return form data lists what can come back and the racks', $ri && (float)$ri['returnable'] === 4.0 && isset($r['json']['data']['racks'][$wh]));
+check('the invoice pick list answers without an invoice chosen', count($a->call('GET', '/sales/returns/create')['json']['data']['rows']) >= 2);
+$r = $a->call('POST', '/sales/returns', ['invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'reason' => 'Wrong shade', 'lines' => [(string)$ri['id'] => ['qty' => '2', 'location_id' => $rack1, 'restock' => 1]]]);
+$srId = (int)DB::val('SELECT MAX(id) FROM sales_returns WHERE tenant_id = ?', [$tA]);
+check('a return puts the goods back on the rack and credits the invoice', $r['status'] === 200 && $srId > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 22.0 && (float)DB::val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv1]) > 0);
+$r = $a->call('POST', '/sales/returns', ['invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'lines' => [(string)$ri['id'] => ['qty' => '50', 'location_id' => '0', 'restock' => 1]]]);
+check('returning more than was sold is refused', $r['status'] === 422);
+$r = $a->call('GET', "/sales/returns/$srId");
+check('the return page data has its lines', count($r['json']['data']['items']) === 1 && (float)$r['json']['data']['r']['total'] > 0);
+$rec = $a->call('GET', "/record/sales_return/$srId");
+check('the return record page links its invoice and shows the credit', str_contains(json_encode($rec['json']), 'sales\\/invoices\\/' . $inv1) && str_contains(json_encode($rec['json']), 'Total credit'));
+check('the sales order record page has created-by and total', str_contains(json_encode($a->call('GET', "/record/sales_order/$soId")['json']), 'Created by'));
+
+$r = $a->call('POST', '/sales/deliveries', ['customer_id' => $cid, 'warehouse_id' => $wh, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [['variant_id' => $v2, 'qty' => '1', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0', 'batch_id' => '0', 'location_id' => '0']]]);
+$dlv3 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+check('goods can be delivered without an order (and invoiced)', $r['status'] === 200 && $dlv3 > $dlv2 && DB::val('SELECT order_id FROM deliveries WHERE id = ?', [$dlv3]) === null && DB::val('SELECT 1 FROM sales_invoices WHERE delivery_id = ?', [$dlv3]) !== null);
+$r = $a->call('GET', '/sales/deliveries/create');
+check('the direct delivery form data has customers and warehouses', count($r['json']['data']['customers']) >= 1 && count($r['json']['data']['warehouses']) >= 2);
+check('lists answer with rows: orders, deliveries, returns', count($a->call('GET', '/sales/orders?status=delivered')['json']['data']['rows']) >= 1 && count($a->call('GET', '/sales/deliveries')['json']['data']['rows']) >= 3 && count($a->call('GET', '/sales/returns')['json']['data']['rows']) >= 1);
+$a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $v2, 'qty' => '1', 'unit_price' => '150']]]);
+$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$r = $a->call('POST', "/sales/orders/$so2/delete");
+check('a draft order can be deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM sales_orders WHERE id = ?', [$so2]));
+$r = $a->call('POST', "/sales/orders/$soId/delete");
+check('a delivered order cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM sales_orders WHERE id = ?', [$soId]));
+
 echo "Isolation and secrets\n";
 $b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
 check('another company gets a 404 for it, on the page data and the record data', $b->call('GET', "/customers/$cid")['status'] === 404 && $b->call('GET', "/record/customer/$cid")['status'] === 404);

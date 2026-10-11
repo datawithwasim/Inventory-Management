@@ -169,6 +169,25 @@ final class RecordView
             $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
             $facts = ['raised' => ['Raised', e(fdate(substr((string)$row['created_at'], 0, 10)))], 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')],
                 'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : '']];
+        } elseif ($entity === 'sales_order') {
+            $facts = ['created_by' => ['Created by', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total', e(money($row['total']))]];
+        } elseif ($entity === 'delivery') {
+            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE tenant_id = ? AND id = ?', [$t, $row['order_id']]) : null;
+            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$t, $row['id']]);
+            $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
+                'order' => ['Order', $o ? $link('sales/orders', (int)$o['id'], $o['order_no']) : ''], 'invoice' => ['Invoice', $inv ? $link('sales/invoices', (int)$inv['id'], $inv['invoice_no']) : ''],
+                'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
+        } elseif ($entity === 'invoice') {
+            $d = $row['delivery_id'] ? DB::one('SELECT id, delivery_no FROM deliveries WHERE tenant_id = ? AND id = ?', [$t, $row['delivery_id']]) : null;
+            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE tenant_id = ? AND id = ?', [$t, $row['order_id']]) : null;
+            $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
+                'delivery' => ['Delivery', $d ? $link('sales/deliveries', (int)$d['id'], $d['delivery_no']) : ''], 'order' => ['Order', $o ? $link('sales/orders', (int)$o['id'], $o['order_no']) : ''],
+                'balance_due' => ['Balance due', e(money(max(0, Purchase::outstanding($row))))]];
+        } elseif ($entity === 'sales_return') {
+            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE tenant_id = ? AND id = ?', [$t, $row['invoice_id']]);
+            $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
+                'invoice' => ['Invoice', $inv ? $link('sales/invoices', (int)$inv['id'], $inv['invoice_no']) : ''],
+                'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total credit (incl. tax)', e(money($row['total']))]];
         } elseif ($entity === 'location') {
             $facts = ['warehouse' => [term('warehouse'), $link('warehouses', (int)$row['warehouse_id'], $name('SELECT name FROM warehouses WHERE id = ?', [$row['warehouse_id']]))]];
         } elseif ($entity === 'stocktake') {

@@ -30,6 +30,10 @@ import { WarehouseList, WarehouseDetail, WarehouseForm } from './pages/stock/War
 import { LocationList, LocationDetail, LocationForm } from './pages/stock/LocationPages';
 import { StockOverview, StockRacks, StockBatches, StockBatch, StockLedger } from './pages/stock/StockViews';
 import { AdjustmentList, AdjustmentForm, AdjustmentDetail, TransferList, TransferForm, TransferDetail, TakeList, TakeForm, TakeDetail } from './pages/stock/DocPages';
+import { OrderList, OrderForm, OrderDetail } from './pages/sales/OrderPages';
+import { DeliveryList, DeliveryForm, DeliveryDetail } from './pages/sales/DeliveryPages';
+import { InvoiceList, InvoiceDetail, InvoiceForm } from './pages/sales/InvoicePages';
+import { SalesReturnList, SalesReturnCreate, SalesReturnDetail } from './pages/sales/ReturnPages';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -101,6 +105,20 @@ export default function App() {
         <Route path="/stock/takes" element={<TakeList />} />
         <Route path="/stock/takes/create" element={<TakeForm />} />
         <Route path="/stock/takes/:id" element={<TakeDetail />} />
+        <Route path="/sales/orders" element={<OrderList />} />
+        <Route path="/sales/orders/create" element={<OrderForm />} />
+        <Route path="/sales/orders/:id" element={<OrderDetail />} />
+        <Route path="/sales/orders/:id/edit" element={<OrderForm />} />
+        <Route path="/sales/orders/:id/deliver" element={<DeliveryForm />} />
+        <Route path="/sales/deliveries" element={<DeliveryList />} />
+        <Route path="/sales/deliveries/create" element={<DeliveryForm />} />
+        <Route path="/sales/deliveries/:id" element={<DeliveryDetail />} />
+        <Route path="/sales/invoices" element={<InvoiceList />} />
+        <Route path="/sales/invoices/:id" element={<InvoiceDetail />} />
+        <Route path="/sales/invoices/:id/edit" element={<InvoiceForm />} />
+        <Route path="/sales/returns" element={<SalesReturnList />} />
+        <Route path="/sales/returns/create" element={<SalesReturnCreate />} />
+        <Route path="/sales/returns/:id" element={<SalesReturnDetail />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>
