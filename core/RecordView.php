@@ -127,6 +127,24 @@ final class RecordView
         return $o;
     }
 
+    /**
+     * The record-only facts (and any extra columns) the generic record endpoint needs for entities whose old page worked them out in its view.
+     * @return array{0: array, 1: array} the row, facts [key => [label, html]]
+     */
+    public static function prepare(string $entity, array $row): array
+    {
+        $facts = [];
+        if ($entity === 'supplier_item') {
+            $vid = (int)($row['variant_id'] ?? 0);
+            $row['item_id'] = $vid ? (int)DB::val('SELECT item_id FROM item_variants WHERE tenant_id = ? AND id = ?', [Auth::tenantId(), $vid]) : 0;
+            $cur = $vid ? Purchase::currentRate((int)$row['supplier_id'], $vid) : null;
+            $last = $vid ? Purchase::lastPaid((int)$row['supplier_id'], $vid) : null;
+            $facts = ['rate' => ['Current rate', $cur ? e(money(Purchase::netRate($cur))) : ''], 'last_paid' => ['Last paid', $last ? e(money($last['unit_price'])) . ' on ' . e(fdate($last['received_date'])) : ''],
+                'preferred' => ['Preferred source', !empty($row['is_preferred']) ? 'Yes' : '']];
+        }
+        return [$row, $facts];
+    }
+
     /** A value as {text, href}: the structured twin of cell(), for the React pages. */
     private static function item(string $entity, string $k, array $row, array $cfValues, array $r, array $facts): array
     {

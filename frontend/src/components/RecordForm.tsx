@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../lib/api';
+import ItemSearch from './ItemSearch';
 
 export type Field = {
   key: string; label: string; type: string; required: boolean; help?: string; w?: string; custom?: boolean; sys?: boolean; cfId?: number; choices?: string[]; source?: string;
@@ -13,10 +14,10 @@ function useOptions(source?: string) {
   return useQuery({ queryKey: ['options', source], enabled: !!source, staleTime: 60_000, queryFn: async () => (await get(`/options/${source}`)).options as { id: string | number; name: string }[] });
 }
 
-function Select({ field, value, onChange }: { field: Field; value: string; onChange: (v: string) => void }) {
+function Select({ field, value, onChange, disabled }: { field: Field; value: string; onChange: (v: string) => void; disabled?: boolean }) {
   const o = useOptions(field.source);
   return (
-    <select className="form-select" value={value} required={field.required} onChange={(e) => onChange(e.target.value)}>
+    <select className="form-select" value={value} required={field.required} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
       <option value="">{field.required ? 'Choose…' : '—'}</option>
       {(o.data ?? []).map((x) => <option key={x.id} value={String(x.id)}>{x.name}</option>)}
     </select>
@@ -24,7 +25,7 @@ function Select({ field, value, onChange }: { field: Field; value: string; onCha
 }
 
 /** One input, by the field's type. Values travel as strings, the way the PHP forms post them. */
-function Input({ field, value, onChange }: { field: Field; value: string | string[]; onChange: (v: any) => void }) {
+function Input({ field, value, onChange, label, onPatch, locked }: { field: Field; value: string | string[]; onChange: (v: any) => void; label?: string; onPatch?: (patch: Record<string, any>) => void; locked?: boolean }) {
   const v = Array.isArray(value) ? '' : value ?? '';
   const common = { className: 'form-control', value: v, required: field.required, onChange: (e: any) => onChange(e.target.value) };
   switch (field.type) {
@@ -37,7 +38,8 @@ function Input({ field, value, onChange }: { field: Field; value: string | strin
     case 'number': return <input type="number" step="1" {...common} />;
     case 'decimal': case 'currency': case 'money': return <input type="number" step="0.01" {...common} />;
     case 'percent': return <input type="number" step="0.01" min="0" max="100" {...common} />;
-    case 'select': return <Select field={field} value={v} onChange={onChange} />;
+    case 'select': return <Select field={field} value={v} onChange={onChange} disabled={locked} />;
+    case 'variant': return <ItemSearch value={v} label={label ?? ''} disabled={locked} onPick={(p) => onPatch?.({ [field.key]: p ? String(p.id) : '', [field.key + ':label']: p ? p.label : '' })} />;
     case 'dropdown': return <select className="form-select" value={v} required={field.required} onChange={(e) => onChange(e.target.value)}><option value="">—</option>{(field.choices ?? []).map((c) => <option key={c}>{c}</option>)}</select>;
     case 'radio': return <div>{(field.choices ?? []).map((c) => <div className="form-check form-check-inline" key={c}><input className="form-check-input" type="radio" checked={v === c} onChange={() => onChange(c)} id={`${field.key}-${c}`} /><label className="form-check-label" htmlFor={`${field.key}-${c}`}>{c}</label></div>)}</div>;
     case 'multiselect': { const sel = Array.isArray(value) ? value : []; return <div>{(field.choices ?? []).map((c) => <div className="form-check" key={c}><input className="form-check-input" type="checkbox" checked={sel.includes(c)} id={`${field.key}-${c}`} onChange={(e) => onChange(e.target.checked ? [...sel, c] : sel.filter((x) => x !== c))} /><label className="form-check-label" htmlFor={`${field.key}-${c}`}>{c}</label></div>)}</div>; }
@@ -52,7 +54,7 @@ const widthOf = (f: Field, cols: number) => (f.w ? Number(f.w) : cols === 3 ? 33
  * The designed form of an entity: sections, columns, widths, own labels and fields, from /schema/<entity>.
  * `values` holds standard fields by key and custom fields as `cf:<id>`; `onChange` gets the whole map.
  */
-export function SchemaForm({ schema, values, onChange }: { schema: Schema; values: Record<string, any>; onChange: (v: Record<string, any>) => void }) {
+export function SchemaForm({ schema, values, onChange, locked = [] }: { schema: Schema; values: Record<string, any>; onChange: (v: Record<string, any>) => void; locked?: string[] }) {
   const set = (k: string, v: any) => onChange({ ...values, [k]: v });
   return (
     <div className={`ffgrid ${schema.style === 'left' ? 'ff-left' : ''}`}>
@@ -65,7 +67,7 @@ export function SchemaForm({ schema, values, onChange }: { schema: Schema; value
             {fields.map((f) => (
               <div key={f.key} className="mb-3" style={{ flex: `0 0 ${widthOf(f, s.cols)}%`, maxWidth: `${widthOf(f, s.cols)}%` }}>
                 <label className="form-label">{f.label}{f.required && <span className="text-danger"> *</span>}</label>
-                <Input field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />
+                <Input field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} label={values[f.key + ':label']} onPatch={(patch) => onChange({ ...values, ...patch })} locked={locked.includes(f.key)} />
                 {f.help && <div className="form-text">{f.help}</div>}
               </div>
             ))}

@@ -43,7 +43,9 @@ Upload `public/ui/` to the server after a build.
 |---|---|
 | Sign-in, shell (menu, profile, theme), dashboard | done (dashboard is a simplified first version: no charts yet) |
 | Customers (list with column picker, record page, form from the layout designer) | done |
-| Everything else (items, suppliers, supplier items, purchase, sales, stock, racks, reports, settings, POS, admin) | still the PHP pages |
+| Suppliers (list, record page with contacts, items supplied, rate list add / revise / remove, orders, bills; form with contact people) | done |
+| Supplier items (list with filters + column picker, record page with rates, form with the our-item search) | done (CSV import stays on the PHP page for now) |
+| Everything else (items, purchase documents, sales, stock, racks, reports, settings, POS, admin) | still the PHP pages |
 | Layout designer, print pages (invoice, voucher), POS counter | stay PHP for now |
 
-Suggested order: Suppliers → Supplier items → Items → Warehouses / racks → Purchase documents → Sales documents → Stock documents → Reports → Settings → POS → Super admin.
+Suggested order: Items → Warehouses / racks → Purchase documents → Sales documents → Stock documents → Reports → Settings → POS → Super admin.

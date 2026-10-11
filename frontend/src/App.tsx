@@ -6,6 +6,12 @@ import Dashboard from './pages/Dashboard';
 import CustomerList from './pages/customers/List';
 import CustomerDetail from './pages/customers/Detail';
 import CustomerForm from './pages/customers/Form';
+import SupplierList from './pages/suppliers/List';
+import SupplierDetail from './pages/suppliers/Detail';
+import SupplierForm from './pages/suppliers/Form';
+import SupplierItemList from './pages/supplierItems/List';
+import SupplierItemDetail from './pages/supplierItems/Detail';
+import SupplierItemForm from './pages/supplierItems/Form';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -26,6 +32,14 @@ export default function App() {
         <Route path="/customers/create" element={<CustomerForm />} />
         <Route path="/customers/:id" element={<CustomerDetail />} />
         <Route path="/customers/:id/edit" element={<CustomerForm />} />
+        <Route path="/suppliers" element={<SupplierList />} />
+        <Route path="/suppliers/create" element={<SupplierForm />} />
+        <Route path="/suppliers/:id" element={<SupplierDetail />} />
+        <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
+        <Route path="/purchase/supplier-items" element={<SupplierItemList />} />
+        <Route path="/purchase/supplier-items/create" element={<SupplierItemForm />} />
+        <Route path="/purchase/supplier-items/:id" element={<SupplierItemDetail />} />
+        <Route path="/purchase/supplier-items/:id/edit" element={<SupplierItemForm />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>

@@ -291,7 +291,7 @@ final class FormDesign
     private const PICK = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses', 'group_id' => 'customer_groups',
         'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'item_type' => 'item_types', 'supplier_type' => 'supplier_types'];
     /** Overrides of the guess below: entity => key => input type. */
-    private const INPUT = ['customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
+    private const INPUT = ['supplier_item' => ['variant_id' => 'variant'], 'customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
 
     /** How one standard field is typed on a form: text | textarea | email | phone | date | number | money | select (with `source`). */
     public static function inputMeta(string $entity, string $key): array

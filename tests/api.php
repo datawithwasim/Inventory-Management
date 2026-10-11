@@ -86,6 +86,27 @@ check('an unknown pick list or schema is a 404 JSON', $a->call('GET', '/options/
 $r = $a->call('POST', "/records/customer/$cid/notes", ['body' => 'Called today']);
 check('adding a note works through the API', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM record_notes WHERE tenant_id = ? AND entity = ? AND entity_id = ?', [$tA, 'customer', $cid]) === 1);
 
+echo "Suppliers and supplier items through the API\n";
+$r = $a->call('POST', '/suppliers', ['name' => 'Api Mills', 'payment_terms_days' => '15', 'contacts' => [['name' => 'Ravi', 'phone' => '555 1234', 'role' => 'Sales', 'email' => '']]]);
+$sid = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Api Mills'", [$tA]);
+check('a supplier with an extra contact person saves from JSON', $r['status'] === 200 && $sid > 0 && (int)DB::val('SELECT COUNT(*) FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ?', [$tA, $sid]) === 1);
+$r = $a->call('GET', "/suppliers/$sid");
+check('the supplier page data has contacts, rates and the items supplied', $r['status'] === 200 && ($r['json']['data']['contacts'][0]['name'] ?? '') === 'Ravi' && array_key_exists('rates', $r['json']['data']) && array_key_exists('products', $r['json']['data']));
+$a->call('POST', '/items', ['name' => 'Api Velvet', 'unit_id' => (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]), 'variants' => [['sku' => 'APV', 'cost_price' => 100, 'sale_price' => 200]]]);
+$vid = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'APV'", [$tA]);
+$r = $a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Royal Maroon', 'supplier_code' => 'RM-1', 'variant_id' => $vid, 'min_order_qty' => '50', 'is_preferred' => 1]);
+$siId = (int)DB::val("SELECT id FROM supplier_items WHERE tenant_id = ? AND supplier_code = 'RM-1'", [$tA]);
+check('a supplier item links to our variant through the API', $siId > 0 && ($r['json']['redirect'] ?? '') === "purchase/supplier-items/$siId");
+$a->call('POST', "/suppliers/$sid/rates", ['variant_id' => $vid, 'rate' => '120', 'discount_pct' => '10', 'return' => "purchase/supplier-items/$siId"]);
+$r = $a->call('GET', "/record/supplier_item/$siId");
+$vals = [];
+foreach (array_merge($r['json']['record']['summary'] ?? [], ...array_column($r['json']['record']['sections'] ?? [], 'items')) as $it) $vals[$it['label']] = $it;
+check('the supplier item record page has its record-only facts (current rate after discount) and a link to our item', ($vals['Current rate']['text'] ?? '') !== '' && str_contains($vals['Current rate']['text'], '108') && str_contains((string)($vals['Our item']['href'] ?? ''), 'items/'));
+$r = $a->call('GET', '/schema/supplier_item');
+check('the supplier item schema types our-item as a searchable item picker', ($r['json']['schema']['fields']['variant_id']['type'] ?? '') === 'variant' && ($r['json']['schema']['fields']['supplier_id']['source'] ?? '') === 'suppliers');
+$r = $a->call('GET', '/columns/supplier_items');
+check('column choices come for a list', $r['status'] === 200 && isset($r['json']['options']['our_item']) && is_array($r['json']['visible']));
+
 echo "Isolation and secrets\n";
 $b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
 check('another company gets a 404 for it, on the page data and the record data', $b->call('GET', "/customers/$cid")['status'] === 404 && $b->call('GET', "/record/customer/$cid")['status'] === 404);

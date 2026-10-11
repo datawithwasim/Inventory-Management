@@ -82,7 +82,8 @@ final class ApiController extends Controller
         if (!Auth::can($meta[0]) && !Auth::can(explode('.', $meta[0])[0] . '.view')) $this->forbidden();
         $row = DB::one("SELECT * FROM `{$meta[1]}` WHERE tenant_id = ? AND id = ?", [Auth::tenantId(), (int)$id]) ?? $this->notFound();
         $cf = isset(CustomFields::ENTITIES[$entity]) ? CustomFields::values($entity, (int)$id) : [];
-        Api::send(['ok' => true, 'record' => Api::clean(RecordView::payload($entity, $row, $cf)), 'timeline' => RecordView::timelineRows($entity, (int)$id),
+        [$row, $facts] = RecordView::prepare($entity, $row);
+        Api::send(['ok' => true, 'record' => Api::clean(RecordView::payload($entity, $row, $cf, $facts)), 'timeline' => RecordView::timelineRows($entity, (int)$id),
             'notes' => Api::clean(RecordView::notes($entity, (int)$id)), 'canNote' => Auth::can($meta[0])]);
     }
 }
