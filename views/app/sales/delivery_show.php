@@ -1,6 +1,7 @@
 
 <?php ob_start(); ?>
     <a class="btn btn-outline-secondary" target="_blank" href="<?= url("sales/deliveries/{$d['id']}/print") ?>"><i class="bi bi-printer"></i> Delivery note</a>
+    <a class="btn btn-outline-secondary" target="_blank" href="<?= url("sales/deliveries/{$d['id']}/voucher") ?>"><i class="bi bi-scissors"></i> Stock-out voucher</a>
     <?php if ($d['invoice_id']): ?><a class="btn btn-outline-primary" href="<?= url('sales/invoices/' . (int)$d['invoice_id']) ?>">Invoice <?= e($d['invoice_no']) ?></a>
     <?php elseif (can('sales.create')): ?><form method="post" action="<?= url("sales/deliveries/{$d['id']}/invoice") ?>"><?= csrf_field() ?><button class="btn btn-primary">Create invoice</button></form><?php endif; ?>
   <?php $actions = ob_get_clean(); ?>

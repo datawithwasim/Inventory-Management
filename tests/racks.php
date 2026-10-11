@@ -93,6 +93,13 @@ check('cannot take stock from a rack that has none', $ledger($tA) === $before &&
 $r = $adj($main, [['variant_id' => $tbl, 'qty' => -7, 'location_id' => $A1]]);
 check('message mentions stock on other racks', str_contains($a->follow($r)['body'], 'other racks') && $bal($tA, $tbl, $main, 0, $A1) === 6.0);
 $adj($main, [['variant_id' => $tbl, 'qty' => -4, 'location_id' => $A1]]);
+$outAdj = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment'", [$tA]);
+$av = $a->get("/stock/adjustments/$outAdj/voucher");
+check('a stock-out adjustment has a voucher with the rack and the quantity taken', $av['status'] === 200 && str_contains($av['body'], 'Stock-out voucher') && str_contains($av['body'], 'A-01'));
+$inAdj = (int)$val("SELECT MIN(id) FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment'", [$tA]);
+$iv = $a->get("/stock/adjustments/$inAdj/voucher");
+check('an adjustment that only adds stock has nothing to issue: it goes back to the document with a message', $iv['status'] === 302 && str_contains((string)$iv['location'], "stock/adjustments/$inAdj"));
+
 check('remove from the right rack works (A-01: 2 left, others unchanged)', $bal($tA, $tbl, $main, 0, $A1) === 2.0 && $bal($tA, $tbl, $main, 0, $B1) === 5.0);
 $n = $ledger($tA);
 $adj($main, [['variant_id' => $tbl, 'qty' => 1, 'location_id' => $S1]]);
@@ -118,6 +125,10 @@ check('moving to the same rack is refused', $ledger($tA) === $n);
 $tr($main, $main, [['variant_id' => $vel, 'batch_id' => $roll, 'qty' => 5, 'location_id' => $B2, 'to_location_id' => $B1]]);
 check('moving from a rack that is empty is refused', $ledger($tA) === $n);
 $tr($main, $show, [['variant_id' => $tbl, 'qty' => 5, 'location_id' => $B1, 'to_location_id' => $S1]]);
+$lastTr = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+$tv = $a->get("/stock/transfers/$lastTr/voucher");
+check('a transfer has a voucher too, showing from-rack and to-rack', $tv['status'] === 200 && str_contains($tv['body'], 'Stock-out voucher') && str_contains($tv['body'], 'To rack'));
+
 check('stock moved to a rack in another warehouse', $bal($tA, $tbl, $show, 0, $S1) === 5.0 && $bal($tA, $tbl, $main, 0, $B1) === 0.0);
 $n = $ledger($tA);
 $tr($main, $show, [['variant_id' => $tbl, 'qty' => 1, 'location_id' => 0, 'to_location_id' => $B1]]);

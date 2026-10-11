@@ -214,6 +214,9 @@ $router->get('/sales/deliveries', $A . 'DeliveryController@index', ['auth', 'per
 $router->get('/sales/deliveries/create', $A . 'DeliveryController@create', ['auth', 'perm:sales.create']);
 $router->post('/sales/deliveries', $A . 'DeliveryController@store', ['auth', 'perm:sales.create']);
 $router->get('/sales/deliveries/{id}', $A . 'DeliveryController@show', ['auth', 'perm:sales.view']);
+$router->get('/sales/deliveries/{id}/voucher', $A . 'VoucherController@delivery', ['auth', 'perm:sales.view']);
+$router->get('/stock/adjustments/{id}/voucher', $A . 'VoucherController@adjustment', ['auth', 'perm:stock.view']);
+$router->get('/stock/transfers/{id}/voucher', $A . 'VoucherController@transfer', ['auth', 'perm:stock.view']);
 $router->get('/sales/deliveries/{id}/print', $A . 'DeliveryController@print', ['auth', 'perm:sales.view']);
 $router->post('/sales/deliveries/{id}/invoice', $A . 'DeliveryController@invoice', ['auth', 'perm:sales.create']);
 

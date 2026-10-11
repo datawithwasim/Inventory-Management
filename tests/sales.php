@@ -355,6 +355,13 @@ $odr = $a->get("/sales/orders/$o3")['body'];
 check('order page: the action buttons live in the header (some open order shows Confirm / Deliver / Cancel)', str_contains($h, 'rec-actions') && preg_match('/Deliver goods|Confirm &amp; reserve|Cancel|Close/', $h . $odr . $a->get("/sales/orders/$o4")['body']) === 1);
 $h = $a->get("/sales/deliveries/$d1")['body'];
 check('delivery page: shell, delivery note button, order link, rows', str_contains($h, 'class="rec-top"') && str_contains($h, '/print') && str_contains($h, 'id="lines"') && str_contains($h, 'Order'));
+$vch = $a->get("/sales/deliveries/$d1/voucher");
+$rollNos = array_column(DB::all('SELECT DISTINCT b.batch_no FROM delivery_items l JOIN batches b ON b.id = l.batch_id WHERE l.delivery_id = ?', [$d1]), 'batch_no');
+$rackNos = array_column(DB::all('SELECT DISTINCT k.code FROM delivery_items l JOIN locations k ON k.id = l.location_id WHERE l.delivery_id = ?', [$d1]), 'code');
+check('stock-out voucher: title, the exact roll(s) and rack(s) to take from, issue qty, blank cut / left columns, signatures', $vch['status'] === 200 && str_contains($vch['body'], 'Stock-out voucher') && $rollNos && str_contains($vch['body'], $rollNos[0]) && $rackNos && str_contains($vch['body'], $rackNos[0])
+    && str_contains($vch['body'], 'Issue qty') && str_contains($vch['body'], 'Actual cut') && str_contains($vch['body'], 'Received by (cutter)') && str_contains($vch['body'], 'Roll length before'));
+check('the delivery page has a button for it', str_contains($h, '/voucher'));
+check('another company cannot open the voucher', $b->get("/sales/deliveries/$d1/voucher")['status'] === 404);
 $inv = (int)$val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$tA]);
 $h = $a->get("/sales/invoices/$inv")['body'];
 check('invoice page: shell, amounts, payments, record-payment form and print buttons', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Print invoice') && str_contains($h, 'Edit page layout'));
