@@ -57,7 +57,7 @@ $acme = $ins('customers', ['name' => 'Acme Interiors', 'credit_days' => 15]);
 $ravi = $ins('customers', ['name' => "=HYPERLINK(\"http://x\")"]);
 $s1 = $ins('suppliers', ['name' => 'Loom House']);
 $otherCust = DB::insert('customers', ['tenant_id' => $tB, 'name' => 'Stranger']);
-DB::insert('sales_invoices', ['tenant_id' => $tB, 'invoice_no' => 'X-1', 'customer_id' => $otherCust, 'invoice_date' => $day(-1), 'subtotal' => 999, 'total' => 999]);
+DB::insert('sales_invoices', ['tenant_id' => $tB, 'invoice_no' => 'X-1', 'customer_id' => $otherCust, 'invoice_date' => $day(-1), 'subtotal' => 987654.32, 'total' => 987654.32]);
 
 // Sales: i1 (Acme, 40 days ago, overdue), i2 (Ravi, today)
 $d1 = $ins('deliveries', ['delivery_no' => 'D1', 'customer_id' => $acme, 'warehouse_id' => $main, 'delivery_date' => $day(-40), 'source' => 'order']);
@@ -185,7 +185,7 @@ $rows = array_values(array_filter($cells($h), fn($r) => count($r) > 4));
 check('statement from a later date starts with an opening balance of 10,856', count($rows) === 3 && $near($num($rows[0][5]), 10856) && $near($num($rows[2][5]), 4656));
 check('statement with no customer chosen asks for one', str_contains($page('customer-statement'), 'Choose a customer'));
 $h = $page('customer-statement', "customer=$otherCust&from=" . $day(-60));
-check('another company\'s customer id leaks nothing', !str_contains($h = preg_replace('/[a-f0-9]{32,}/', '', $h), 'X-1') && !str_contains($h, '999'));
+check('another company\'s customer id leaks nothing', !str_contains($h = preg_replace('/[a-f0-9]{32,}/', '', $h), 'X-1') && !str_contains($h, '987,654'));
 $h = $page('supplier-statement', "supplier=$s1&from=" . $day(-60));
 $rows = array_values(array_filter($cells($h), fn($r) => count($r) > 4));
 check('supplier statement: bill 28,000 − payment 10,000 − return 2,800 = 15,200', count($rows) === 4 && $near($num($rows[3][5]), 15200));
