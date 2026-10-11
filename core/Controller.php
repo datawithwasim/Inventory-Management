@@ -50,6 +50,7 @@ abstract class Controller
 
     protected function notFound(): never
     {
+        if (Api::on()) Api::error(404, 'Not found.');
         http_response_code(404);
         View::render('errors/404', [], null);
         exit;
@@ -57,6 +58,7 @@ abstract class Controller
 
     protected function forbidden(): never
     {
+        if (Api::on()) Api::error(403, 'You do not have permission for this.');
         http_response_code(403);
         View::render('errors/403', [], null);
         exit;

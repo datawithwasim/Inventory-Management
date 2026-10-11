@@ -5,3 +5,4 @@ storage/uploads/*
 vendor/
 .DS_Store
 storage/installed.lock
+frontend/node_modules/

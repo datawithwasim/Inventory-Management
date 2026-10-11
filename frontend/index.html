@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventory</title>
+  <link href="/assets/lib/inter/inter.css" rel="stylesheet">
+  <link href="/assets/lib/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="/assets/lib/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/assets/css/app.css" rel="stylesheet">
+  <link href="/assets/css/charts.css" rel="stylesheet">
+  <style id="brand-vars"></style>
+  <script>(function(){var m=null;try{m=localStorage.getItem("inv-mode")}catch(e){}if(!m||m==="default")m="light";if(m==="auto")m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var d=document.documentElement;d.setAttribute("data-bs-theme",m);d.setAttribute("data-theme",m);try{if(localStorage.getItem("inv-sb")==="1")d.classList.add("sb-collapsed")}catch(e){}})();</script>
+</head>
+<body class="app">
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

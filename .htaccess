@@ -13,6 +13,7 @@ RewriteRule ^(composer\.(json|lock)|README\.md)$ - [F,L]
 
 # Public assets live in public/assets.
 RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+RewriteRule ^ui/(.*)$ public/ui/$1 [L]
 
 # Everything else goes through the front controller.
 RewriteCond %{REQUEST_FILENAME} !-f

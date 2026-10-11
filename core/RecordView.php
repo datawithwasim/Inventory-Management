@@ -127,9 +127,60 @@ final class RecordView
         return $o;
     }
 
+    /** A value as {text, href}: the structured twin of cell(), for the React pages. */
+    private static function item(string $entity, string $k, array $row, array $cfValues, array $r, array $facts): array
+    {
+        $label = self::label($entity, $k, $r);
+        if (str_starts_with($k, 'sys:')) {
+            $html = (string)($facts[substr($k, 4)][1] ?? '');
+            $href = preg_match('/href="([^"]+)"/', $html, $m) ? html_entity_decode($m[1]) : null;
+            return ['key' => $k, 'label' => $label, 'text' => trim(html_entity_decode(strip_tags($html))), 'href' => $href];
+        }
+        $text = self::value($entity, $k, $row, $cfValues);
+        $href = null;
+        if ($text !== '' && isset(self::LINKS[$k]) && (int)($row[$k] ?? 0) > 0) $href = url(self::LINKS[$k] . '/' . (int)$row[$k]);
+        if ($text !== '' && $k === 'variant_id' && $entity === 'supplier_item' && !empty($row['item_id'])) $href = url('items/' . (int)$row['item_id']);
+        return ['key' => $k, 'label' => $label, 'text' => $text, 'href' => $href];
+    }
+
+    /** The designed record page as data: summary strip + sections (title, columns, items). Same rules as summary() / sections(). */
+    public static function payload(string $entity, array $row, array $cfValues, array $facts = []): array
+    {
+        if (!isset(FormDesign::FIELDS[$entity])) return ['summary' => [], 'sections' => []];
+        $r = FormDesign::resolve($entity);
+        $summary = array_map(fn($k) => self::item($entity, $k, $row, $cfValues, $r, $facts), $r['summary']);
+        $sections = [];
+        $first = true;
+        foreach ($r['sections'] as $s) {
+            $keys = array_values(array_diff($s['fields'], $r['summary']));
+            if (!$keys) continue;
+            $title = $s['title'] !== '' ? $s['title'] : ($first ? (FormFields::ENTITY_LABELS[$entity] ?? 'Details') : 'More details');
+            $title = $s['title'] === '' && $first ? trim(preg_replace(['/ form$/i', '/\\s*\\(.*?\\)/'], '', $title)) . ' information' : $title;
+            $first = false;
+            $cols = in_array((int)$s['cols'], [1, 2, 3], true) ? (int)$s['cols'] : 2;
+            $sections[] = ['title' => $title, 'cols' => $cols, 'items' => array_map(fn($k) => self::item($entity, $k, $row, $cfValues, $r, $facts), $keys)];
+        }
+        return ['summary' => $summary, 'sections' => $sections, 'related' => array_map(fn($x) => $x, $r['related'] ?? []), 'customised' => $r['customised']];
+    }
+
     // ------------------------------------------------------------------ timeline
 
     private const VERBS = ['create' => 'created', 'update' => 'updated', 'delete' => 'deleted', 'rate_add' => 'added a rate', 'rate_delete' => 'removed a rate', 'rate_import' => 'imported rates'];
+
+    /** Timeline entries as data. */
+    public static function timelineRows(string $entity, int $id): array
+    {
+        $audit = self::META[$entity][2] ?? $entity;
+        $out = [];
+        foreach (DB::all(
+            "SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON a.actor_type = 'user' AND u.id = a.actor_id
+             WHERE a.tenant_id = ? AND a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [Auth::tenantId(), $audit, $id]) as $a) {
+            $suffix = preg_replace('/^' . preg_quote($audit, '/') . '_/', '', (string)$a['action']);
+            $out[] = ['who' => $a['user_name'] ?: ($a['actor_type'] === 'admin' ? 'Support' : 'System'), 'verb' => self::VERBS[$suffix] ?? str_replace('_', ' ', $suffix),
+                'details' => $a['details'] ? mb_substr((string)$a['details'], 0, 120) : null, 'at' => (string)$a['created_at']];
+        }
+        return $out;
+    }
 
     public static function timeline(string $entity, int $id, ?string $createdAt = null): string
     {

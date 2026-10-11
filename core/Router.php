@@ -23,12 +23,18 @@ final class Router
         $base = base_path();
         if ($base !== '' && str_starts_with($path, $base)) $path = substr($path, strlen($base));
         $path = '/' . trim($path, '/');
+        if ($path === '/app' || str_starts_with($path, '/app/')) \App\Controllers\SpaController::serve();
+        if (preg_match('~^/api(/v1)?(/|$)~', $path)) {
+            Api::enable();
+            $path = '/' . trim((string)preg_replace('~^/api(/v1)?~', '', $path), '/');
+        }
 
         foreach ($this->routes as [$m, $pattern, $handler, $mw]) {
             $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[^/]+)', $pattern) . '$#';
             if ($m !== $method || !preg_match($regex, $path, $match)) continue;
 
             if ($method === 'POST' && !hash_equals(csrf_token(), (string)($_POST['_csrf'] ?? ''))) {
+                if (Api::on()) Api::error(419, 'Your session expired. Reload the page and try again.');
                 http_response_code(419);
                 View::render('errors/419', [], null);
                 return;
@@ -37,6 +43,7 @@ final class Router
                 if (!$this->middleware($name)) return;
             }
             if (Auth::user() && Modules::blocked($path) !== null) {
+                if (Api::on()) Api::error(404, 'This part is switched off.');
                 http_response_code(404);
                 View::render('errors/404', [], null);
                 return;
@@ -46,6 +53,7 @@ final class Router
             (new $class())->$action(...array_values($params));
             return;
         }
+        if (Api::on()) Api::error(404, 'Not found.');
         http_response_code(404);
         View::render('errors/404', [], null);
     }
@@ -56,19 +64,20 @@ final class Router
         [$n, $arg] = array_pad(explode(':', $name, 2), 2, null);
         switch ($n) {
             case 'auth':
-                if (!Auth::check()) redirect('login');
+                if (!Auth::check()) { if (Api::on()) Api::error(401, 'Please sign in.'); redirect('login'); }
                 return true;
             case 'guest':
-                if (Auth::check()) redirect('dashboard');
+                if (Auth::check()) { if (Api::on()) Api::send(['ok' => true, 'redirect' => 'dashboard', 'messages' => []]); redirect('dashboard'); }
                 return true;
             case 'admin':
-                if (!Auth::admin()) redirect('admin/login');
+                if (!Auth::admin()) { if (Api::on()) Api::error(401, 'Please sign in.'); redirect('admin/login'); }
                 return true;
             case 'admin_guest':
                 if (Auth::admin()) redirect('admin');
                 return true;
             case 'perm':
                 if (!Auth::can((string)$arg)) {
+                    if (Api::on()) Api::error(403, 'You do not have permission for this.');
                     http_response_code(403);
                     View::render('errors/403', [], null);
                     return false;

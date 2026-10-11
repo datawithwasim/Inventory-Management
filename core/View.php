@@ -7,6 +7,7 @@ final class View
 {
     public static function render(string $view, array $data = [], ?string $layout = 'layouts/app'): void
     {
+        if (Api::on()) Api::view($view, $data);
         $content = self::capture($view, $data);
         if ($layout === null) {
             echo $content;

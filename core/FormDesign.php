@@ -285,6 +285,52 @@ final class FormDesign
         return $o;
     }
 
+    // ---------------------------------------------------------------- input metadata (for the React forms)
+
+    /** key => option source, for fields that pick from a list. */
+    private const PICK = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses', 'group_id' => 'customer_groups',
+        'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'item_type' => 'item_types', 'supplier_type' => 'supplier_types'];
+    /** Overrides of the guess below: entity => key => input type. */
+    private const INPUT = ['customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
+
+    /** How one standard field is typed on a form: text | textarea | email | phone | date | number | money | select (with `source`). */
+    public static function inputMeta(string $entity, string $key): array
+    {
+        if (isset(self::INPUT[$entity][$key])) return ['type' => self::INPUT[$entity][$key]];
+        if (isset(self::PICK[$key])) return ['type' => 'select', 'source' => self::PICK[$key]];
+        return ['type' => match (true) {
+            str_ends_with($key, '_date') || $key === 'valid_until' => 'date',
+            $key === 'email' => 'email',
+            $key === 'phone' => 'phone',
+            (bool)preg_match('/charge|cost|price|credit_limit/', $key) => 'money',
+            (bool)preg_match('/days|qty/', $key) => 'number',
+            (bool)preg_match('/^(notes?|description|reason|address|ship_to)$/', $key) => 'textarea',
+            default => 'text',
+        }];
+    }
+
+    /** The whole form of one entity as data: sections with typed fields, summary, related lists, hidden / required rules. */
+    public static function schema(string $entity): array
+    {
+        $r = self::resolve($entity);
+        $fields = [];
+        foreach ($r['sections'] as $sec) {
+            foreach ($sec['fields'] as $k) {
+                if (isset($fields[$k])) continue;
+                if (isset($r['cf'][$k])) {
+                    $c = $r['cf'][$k];
+                    $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: $c['label'], 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'], 'choices' => $c['choices'], 'required' => (bool)$c['is_required'], 'help' => $r['props'][$k]['help'], 'w' => $r['props'][$k]['w']];
+                } elseif (str_starts_with($k, 'sys:')) {
+                    $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: self::sysLabel($entity, $k), 'sys' => true, 'type' => 'text', 'required' => false, 'help' => '', 'w' => ''];
+                } else {
+                    $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: (self::FIELDS[$entity][$k] ?? $k), 'custom' => false, 'required' => FormFields::required($entity, $k), 'help' => $r['props'][$k]['help'], 'w' => $r['props'][$k]['w']] + self::inputMeta($entity, $k);
+                }
+            }
+        }
+        return ['entity' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity] ?? $entity, 'style' => $r['style'], 'sections' => $r['sections'], 'fields' => $fields, 'summary' => $r['summary'], 'related' => $r['related'],
+            'customised' => $r['customised'], 'detail' => in_array($entity, self::DETAIL, true), 'canDesign' => Auth::can('settings.edit')];
+    }
+
     // ---------------------------------------------------------------- designer model & save
 
     private static function kind(string $col): string

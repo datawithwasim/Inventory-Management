@@ -10,6 +10,11 @@ $router->post('/install', $A . 'InstallController@run');
 
 // ---- Company app ----
 $router->get('/', $A . 'AuthController@home');
+$router->get('/session', $A . 'ApiController@session');
+$router->get('/columns/{list}', $A . 'ApiController@columns', ['auth']);
+$router->get('/schema/{entity}', $A . 'ApiController@schema', ['auth']);
+$router->get('/options/{source}', $A . 'ApiController@options', ['auth']);
+$router->get('/record/{entity}/{id}', $A . 'ApiController@record', ['auth']);
 $router->get('/login', $A . 'AuthController@showLogin', ['guest']);
 $router->post('/login', $A . 'AuthController@login', ['guest']);
 $router->post('/logout', $A . 'AuthController@logout');

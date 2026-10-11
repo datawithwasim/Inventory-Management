@@ -34,6 +34,7 @@ function asset(string $path): string
 
 function redirect(string $path): never
 {
+    if (Core\Api::on()) Core\Api::redirect(preg_replace('~^https?://[^/]+~', '', $path));
     header('Location: ' . url($path));
     exit;
 }

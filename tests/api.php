@@ -1,0 +1,105 @@
+<?php
+declare(strict_types=1);
+
+/** JSON API mode (the React app's backend bridge).  php tests/api.php */
+$base = rtrim($argv[1] ?? 'http://127.0.0.1:8099', '/');
+require dirname(__DIR__) . '/core/bootstrap.php';
+require __DIR__ . '/lib.php';
+
+use Core\DB;
+
+/** Small JSON client: keeps the session cookie and the CSRF token the way the React app does. */
+final class J
+{
+    private string $jar;
+    public string $csrf = '';
+    public function __construct(private string $base) { $this->jar = tempnam(sys_get_temp_dir(), 'jj'); }
+    public function call(string $method, string $path, ?array $body = null, bool $csrf = true): array
+    {
+        $ch = curl_init($this->base . '/api/v1' . $path);
+        $h = ['Accept: application/json'];
+        if ($csrf && $this->csrf !== '') $h[] = 'X-CSRF-Token: ' . $this->csrf;
+        if ($body !== null) $h[] = 'Content-Type: application/json';
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => $method, CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar, CURLOPT_HTTPHEADER => $h,
+            CURLOPT_POSTFIELDS => $body !== null ? json_encode($body) : null]);
+        $raw = (string)curl_exec($ch);
+        $st = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['status' => $st, 'json' => json_decode($raw, true), 'raw' => $raw];
+    }
+    public function session(): array { $r = $this->call('GET', '/session'); $this->csrf = (string)($r['json']['csrf'] ?? ''); return $r; }
+}
+
+$sfx = bin2hex(random_bytes(3));
+$sa = config('superadmin');
+$admin = new Client($base);
+$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
+$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
+$mk = function (string $name) use ($admin, $pro, $sfx): array {
+    $email = strtolower($name) . "-$sfx@test.local";
+    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '', 'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
+    return [$email, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
+};
+[$emA, $tA] = $mk('Apia');
+[$emB, $tB] = $mk('Apib');
+
+echo "Session and sign-in\n";
+$a = new J($base);
+$s = $a->session();
+check('signed out: the session call answers JSON with a CSRF token and no user', $s['status'] === 200 && ($s['json']['authenticated'] ?? null) === false && strlen($a->csrf) >= 32 && !isset($s['json']['user']));
+$r = $a->call('GET', '/customers');
+check('a protected route answers 401 JSON instead of redirecting to the login page', $r['status'] === 401 && ($r['json']['ok'] ?? null) === false);
+$r = $a->call('POST', '/login', ['email' => $emA, 'password' => 'Password123'], false);
+check('a POST without the CSRF header is refused with 419', $r['status'] === 419);
+$r = $a->call('POST', '/login', ['email' => $emA, 'password' => 'wrong']);
+check('a wrong password is a 422 with the message', $r['status'] === 422 && ($r['json']['ok'] ?? null) === false && str_contains(json_encode($r['json']['messages'] ?? []), 'password') || ($r['status'] === 422 && !empty($r['json']['messages'])));
+$r = $a->call('POST', '/login', ['email' => $emA, 'password' => 'Password123']);
+check('the right password signs in (ok + where the page would have gone)', $r['status'] === 200 && ($r['json']['ok'] ?? null) === true && ($r['json']['redirect'] ?? '') === 'dashboard');
+$s = $a->session(); $j = $s['json'];
+check('the session now carries the user, company, permissions, menu, terms and theme', ($j['authenticated'] ?? false) === true && ($j['user']['owner'] ?? false) === true && ($j['perms'][0] ?? '') === '*' && !empty($j['menu']['groups']['purchase']) && ($j['terms']['batch'][0] ?? '') === 'Roll' && ($j['theme']['brand'] ?? '') !== '' && ($j['tenant']['name'] ?? '') === "Apia $sfx");
+check('no password hash or token anywhere in the session payload', !preg_match('/password|token_hash|\$2y\$/i', json_encode(array_diff_key($j, ['csrf' => 1]))));
+
+echo "Pages as data\n";
+$r = $a->call('POST', '/customers', ['name' => 'Rani Textiles', 'phone' => '999', 'credit_days' => '30']);
+$cid = (int)DB::val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Rani Textiles'", [$tA]);
+check('saving a customer through the API runs the page\'s own validation and saves; the reply says where to go next', $r['status'] === 200 && $cid > 0 && ($r['json']['redirect'] ?? '') === "customers/$cid" && in_array('success', array_column($r['json']['messages'] ?? [], 'type'), true));
+$r = $a->call('POST', '/customers', ['name' => '']);
+check('a refused form is a 422 with the reason, nothing saved', $r['status'] === 422 && ($r['json']['ok'] ?? null) === false && str_contains(json_encode($r['json']['messages']), 'required'));
+$r = $a->call('POST', '/customers', ['name' => 'Rani Textiles']);
+check('duplicate name is refused the same way', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND name = 'Rani Textiles'", [$tA]) === 1);
+$r = $a->call('GET', '/customers');
+check('the customer list returns its rows and column choices as JSON', $r['status'] === 200 && ($r['json']['view'] ?? '') === 'app/customers/index' && in_array('Rani Textiles', array_column($r['json']['data']['rows'] ?? [], 'name'), true) && isset($r['json']['data']['cols']));
+$r = $a->call('GET', "/customers/$cid");
+check('the customer page returns its data (balance, orders, invoices)', $r['status'] === 200 && ($r['json']['data']['c']['name'] ?? '') === 'Rani Textiles' && array_key_exists('owed', $r['json']['data']));
+$r = $a->call('GET', "/record/customer/$cid");
+$sec = $r['json']['record']['sections'] ?? [];
+$vals = [];
+foreach ($sec as $x) foreach ($x['items'] as $it) $vals[$it['label']] = $it['text'];
+foreach (($r['json']['record']['summary'] ?? []) as $it) $vals[$it['label']] = $it['text'];
+check('the designed record page as data: summary + sections with the values', $r['status'] === 200 && ($vals['Phone'] ?? '') === '999' && ($vals['Credit days'] ?? '') === '30 days' || ($vals['Credit days'] ?? '') === '30');
+check('and the timeline says who created it', ($r['json']['timeline'][0]['verb'] ?? '') === 'created');
+$r = $a->call('GET', '/schema/customer');
+check('the form schema lists sections, typed fields, required rules', $r['status'] === 200 && ($r['json']['schema']['fields']['email']['type'] ?? '') === 'email' && ($r['json']['schema']['fields']['group_id']['source'] ?? '') === 'customer_groups' && !empty($r['json']['schema']['sections']));
+$r = $a->call('GET', '/options/units');
+check('pick lists come as {id, name}', $r['status'] === 200 && is_array($r['json']['options']) && isset($r['json']['options'][0]['id']));
+check('an unknown pick list or schema is a 404 JSON', $a->call('GET', '/options/passwords')['status'] === 404 && $a->call('GET', '/schema/nothing')['status'] === 404);
+$r = $a->call('POST', "/records/customer/$cid/notes", ['body' => 'Called today']);
+check('adding a note works through the API', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM record_notes WHERE tenant_id = ? AND entity = ? AND entity_id = ?', [$tA, 'customer', $cid]) === 1);
+
+echo "Isolation and secrets\n";
+$b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
+check('another company gets a 404 for it, on the page data and the record data', $b->call('GET', "/customers/$cid")['status'] === 404 && $b->call('GET', "/record/customer/$cid")['status'] === 404);
+check('and cannot change it', $b->call('POST', "/customers/$cid", ['name' => 'Hacked'])['status'] === 404 && (string)DB::val('SELECT name FROM customers WHERE id = ?', [$cid]) === 'Rani Textiles');
+$r = $a->call('GET', '/users');
+check('user lists never include password hashes', $r['status'] === 200 && !str_contains($r['raw'], 'password_hash') && !str_contains($r['raw'], '$2y$'));
+$a->call('POST', '/logout', []);
+check('signing out ends the session', $a->call('GET', '/customers')['status'] === 401);
+check('a plain page request still works and is still HTML (nothing changed for the old UI)', (new Client($base))->get('/login')['status'] === 200 && str_contains((new Client($base))->get('/login')['body'], '<form'));
+
+echo "The React shell\n";
+$spa = (new Client($base))->get('/app/customers/12');
+check('/app/... serves the built React page (any deep link), without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));
+check('its built files are reachable', preg_match('~src="(/ui/assets/[^"]+\.js)"~', $spa['body'], $m) === 1 && (new Client($base))->get($m[1])['status'] === 200);
+
+echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
+exit($fails ? 1 : 0);

@@ -25,6 +25,7 @@ try {
     $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 } catch (Throwable $e) {
     error_log((string)$e);
+    if (class_exists('Core\\Api', false) && Core\Api::on()) Core\Api::error(500, config('debug') ? $e->getMessage() : 'Something went wrong. Please try again.');
     http_response_code(500);
     if (config('debug')) {
         echo '<pre>' . e((string)$e) . '</pre>';
