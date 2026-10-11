@@ -4,8 +4,8 @@ import { get } from '../lib/api';
 export type Picked = { id: number; label: string; row: any };
 
 /** Search box for our items (name, SKU, barcode). Calls onPick with the variant; typing again clears the choice. */
-export default function ItemSearch({ value, label, onPick, supplier, placeholder = 'Search your items by name, SKU or barcode…', disabled = false }: {
-  value: string; label: string; onPick: (p: Picked | null) => void; supplier?: string | number; placeholder?: string; disabled?: boolean;
+export default function ItemSearch({ value, label, onPick, supplier, placeholder = 'Search your items by name, SKU or barcode…', disabled = false, path = '/lookup/items' }: {
+  value: string; label: string; onPick: (p: Picked | null) => void; supplier?: string | number; placeholder?: string; disabled?: boolean; path?: string;
 }) {
   const [text, setText] = useState(label); const [rows, setRows] = useState<any[]>([]); const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null); const timer = useRef<number | undefined>(undefined);
@@ -18,7 +18,7 @@ export default function ItemSearch({ value, label, onPick, supplier, placeholder
     window.clearTimeout(timer.current);
     if (!q.trim()) { setRows([]); setOpen(false); return; }
     timer.current = window.setTimeout(async () => {
-      const r: any = await get(`/lookup/items?q=${encodeURIComponent(q)}${supplier ? `&supplier=${supplier}` : ''}`);
+      const r: any = await get(`${path}?q=${encodeURIComponent(q)}${supplier ? `&supplier=${supplier}` : ''}`);
       setRows(Array.isArray(r) ? r : (r.data ?? [])); setOpen(true);
     }, 180);
   };

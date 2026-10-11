@@ -293,10 +293,14 @@ final class FormDesign
     /** Overrides of the guess below: entity => key => input type. */
     private const INPUT = ['supplier_item' => ['variant_id' => 'variant'], 'customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
 
+    /** entity => key => option source, where the same key picks from a different list on one form. */
+    private const PICK_FOR = ['adjustment' => ['reason' => 'stock_reasons']];
+
     /** How one standard field is typed on a form: text | textarea | email | phone | date | number | money | select (with `source`). */
     public static function inputMeta(string $entity, string $key): array
     {
         if (isset(self::INPUT[$entity][$key])) return ['type' => self::INPUT[$entity][$key]];
+        if (isset(self::PICK_FOR[$entity][$key])) return ['type' => 'select', 'source' => self::PICK_FOR[$entity][$key]];
         if (isset(self::PICK[$key])) return ['type' => 'select', 'source' => self::PICK[$key]];
         return ['type' => match (true) {
             str_ends_with($key, '_date') || $key === 'valid_until' => 'date',

@@ -8,7 +8,7 @@ import { Dropdown } from './ui';
 
 /** A menu link: React route when the screen has been rebuilt, otherwise the PHP page. */
 export function AppLink({ item, className, children, onClick }: { item: { path: string; href?: string }; className?: string; children: ReactNode; onClick?: () => void }) {
-  if (isReact(item.path)) return <NavLink to={item.href ?? item.path} className={({ isActive }) => `${className ?? ''} ${isActive ? 'active' : ''}`} onClick={onClick}>{children}</NavLink>;
+  if (isReact(item.path)) return <NavLink to={item.href ?? item.path} end={item.path === '/stock'} className={({ isActive }) => `${className ?? ''} ${isActive ? 'active' : ''}`} onClick={onClick}>{children}</NavLink>;
   return <a className={className} href={legacyUrl(item.href ?? item.path)} onClick={onClick}>{children}</a>;
 }
 

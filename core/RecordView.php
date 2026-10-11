@@ -169,6 +169,14 @@ final class RecordView
             $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
             $facts = ['raised' => ['Raised', e(fdate(substr((string)$row['created_at'], 0, 10)))], 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')],
                 'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : '']];
+        } elseif ($entity === 'location') {
+            $facts = ['warehouse' => [term('warehouse'), $link('warehouses', (int)$row['warehouse_id'], $name('SELECT name FROM warehouses WHERE id = ?', [$row['warehouse_id']]))]];
+        } elseif ($entity === 'stocktake') {
+            $facts = ['started' => ['Started', e(fdate(substr((string)$row['created_at'], 0, 10)))]];
+        } elseif ($entity === 'adjustment' || $entity === 'transfer') {
+            if (!empty($row['reason'])) $row['reason'] = \App\Controllers\AdjustmentController::REASONS[$row['reason']] ?? $row['reason'];
+            $facts = ['date' => ['Date', e(fdate(substr((string)$row['created_at'], 0, 10))) . ' ' . e(substr((string)$row['created_at'], 11, 5))],
+                'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
         }
         return [$row, $facts];
     }

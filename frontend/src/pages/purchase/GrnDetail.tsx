@@ -28,7 +28,7 @@ export default function GrnDetail() {
         <thead><tr><th>{term('item')}</th><th>{term('batch')}</th><th>{term('rack')}</th><th className="text-end">Qty</th><th className="text-end">Returned</th><th className="text-end">Price</th><th className="text-end">Stock cost</th></tr></thead>
         <tbody>
           {d.items.map((l: any) => <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small>{(l.sup_code || l.sup_name) && <div className="small text-muted">Their: {[l.sup_code, l.sup_name].filter(Boolean).join(' · ')}</div>}</td>
-            <td>{l.batch_no ? <><a href={legacyUrl(`/stock/batches/${l.batch_id}`)}>{l.batch_no}</a>{l.supplier_lot ? <><br /><small className="text-muted">lot {l.supplier_lot}</small></> : null}</> : '—'}</td>
+            <td>{l.batch_no ? <><Link to={`/stock/batches/${l.batch_id}`}>{l.batch_no}</Link>{l.supplier_lot ? <><br /><small className="text-muted">lot {l.supplier_lot}</small></> : null}</> : '—'}</td>
             <td>{l.rack ?? 'No rack'}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{Number(l.qty_returned) > 0 ? qty(l.qty_returned) : ''}</td><td className="text-end">{money(l.unit_price)}</td><td className="text-end">{money(l.landed_unit_cost)}</td></tr>)}</tbody></table></div></div>
       {d.returns.length > 0 && <div className="card mb-3" id="returns"><div className="card-header">Returns</div><ul className="list-group list-group-flush">
         {d.returns.map((r: any) => <li className="list-group-item" key={r.id}><Link to={`/purchase/returns/${r.id}`}>{r.return_no}</Link> <span className="text-muted">· {fdate(r.return_date)} · {money(r.total)}</span></li>)}</ul></div>}

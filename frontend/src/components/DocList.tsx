@@ -38,7 +38,7 @@ export default function DocList({ title, api, queryKey, columns, filters, action
         <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">
           <thead><tr>{columns.map((c, i) => <th key={i} className={c.className}>{c.head}</th>)}</tr></thead>
           <tbody>
-            {d.rows.map((r: any) => <tr key={r.id}>{columns.map((c, i) => <td key={i} className={c.className}>{c.cell(r, d)}</td>)}</tr>)}
+            {d.rows.map((r: any, ri: number) => <tr key={r.id ?? ri}>{columns.map((c, i) => <td key={i} className={c.className}>{c.cell(r, d)}</td>)}</tr>)}
             {!d.rows.length && <tr><td colSpan={columns.length} className="text-muted">{empty}</td></tr>}
           </tbody></table></div></div>
         <Pager page={Number(sp.get('page') ?? d.page ?? 1)} pages={d.pages ?? 1} onPage={(p) => set({ page: String(p) })} />

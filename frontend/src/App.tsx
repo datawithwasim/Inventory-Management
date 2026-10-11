@@ -26,6 +26,10 @@ import BillDetail from './pages/purchase/BillDetail';
 import BillForm from './pages/purchase/BillForm';
 import { ReqList, ReqForm, ReqDetail } from './pages/purchase/ReqPages';
 import { ReturnList, ReturnCreate, ReturnDetail } from './pages/purchase/ReturnPages';
+import { WarehouseList, WarehouseDetail, WarehouseForm } from './pages/stock/WarehousePages';
+import { LocationList, LocationDetail, LocationForm } from './pages/stock/LocationPages';
+import { StockOverview, StockRacks, StockBatches, StockBatch, StockLedger } from './pages/stock/StockViews';
+import { AdjustmentList, AdjustmentForm, AdjustmentDetail, TransferList, TransferForm, TransferDetail, TakeList, TakeForm, TakeDetail } from './pages/stock/DocPages';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -75,6 +79,28 @@ export default function App() {
         <Route path="/purchase/returns" element={<ReturnList />} />
         <Route path="/purchase/returns/create" element={<ReturnCreate />} />
         <Route path="/purchase/returns/:id" element={<ReturnDetail />} />
+        <Route path="/warehouses" element={<WarehouseList />} />
+        <Route path="/warehouses/create" element={<WarehouseForm />} />
+        <Route path="/warehouses/:id" element={<WarehouseDetail />} />
+        <Route path="/warehouses/:id/edit" element={<WarehouseForm />} />
+        <Route path="/locations" element={<LocationList />} />
+        <Route path="/locations/create" element={<LocationForm />} />
+        <Route path="/locations/:id" element={<LocationDetail />} />
+        <Route path="/locations/:id/edit" element={<LocationForm />} />
+        <Route path="/stock" element={<StockOverview />} />
+        <Route path="/stock/racks" element={<StockRacks />} />
+        <Route path="/stock/batches" element={<StockBatches />} />
+        <Route path="/stock/batches/:id" element={<StockBatch />} />
+        <Route path="/stock/ledger" element={<StockLedger />} />
+        <Route path="/stock/adjustments" element={<AdjustmentList />} />
+        <Route path="/stock/adjustments/create" element={<AdjustmentForm />} />
+        <Route path="/stock/adjustments/:id" element={<AdjustmentDetail />} />
+        <Route path="/stock/transfers" element={<TransferList />} />
+        <Route path="/stock/transfers/create" element={<TransferForm />} />
+        <Route path="/stock/transfers/:id" element={<TransferDetail />} />
+        <Route path="/stock/takes" element={<TakeList />} />
+        <Route path="/stock/takes/create" element={<TakeForm />} />
+        <Route path="/stock/takes/:id" element={<TakeDetail />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>

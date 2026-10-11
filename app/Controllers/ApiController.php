@@ -71,6 +71,7 @@ final class ApiController extends Controller
             'taxes' => DB::all('SELECT id, CONCAT(name, " (", TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM rate)), "%)") AS name FROM taxes WHERE tenant_id = ? ORDER BY name', [$t]),
             'item_types' => array_map(fn($k, $l) => ['id' => $k, 'name' => $l], array_keys(ItemTypes::LABELS), ItemTypes::LABELS),
             'supplier_types' => array_map(fn($k, $l) => ['id' => $k, 'name' => $l], array_keys(Purchase::SUPPLIER_TYPES), Purchase::SUPPLIER_TYPES),
+            'stock_reasons' => array_map(fn($k, $l) => ['id' => $k, 'name' => $l], array_keys(\App\Controllers\AdjustmentController::REASONS), \App\Controllers\AdjustmentController::REASONS),
             default => $this->notFound(),
         };
         Api::send(['ok' => true, 'options' => $rows]);

@@ -88,7 +88,7 @@ function FragmentRows({ v, it, bundle, tracked, term }: { v: any; it: any; bundl
         <tr className="var-rolls-row"><td colSpan={cols} className="p-0 border-0">
           <details className="var-rolls"><summary><i className="bi bi-layers" /> {v.batches.length} {term('batch', true).toLowerCase()}{v.batches.length ? ` · ${qty(v.batches.reduce((a: number, b: any) => a + Number(b.balance), 0))} ${it.unit} left` : ''}</summary>
             <table className="table table-sm mb-0"><thead><tr><th>{term('batch')}</th><th>{term('supplier')} lot</th><th>Received</th><th className="text-end">Roll size</th><th className="text-end">Balance</th><th>Status</th></tr></thead><tbody>
-              {v.batches.map((b: any) => <tr key={b.id}><td><a href={legacyUrl(`/stock/batches/${b.id}`)}>{b.batch_no}</a></td><td>{b.supplier_lot ?? ''}</td><td>{fdate(b.received_date)}</td><td className="text-end">{qty(b.received_qty)}</td><td className="text-end">{qty(b.balance)}</td><td>{rollStatus(Number(b.balance), Number(b.received_qty))}</td></tr>)}
+              {v.batches.map((b: any) => <tr key={b.id}><td><Link to={`/stock/batches/${b.id}`}>{b.batch_no}</Link></td><td>{b.supplier_lot ?? ''}</td><td>{fdate(b.received_date)}</td><td className="text-end">{qty(b.received_qty)}</td><td className="text-end">{qty(b.balance)}</td><td>{rollStatus(Number(b.balance), Number(b.received_qty))}</td></tr>)}
               {!v.batches.length && <tr><td colSpan={6} className="text-muted">No {term('batch', true).toLowerCase()} yet.</td></tr>}</tbody></table></details></td></tr>
       )}
     </>
