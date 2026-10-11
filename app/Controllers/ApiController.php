@@ -35,7 +35,7 @@ final class ApiController extends Controller
                 'perms' => $perms, 'menu' => Menu::sidebar(), 'quick' => Menu::quick(), 'terms' => $terms, 'supportMode' => Auth::impersonating(),
                 'fmt' => ['decimals' => max(0, min(3, (int)\Core\Settings::get('currency.decimals'))), 'grouping' => \Core\Settings::get('number.grouping'), 'symbol' => \Core\Settings::get('currency.symbol'),
                     'position' => \Core\Settings::get('currency.position'), 'date' => \Core\Settings::get('date.format') ?: 'Y-m-d'],
-                'stockTypes' => StockController::TYPES,
+                'stockTypes' => StockController::TYPES, 'poStatus' => Purchase::PO_STATUS, 'payStatus' => Purchase::PAY_STATUS, 'payMethods' => Purchase::METHODS,
                 'themeCss' => preg_replace('~</?style[^>]*>~', '', Theme::css()),
                 'theme' => ['brand' => Theme::get('appearance.brand'), 'sidebar' => Theme::get('appearance.sidebar'), 'density' => Theme::get('appearance.density'), 'mode' => Theme::get('appearance.mode')],
             ];

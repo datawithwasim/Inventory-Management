@@ -45,7 +45,9 @@ Upload `public/ui/` to the server after a build.
 | Customers (list with column picker, record page, form from the layout designer) | done |
 | Suppliers (list, record page with contacts, items supplied, rate list add / revise / remove, orders, bills; form with contact people) | done |
 | Supplier items (list with filters + column picker, record page with rates, form with the our-item search) | done (CSV import stays on the PHP page for now) |
-| Everything else (items, purchase documents, sales, stock, racks, reports, settings, POS, admin) | still the PHP pages |
+| Items (list, record page with variants / rolls / supplier rates, form with variants and bundle components) | done |
+| Purchase: orders (list, approval switch, workflow buttons, form with the items table), goods receipts (against an order or direct, per-roll lines with racks and supplier lots), bills (payments), requisitions (incl. from low stock, turn into PO), returns (pick receipt, choose qty and rack) | done |
+| Everything else (sales, stock, racks, reports, settings, POS, admin) | still the PHP pages |
 | Layout designer, print pages (invoice, voucher), POS counter | stay PHP for now |
 
-Suggested order: Items → Warehouses / racks → Purchase documents → Sales documents → Stock documents → Reports → Settings → POS → Super admin.
+Suggested order: Warehouses / racks → Purchase documents → Sales documents → Stock documents → Reports → Settings → POS → Super admin.

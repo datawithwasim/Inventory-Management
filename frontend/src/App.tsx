@@ -15,6 +15,17 @@ import SupplierItemForm from './pages/supplierItems/Form';
 import ItemList from './pages/items/List';
 import ItemDetail from './pages/items/Detail';
 import ItemForm from './pages/items/Form';
+import PoList from './pages/purchase/PoList';
+import PoDetail from './pages/purchase/PoDetail';
+import PoForm from './pages/purchase/PoForm';
+import GrnList from './pages/purchase/GrnList';
+import GrnDetail from './pages/purchase/GrnDetail';
+import GrnForm from './pages/purchase/GrnForm';
+import BillList from './pages/purchase/BillList';
+import BillDetail from './pages/purchase/BillDetail';
+import BillForm from './pages/purchase/BillForm';
+import { ReqList, ReqForm, ReqDetail } from './pages/purchase/ReqPages';
+import { ReturnList, ReturnCreate, ReturnDetail } from './pages/purchase/ReturnPages';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -47,6 +58,23 @@ export default function App() {
         <Route path="/items/create" element={<ItemForm />} />
         <Route path="/items/:id" element={<ItemDetail />} />
         <Route path="/items/:id/edit" element={<ItemForm />} />
+        <Route path="/purchase/orders" element={<PoList />} />
+        <Route path="/purchase/orders/create" element={<PoForm />} />
+        <Route path="/purchase/orders/:id" element={<PoDetail />} />
+        <Route path="/purchase/orders/:id/edit" element={<PoForm />} />
+        <Route path="/purchase/orders/:id/receive" element={<GrnForm />} />
+        <Route path="/purchase/grns" element={<GrnList />} />
+        <Route path="/purchase/grns/create" element={<GrnForm />} />
+        <Route path="/purchase/grns/:id" element={<GrnDetail />} />
+        <Route path="/purchase/bills" element={<BillList />} />
+        <Route path="/purchase/bills/:id" element={<BillDetail />} />
+        <Route path="/purchase/bills/:id/edit" element={<BillForm />} />
+        <Route path="/purchase/requisitions" element={<ReqList />} />
+        <Route path="/purchase/requisitions/create" element={<ReqForm />} />
+        <Route path="/purchase/requisitions/:id" element={<ReqDetail />} />
+        <Route path="/purchase/returns" element={<ReturnList />} />
+        <Route path="/purchase/returns/create" element={<ReturnCreate />} />
+        <Route path="/purchase/returns/:id" element={<ReturnDetail />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>

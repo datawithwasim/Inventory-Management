@@ -21,9 +21,9 @@ function Value({ it }: { it: Item }) {
  * The Zoho-style record page shell: title row with actions, "Related list" menu, Overview / Timeline tabs,
  * the designed summary strip and sections (from the layout designer), module cards, and notes.
  */
-export default function RecordPage({ entity, id, name, back, badges, actions, menu, related, children }: {
+export default function RecordPage({ entity, id, name, back, badges, actions, menu, related, children, notice }: {
   entity: string; id: string | number; name: string; back: string; badges?: ReactNode; actions?: ReactNode; menu?: (close: () => void) => ReactNode;
-  related: { id: string; label: string }[]; children?: ReactNode;
+  related: { id: string; label: string }[]; children?: ReactNode; notice?: ReactNode;
 }) {
   const { can } = useSession();
   const nav = useNavigate(); const qc = useQueryClient();
@@ -59,6 +59,7 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
           )}
         </div>
       </div>
+      {notice}
       <div className="rec-layout">
         <aside className="rec-side"><div className="rec-side-h">Related list</div>
           {sideItems.map((s) => <a key={s.id} href={`#${s.id}`} onClick={(e) => { e.preventDefault(); scrollTo(s.id); }}>{s.label}</a>)}

@@ -142,6 +142,34 @@ final class RecordView
             $facts = ['rate' => ['Current rate', $cur ? e(money(Purchase::netRate($cur))) : ''], 'last_paid' => ['Last paid', $last ? e(money($last['unit_price'])) . ' on ' . e(fdate($last['received_date'])) : ''],
                 'preferred' => ['Preferred source', !empty($row['is_preferred']) ? 'Yes' : '']];
         }
+        $name = fn(string $sql, array $a) => (string)DB::val($sql, $a);
+        $link = fn(string $path, int $id, string $label) => $id > 0 && $label !== '' ? '<a href="' . e(url($path . '/' . $id)) . '">' . e($label) . '</a>' : '';
+        $t = Auth::tenantId();
+        if ($entity === 'purchase_order') {
+            $creator = $row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '';
+            $approver = $row['approved_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['approved_by']]) : '';
+            $facts = ['created_by' => ['Created by', e($creator ?: '—')], 'approved_by' => ['Approved by', $approver ? e($approver) . ' on ' . e(substr((string)$row['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(money($row['total']))]];
+        } elseif ($entity === 'grn') {
+            $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
+            $bill = DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $row['id']]);
+            $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
+                'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : ''], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
+                'received_by' => ['Received by', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
+        } elseif ($entity === 'bill') {
+            $grn = $row['grn_id'] ? DB::one('SELECT id, grn_no FROM grns WHERE tenant_id = ? AND id = ?', [$t, $row['grn_id']]) : null;
+            $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
+                'grn' => ['Goods receipt', $grn ? $link('purchase/grns', (int)$grn['id'], $grn['grn_no']) : ''], 'balance_due' => ['Balance due', e(money(max(0, Purchase::outstanding($row))))]];
+        } elseif ($entity === 'purchase_return') {
+            $grn = DB::one('SELECT id, grn_no FROM grns WHERE tenant_id = ? AND id = ?', [$t, $row['grn_id']]);
+            $bill = $row['bill_id'] ? DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND id = ?', [$t, $row['bill_id']]) : null;
+            $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
+                'grn' => ['Goods receipt', $grn ? $link('purchase/grns', (int)$grn['id'], $grn['grn_no']) : ''], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
+                'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total (incl. tax)', e(money($row['total']))]];
+        } elseif ($entity === 'requisition') {
+            $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
+            $facts = ['raised' => ['Raised', e(fdate(substr((string)$row['created_at'], 0, 10)))], 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')],
+                'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : '']];
+        }
         return [$row, $facts];
     }
 

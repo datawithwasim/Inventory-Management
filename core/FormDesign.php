@@ -328,7 +328,7 @@ final class FormDesign
             }
         }
         return ['entity' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity] ?? $entity, 'style' => $r['style'], 'sections' => $r['sections'], 'fields' => $fields, 'summary' => $r['summary'], 'related' => $r['related'],
-            'customised' => $r['customised'], 'detail' => in_array($entity, self::DETAIL, true), 'canDesign' => Auth::can('settings.edit')];
+            'lines' => $r['lines'], 'customised' => $r['customised'], 'detail' => in_array($entity, self::DETAIL, true), 'canDesign' => Auth::can('settings.edit')];
     }
 
     // ---------------------------------------------------------------- designer model & save
