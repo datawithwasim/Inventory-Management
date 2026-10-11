@@ -34,7 +34,7 @@ export default function ItemDetail() {
       )}
       {!bundle && (
         <div className="card mb-3" id="rates"><div className="card-header d-flex justify-content-between align-items-center gap-2"><span><i className="bi bi-truck me-1" />Suppliers &amp; rates <span className="act-n">{rates.length}</span></span>
-          <span className="d-flex gap-2">{can('reports.view') && <a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/reports/rate-history?q=${encodeURIComponent(it.name)}`)}><i className="bi bi-clock-history" /> Rate history</a>}
+          <span className="d-flex gap-2">{can('reports.view') && <Link className="btn btn-sm btn-outline-secondary" to={`/reports/rate-history?q=${encodeURIComponent(it.name)}`}><i className="bi bi-clock-history" /> Rate history</Link>}
             {can('suppliers.create') && d.variants.length > 0 && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/supplier-items/create?variant=${d.variants[0].id}`}><i className="bi bi-plus-lg" /> Link a supplier</Link>}</span></div>
           {rates.length ? <div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>{term('supplier')}</th><th>Their item</th><th>Variant</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net</th><th className="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
             {rates.map((r) => {

@@ -359,6 +359,23 @@ check('a draft order can be deleted', $r['status'] === 200 && !DB::val('SELECT 1
 $r = $a->call('POST', "/sales/orders/$soId/delete");
 check('a delivered order cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM sales_orders WHERE id = ?', [$soId]));
 
+echo "Reports through the API\n";
+$r = $a->call('GET', '/reports');
+check('the report list comes grouped, with each report\'s title and description', $r['status'] === 200 && isset($r['json']['data']['groups']['stock']['stock-summary']['title']) && isset($r['json']['data']['names']['sales']) && !str_contains($r['raw'], '"run"'));
+$r = $a->call('GET', '/reports/stock-summary?q=ARL-1');
+$srow = $r['json']['data']['rows'][0] ?? [];
+check('a report returns its definition, the filters in force, rows and totals', $r['status'] === 200 && isset($r['json']['data']['def']['columns']['on_hand']) && ($srow['sku'] ?? '') === 'ARL-1' && (float)$srow['on_hand'] > 0 && isset($r['json']['data']['lists']['warehouse']) && ($r['json']['data']['f']['q'] ?? '') === 'ARL-1');
+check('the sales register for the period includes today\'s sales', count($a->call('GET', '/reports/sales-register?from=' . date('Y-m-d', strtotime('-1 day')) . '&to=' . date('Y-m-d'))['json']['data']['rows'] ?? []) >= 1);
+$r = $a->call('GET', '/reports/customer-statement');
+check('a statement asks for its customer first (no rows until chosen)', $r['status'] === 200 && ($r['json']['data']['def']['needs'] ?? '') === 'customer' && $r['json']['data']['rows'] === []);
+$r = $a->call('GET', "/reports/customer-statement?customer=$cid");
+check('and lists the customer\'s invoices and payments once chosen', count($r['json']['data']['rows']) >= 1);
+check('an unknown report is a 404 JSON', $a->call('GET', '/reports/not-a-report')['status'] === 404);
+$ex = $a->call('GET', '/reports/stock-summary/export/csv?q=ARL-1');
+check('the CSV export is still the plain download', $ex['status'] === 200 && str_contains($ex['raw'], 'ARL-1') && $ex['json'] === null);
+$r = $a->call('POST', '/reports/low-stock/create-pos', ['pick' => []]);
+check('creating orders from low stock with nothing low explains itself', $r['status'] === 200 && str_contains(json_encode($r['json']['messages'] ?? []), 'Nothing'));
+
 echo "Isolation and secrets\n";
 $b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
 check('another company gets a 404 for it, on the page data and the record data', $b->call('GET', "/customers/$cid")['status'] === 404 && $b->call('GET', "/record/customer/$cid")['status'] === 404);

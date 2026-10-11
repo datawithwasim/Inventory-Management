@@ -51,7 +51,8 @@ Upload `public/ui/` to the server after a build.
 | Stock: overview (rack split, reserved, value, low stock), stock by rack, rolls list + roll page with history, stock ledger | done |
 | Stock documents: adjustments and transfers (line editor: item search, roll, rack with in-stock hint, new roll with supplier lot; stock-out voucher link), stock-takes (start, enter counts, save, post, delete draft) | done |
 | Sales: orders (list, form with customer prices / discount / tax and live totals, confirm & reserve, advance, close, cancel), deliveries (against an order with the roll and rack suggested per line and shade warning, split lines, or direct; creates the invoice), invoices (payments, edit details), sales returns (pick invoice, put back on a rack or not) | done (delivery note / invoice / receipt printing stays on the PHP print pages) |
-| Everything else (reports, settings, POS, admin) | still the PHP pages |
+| Reports: picker, and one viewer for all 18 reports (filter bar from each report's definition, table, totals, Excel / CSV download, print page; low stock turns ticked rows into draft POs) | done |
+| Everything else (settings, POS, admin) | still the PHP pages |
 | Layout designer, print pages (invoice, voucher), POS counter | stay PHP for now |
 
-Suggested order (remaining): Reports → Settings → POS → Super admin.
+Suggested order (remaining): Settings → POS → Super admin.

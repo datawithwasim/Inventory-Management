@@ -34,6 +34,7 @@ import { OrderList, OrderForm, OrderDetail } from './pages/sales/OrderPages';
 import { DeliveryList, DeliveryForm, DeliveryDetail } from './pages/sales/DeliveryPages';
 import { InvoiceList, InvoiceDetail, InvoiceForm } from './pages/sales/InvoicePages';
 import { SalesReturnList, SalesReturnCreate, SalesReturnDetail } from './pages/sales/ReturnPages';
+import { ReportIndex, ReportShow } from './pages/reports/Reports';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -119,6 +120,8 @@ export default function App() {
         <Route path="/sales/returns" element={<SalesReturnList />} />
         <Route path="/sales/returns/create" element={<SalesReturnCreate />} />
         <Route path="/sales/returns/:id" element={<SalesReturnDetail />} />
+        <Route path="/reports" element={<ReportIndex />} />
+        <Route path="/reports/:slug" element={<ReportShow />} />
         <Route path="*" element={<NotBuilt />} />
       </Route>
     </Routes>
