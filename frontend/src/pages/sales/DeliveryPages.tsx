@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { fdate, qty as fq } from '../../lib/format';
 import { useSession } from '../../lib/session';
-import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
+import { Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import Filters from '../../components/Filters';
@@ -24,7 +24,7 @@ export function DeliveryList() {
           <div className="col-md-3"><input name="q" className="form-control" placeholder="Delivery no." defaultValue={sp.get('q') ?? ''} /></div>
         </Filters>)}
       columns={[
-        { head: 'Delivery', cell: (r) => <><Link to={`/sales/deliveries/${r.id}`}>{r.delivery_no}</Link> {r.source === 'pos' ? <span className="badge text-bg-light border">POS</span> : null}</> },
+        { head: 'Delivery', cell: (r) => <Link to={`/sales/deliveries/${r.id}`}>{r.delivery_no}</Link> },
         { head: 'Date', cell: (r) => fdate(r.delivery_date) }, { head: term('customer'), cell: (r) => r.customer }, { head: 'From', cell: (r) => r.warehouse },
         { head: 'Order', cell: (r) => r.order_id ? <Link to={`/sales/orders/${r.order_id}`}>{r.order_no}</Link> : '—' },
         { head: 'Invoice', cell: (r) => r.invoice_id ? <Link to={`/sales/invoices/${r.invoice_id}`}>{r.invoice_no}</Link> : <span className="text-muted">not invoiced</span> },
@@ -176,7 +176,7 @@ export function DeliveryDetail() {
   const x = d.d;
   const makeInvoice = async () => { const r = await post(`/sales/deliveries/${id}/invoice`); setMsgs(r.messages ?? []); refreshSales(qc); if (r.ok && r.redirect) nav('/' + String(r.redirect).replace(/^\//, '')); };
   return (
-    <RecordPage entity="delivery" id={x.id} name={x.delivery_no} back="/sales/deliveries" badges={x.source === 'pos' ? <Badge tone="light">POS</Badge> : null}
+    <RecordPage entity="delivery" id={x.id} name={x.delivery_no} back="/sales/deliveries"
       actions={<>
         <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/deliveries/${x.id}/print`)}><i className="bi bi-printer" /> Delivery note</a>
         <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/deliveries/${x.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>

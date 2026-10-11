@@ -50,7 +50,6 @@ export function InvoiceDetail() {
     <RecordPage entity="invoice" id={i.id} name={i.invoice_no} back="/sales/invoices" badges={<PayBadge state={d.status} />}
       actions={<>
         <a className="btn btn-sm btn-primary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/invoices/${i.id}/print`)}><i className="bi bi-printer" /> Print invoice</a>
-        <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/invoices/${i.id}/print?receipt=1`)}>Receipt</a>
         {can('sales.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/sales/invoices/${i.id}/edit`}>Edit details</Link>}
         {can('sales.create') && i.delivery_id && <Link className="btn btn-sm btn-outline-danger" to={`/sales/returns/create?invoice=${i.id}`}>{term('customer')} return</Link>}
       </>}

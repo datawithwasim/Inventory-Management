@@ -155,7 +155,7 @@ check('a made-up record id is a 404', $a->get('/suppliers/9999999')['status'] ==
 echo "Profile menu, activity tabs, rate list\n";
 $dh = $a->get('/dashboard')['body'];
 check('profile menu shows name, email, role · company, Light / Dark / Auto and Sign out', str_contains($dh, 'class="pm-head"') && str_contains($dh, "recco-$sfx@test.local") && str_contains($dh, 'data-theme-set="dark"') && str_contains($dh, 'data-theme-set="auto"') && str_contains($dh, 'pm-out') && str_contains($dh, 'data-bs-auto-close="outside"'));
-check('the old single "Dark mode" menu item is gone from the app (POS / admin keep their icon button)', !str_contains($dh, 'id="modeBtn"') && str_contains($a->get('/pos')['body'], 'id="modeBtn"'));
+check('the old single "Dark mode" menu item is gone from the app (admin keeps its icon button)', !str_contains($dh, 'id="modeBtn"'));
 check('the page tells the script the company default theme', str_contains($dh, 'data-default-mode'));
 $sh = $a->get("/suppliers/$s1")['body'];
 check('supplier page: rate list uses modals (add / import), no inline form', str_contains($sh, 'id="rateModal"') && str_contains($sh, 'id="rateImportModal"') && !str_contains($sh, 'id="rateAdd"'));

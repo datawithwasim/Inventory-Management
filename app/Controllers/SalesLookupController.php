@@ -49,19 +49,6 @@ final class SalesLookupController extends Controller
         $this->json(array_map(fn($v) => $this->shape($v, $c, $w), $rows));
     }
 
-    /** One variant by id or exact barcode / SKU (barcode scanners). */
-    public function one(): void
-    {
-        $code = trim((string)($_GET['code'] ?? ''));
-        $id = (int)($_GET['id'] ?? 0);
-        $c = (int)($_GET['customer'] ?? 0);
-        $w = (int)($_GET['warehouse'] ?? 0);
-        $v = $id
-            ? DB::one(self::SELECT . ' AND v.id = ?', [Auth::tenantId(), $id])
-            : DB::one(self::SELECT . ' AND (v.barcode = ? OR v.sku = ?) LIMIT 1', [Auth::tenantId(), $code, $code]);
-        $this->json($v ? $this->shape($v, $c, $w) : null);
-    }
-
     /** Rolls and racks that hold a variant in a warehouse. */
     public function stock(): void
     {

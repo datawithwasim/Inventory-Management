@@ -61,13 +61,13 @@ final class InvoiceController extends SalesBase
         ]);
     }
 
-    /** Print-friendly page. ?receipt=1 gives a narrow counter receipt. */
+    /** Print-friendly page. */
     public function print(string $id): void
     {
         $i = $this->load($id);
         $this->view('app/sales/invoice_print', [
-            'title' => $i['invoice_no'], 'i' => $i, 'items' => $this->lines($i), 'receipt' => !empty($_GET['receipt']), 'due' => Purchase::outstanding($i),
-            'tpl' => PrintTemplate::get(!empty($_GET['receipt']) ? 'receipt' : 'invoice'),
+            'title' => $i['invoice_no'], 'i' => $i, 'items' => $this->lines($i), 'due' => Purchase::outstanding($i),
+            'tpl' => PrintTemplate::get('invoice'),
         ], 'layouts/print');
     }
 

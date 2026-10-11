@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * End-to-end test for Phase 4 (customers, orders + reservation, deliveries from rolls/racks, invoices, returns, POS).
+ * End-to-end test for Phase 4 (customers, orders + reservation, deliveries from rolls/racks, invoices, returns).
  *   php tests/sales.php http://127.0.0.1:8099        # against a throw-away database
  */
 $base = rtrim($argv[1] ?? 'http://127.0.0.1:8099', '/');
@@ -88,7 +88,7 @@ $p = $js("/lookup/sale-items?q=velvet&customer=$acme")[0];
 check('dealer gets the 10% group discount on the velvet list price', $near($p['price'], 700) && $near($p['discount'], 10) && (int)$p['track_batch'] === 1);
 $p = $js("/lookup/sale-items?q=velvet&customer=$ravi")[0];
 check('retail customer pays list price, no discount', $near($p['price'], 700) && $near($p['discount'], 0));
-check('barcode scan finds the item and the set shows its availability', ($js("/lookup/sale-item?code=111&customer=$ravi")['sku'] ?? '') === 'TBL' && (float)($js("/lookup/sale-items?q=dining&warehouse=$main")[0]['available'] ?? -1) === 10.0);
+check('the item search shows the set availability', (float)($js("/lookup/sale-items?q=dining&warehouse=$main")[0]['available'] ?? -1) === 10.0);
 check('customer pages load', $a->get('/customers')['status'] === 200 && $a->get("/customers/$acme")['status'] === 200 && $a->get("/customers/$acme/edit")['status'] === 200 && $a->get('/customers/groups')['status'] === 200 && $a->get("/customers/groups/$grp/edit")['status'] === 200);
 
 echo "Order input checks\n";
@@ -232,7 +232,7 @@ check('invoice edited: delivery charge 250 added to the total', $near($val('SELE
 check('overdue filter lists it', str_contains($a->get('/sales/invoices?status=overdue')['body'], (string)$val('SELECT invoice_no FROM sales_invoices WHERE id = ?', [$inv2])));
 $pr = $a->get("/sales/invoices/$inv1/print");
 check('print page shows company, invoice number, items and the roll', $pr['status'] === 200 && str_contains($pr['body'], "Seller $sfx") && str_contains($pr['body'], (string)$val('SELECT invoice_no FROM sales_invoices WHERE id = ?', [$inv1])) && str_contains($pr['body'], $rolls[0]['batch_no']));
-check('receipt layout and invoice pages load', $a->get("/sales/invoices/$inv1/print?receipt=1")['status'] === 200 && $a->get("/sales/invoices/$inv1")['status'] === 200 && $a->get('/sales/invoices')['status'] === 200 && $a->get("/sales/invoices/$inv1/edit")['status'] === 200);
+check('invoice pages load', $a->get("/sales/invoices/$inv1")['status'] === 200 && $a->get('/sales/invoices')['status'] === 200 && $a->get("/sales/invoices/$inv1/edit")['status'] === 200);
 
 echo "Customer returns\n";
 check('return pages load', $a->get('/sales/returns')['status'] === 200 && $a->get('/sales/returns/create')['status'] === 200 && $a->get("/sales/returns/create?invoice=$inv1")['status'] === 200);
@@ -265,45 +265,12 @@ $diPartC = (int)$val('SELECT id FROM delivery_items WHERE delivery_id = ? AND va
 $retn($inv2, [$diSet => ['qty' => 1], $diPartT => ['qty' => 1, 'location_id' => $A1, 'restock' => 1], $diPartC => ['qty' => 2, 'location_id' => $B1, 'restock' => 1]]);
 check('a set is returned as the set line (credit 8960) plus its parts back on racks', $bal($tbl, $main, 0, $A1) === 1.0 && $onhand($chr) === 20.0 && $near($val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv2]), 8960));
 
-echo "Point of sale\n";
-check('POS screen loads', $a->get('/pos')['status'] === 200 && str_contains($a->get('/pos')['body'], 'Scan barcode'));
-$pos = fn(array $lines, array $over = []) => json_decode($a->post('/pos/checkout', $over + ['customer_id' => $walk, 'warehouse_id' => $main, 'method' => 'cash', 'amount' => '', 'lines' => $lines], '/pos')['body'], true);
-$n = $ledger(); $dc = $count('deliveries');
-$res = $pos([]);
-check('an empty cart is refused', $res['ok'] === false && $ledger() === $n);
-$res = $pos([['variant_id' => $vel, 'qty' => 500, 'unit_price' => 700, 'tax_rate' => 12]]);
-check('selling more than is in stock is refused, nothing is saved', $res['ok'] === false && str_contains($res['error'], 'Not enough') && $ledger() === $n && $count('deliveries') === $dc);
-$res = $pos([['variant_id' => $chr, 'qty' => 1.5, 'unit_price' => 1500]]);
-check('decimals on a piece item are refused', $res['ok'] === false);
-$res = $pos([['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500], ['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500]]);
-check('the same item twice in the cart is refused', $res['ok'] === false);
-$res = $pos([['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500]], ['customer_id' => 999999]);
-check('an unknown customer is refused', $res['ok'] === false);
-$res = $pos([['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500]], ['method' => 'barter']);
-check('an unknown payment method is refused', $res['ok'] === false);
-$res = $pos([['variant_id' => $vel, 'qty' => 12.5, 'unit_price' => 700, 'tax_rate' => 12], ['variant_id' => $chr, 'qty' => 2, 'unit_price' => 1500, 'tax_rate' => 12]], ['amount' => 10000, 'reference' => 'CASH1']);
-check('counter sale completes and returns the receipt link', $res['ok'] === true && str_contains($res['url'], 'receipt=1'));
-$pi = (int)$res['invoice'];
-check('invoice 9800 + 3360 = 13160, paid 10000, balance 3160, for the walk-in customer', $near($val('SELECT total FROM sales_invoices WHERE id = ?', [$pi]), 13160) && $near($val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$pi]), 10000) && (int)$val('SELECT customer_id FROM sales_invoices WHERE id = ?', [$pi]) === $walk);
-check('stock was picked automatically: 12.5 m from the oldest roll that covers it (roll 2: 15 m), 2 chairs', $bal($vel, $main, $r2, $A1) === 2.5 && $onhand($chr) === 18.0);
-check('the delivery is marked as a POS sale', $val("SELECT d.source FROM deliveries d JOIN sales_invoices i ON i.delivery_id = d.id WHERE i.id = ?", [$pi]) === 'pos');
-$res = $pos([['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500, 'tax_rate' => 12]], ['amount' => 5000]);
-check('paying more than the total: payment is capped at the total (change given back)', $res['ok'] && $near($val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$res['invoice']]), 1680));
-$res = $pos([['variant_id' => $set, 'qty' => 1, 'unit_price' => 8000, 'tax_rate' => 12]], ['amount' => 8960]);
-check('a set can be sold at the counter (parts picked automatically)', $res['ok'] && (int)$val('SELECT COUNT(*) FROM delivery_items di JOIN sales_invoices i ON i.delivery_id = di.delivery_id WHERE i.id = ? AND di.parent_id IS NOT NULL', [$res['invoice']]) === 2);
-$so($ravi, [['variant_id' => $chr, 'qty' => 15, 'unit_price' => 1500, 'tax_rate' => 12]]);
-$oR = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
-$a->post("/sales/orders/$oR/confirm", [], "/sales/orders/$oR");
-$res = $pos([['variant_id' => $chr, 'qty' => 5, 'unit_price' => 1500]]);
-check('the counter cannot sell chairs that are reserved for an order', $res['ok'] === false && str_contains($res['error'], 'reserved'));
-$a->post("/sales/orders/$oR/cancel", [], "/sales/orders/$oR");
-
 echo "Permissions\n";
 $staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
 $a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
-check('staff can view sales pages and use the counter', $s->get('/sales/orders')['status'] === 200 && $s->get("/sales/invoices/$inv1")['status'] === 200 && $s->get('/customers')['status'] === 200 && $s->get('/pos')['status'] === 200);
+check('staff can view sales pages', $s->get('/sales/orders')['status'] === 200 && $s->get("/sales/invoices/$inv1")['status'] === 200 && $s->get('/customers')['status'] === 200);
 check('staff cannot add customers or edit invoices (403)', $s->get('/customers/create')['status'] === 403 && $s->get("/sales/invoices/$inv1/edit")['status'] === 403 && $s->get("/customers/$acme/edit")['status'] === 403);
 $n = $count('customer_payments');
 $s->post("/sales/invoices/$inv2/payments/1/delete", [], '/sales/invoices');
@@ -312,8 +279,6 @@ $so($ravi, [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500]]);
 $oX = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
 $s->post("/sales/orders/$oX/cancel", [], "/sales/orders/$oX");
 check('cancel is blocked for staff', $val('SELECT status FROM sales_orders WHERE id = ?', [$oX]) === 'draft');
-$res = json_decode($s->post('/pos/checkout', ['customer_id' => $walk, 'warehouse_id' => $main, 'method' => 'cash', 'amount' => 1680, 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500, 'tax_rate' => 12]]], '/pos')['body'], true);
-check('staff can complete a counter sale', ($res['ok'] ?? false) === true);
 
 echo "Stock stays consistent\n";
 $bad = DB::all(
@@ -335,10 +300,11 @@ $nO = (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tB]);
 $b->post('/sales/orders', ['customer_id' => $acme, 'warehouse_id' => $bMain, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], '/sales/orders/create');
 check("B cannot create an order for A's customer or items", (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tB]) === $nO);
 $nL = $ledger();
-$res = json_decode($b->post('/pos/checkout', ['customer_id' => $bWalk, 'warehouse_id' => $bMain, 'method' => 'cash', 'amount' => 1, 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1]]], '/pos')['body'], true);
-check("B's counter cannot sell A's items", $res['ok'] === false && $ledger() === $nL);
-$res = json_decode($b->post('/pos/checkout', ['customer_id' => $walk, 'warehouse_id' => $bMain, 'method' => 'cash', 'lines' => [['variant_id' => 0, 'qty' => 1]]], '/pos')['body'], true);
-check("B cannot use A's customer at the counter", $res['ok'] === false);
+$b->post('/sales/deliveries', ['customer_id' => $bWalk, 'warehouse_id' => $bMain, 'delivery_date' => date('Y-m-d'), 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1]]], '/sales/deliveries/create');
+check("B cannot deliver A's items", $ledger() === $nL);
+$nD = (int)$val('SELECT COUNT(*) FROM deliveries WHERE tenant_id = ?', [$tB]);
+$b->post('/sales/deliveries', ['customer_id' => $walk, 'warehouse_id' => $bMain, 'delivery_date' => date('Y-m-d'), 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1]]], '/sales/deliveries/create');
+check("B cannot use A's customer on a delivery", (int)$val('SELECT COUNT(*) FROM deliveries WHERE tenant_id = ?', [$tB]) === $nD);
 $b->post("/sales/invoices/$inv2/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/sales/invoices');
 $paidBefore = (float)$val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$inv2]);
 $b->post("/sales/invoices/$inv2/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/sales/invoices');

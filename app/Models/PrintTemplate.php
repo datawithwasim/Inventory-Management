@@ -9,7 +9,7 @@ use Core\Settings;
 final class PrintTemplate
 {
     public const DOCS = [
-        'invoice' => 'Sales invoice', 'receipt' => 'Counter receipt', 'delivery_note' => 'Delivery note',
+        'invoice' => 'Sales invoice', 'delivery_note' => 'Delivery note',
         'purchase_order' => 'Purchase order',
     ];
 
@@ -29,14 +29,12 @@ final class PrintTemplate
     private const SPECIFIC = [
         'invoice' => ['show_discount' => ['Show the discount column', 'bool', 1], 'show_tax' => ['Show the tax column', 'bool', 1], 'show_batch' => ['Show the roll (batch) number', 'bool', 1],
             'show_ship_to' => ['Show the delivery address', 'bool', 1], 'show_bank' => ['Print my bank details', 'bool', 1]],
-        'receipt' => ['show_batch' => ['Show the roll (batch) number', 'bool', 0]],
         'delivery_note' => ['show_prices' => ['Show prices and amounts', 'bool', 0], 'show_batch' => ['Show the roll (batch) number', 'bool', 1], 'show_rack' => ['Show the rack picked from', 'bool', 0],
             'show_ship_to' => ['Show the delivery address', 'bool', 1]],
         'purchase_order' => ['show_tax' => ['Show the tax column', 'bool', 1], 'show_expected' => ['Show the expected delivery date', 'bool', 1], 'show_bank' => ['Print my bank details', 'bool', 0]],
     ];
     private const DEFAULT_TEXT = [
         'invoice' => ['title' => 'Tax invoice', 'footer' => 'Thank you for your business.', 'signature_label' => 'Authorised signatory'],
-        'receipt' => ['title' => 'Receipt', 'footer' => 'Thank you!', 'signature' => 0],
         'delivery_note' => ['title' => 'Delivery note', 'signature_label' => 'Received by'],
         'purchase_order' => ['title' => 'Purchase order', 'signature_label' => 'Authorised signatory'],
     ];

@@ -29,7 +29,6 @@ return [
             ['label' => fn() => 'Purchase returns', 'icon' => 'arrow-return-left', 'path' => '/purchase/returns', 'perm' => ['purchase.view'], 'module' => 'purchase_returns'],
         ]],
         'sales' => ['label' => 'Sales', 'icon' => 'bag-check', 'items' => [
-            ['label' => fn() => 'POS (counter)', 'icon' => 'upc-scan', 'path' => '/pos', 'perm' => ['pos.use'], 'module' => 'pos'],
             ['label' => fn() => term('customers'), 'icon' => 'person-lines-fill', 'path' => '/customers', 'perm' => ['customers.view']],
             ['label' => fn() => 'Sales orders', 'icon' => 'bag-check', 'path' => '/sales/orders', 'perm' => ['sales.view']],
             ['label' => fn() => 'Deliveries', 'icon' => 'truck-flatbed', 'path' => '/sales/deliveries', 'perm' => ['sales.view']],
@@ -54,6 +53,5 @@ return [
         ['label' => fn() => 'New sales order', 'icon' => 'bag-plus', 'path' => '/sales/orders/create', 'perm' => ['sales.create']],
         ['label' => fn() => 'New purchase order', 'icon' => 'cart-plus', 'path' => '/purchase/orders/create', 'perm' => ['purchase.create']],
         ['label' => fn() => 'Stock adjustment', 'icon' => 'sliders', 'path' => '/stock/adjustments/create', 'perm' => ['stock.adjust']],
-        ['label' => fn() => 'Open POS', 'icon' => 'upc-scan', 'path' => '/pos', 'perm' => ['pos.use'], 'module' => 'pos'],
     ],
 ];

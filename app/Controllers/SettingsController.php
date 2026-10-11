@@ -118,13 +118,13 @@ final class SettingsController extends Controller
     {
         $t = $this->tid();
         $id = match ($doc) {
-            'invoice', 'receipt' => DB::val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$t]),
+            'invoice' => DB::val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$t]),
             'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$t]),
             'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$t]),
         };
         if (!$id) return null;
         return match ($doc) {
-            'invoice' => url("sales/invoices/$id/print"), 'receipt' => url("sales/invoices/$id/print?receipt=1"), 'delivery_note' => url("sales/deliveries/$id/print"),
+            'invoice' => url("sales/invoices/$id/print"), 'delivery_note' => url("sales/deliveries/$id/print"),
             'purchase_order' => url("purchase/orders/$id/print"),
         };
     }

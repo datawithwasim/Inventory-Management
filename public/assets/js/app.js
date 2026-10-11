@@ -99,7 +99,7 @@
     sb.addEventListener('click', function (e) { if (e.target.closest('a.sb-link')) body.classList.remove('sb-open'); });
   }
 
-  /* ---- light / dark: Light / Dark / Auto switch in the profile menu, or a single toggle button on POS and admin ---- */
+  /* ---- light / dark: Light / Dark / Auto switch in the profile menu, or a single toggle button on admin ---- */
   function currentMode() { var m = store('inv-mode'); return m === 'light' || m === 'dark' || m === 'auto' ? m : 'default'; }
   function applyMode(m) {
     var eff = m;

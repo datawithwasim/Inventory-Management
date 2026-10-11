@@ -11,7 +11,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
   landed cost, bills with payment status, purchase returns)
 - **Phase 4 – Sales: done** (customers & groups with price lists, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
-  invoices with payments and advances, customer returns, set/bundle sales, POS with barcode scanning)
+  invoices with payments and advances, customer returns, set/bundle sales)
 - **Phase 5 – Customization: done** (company profile + logo, currency / date / digit formats, document number styles, workflow rules,
   your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice, receipt,
   delivery note, purchase order)

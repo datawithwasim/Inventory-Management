@@ -20,7 +20,7 @@ final class Tenants
     private static function staffPermissions(): array
     {
         $perms = array_filter(self::allPermissions(), fn($p) => str_ends_with($p, '.view'));
-        return array_values(array_merge($perms, ['sales.create', 'pos.use']));
+        return array_values(array_merge($perms, ['sales.create']));
     }
 
     public static function uniqueSlug(string $name): string

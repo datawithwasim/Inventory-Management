@@ -181,7 +181,6 @@ $router->get('/purchase/returns/{id}', $A . 'PurchaseReturnController@show', ['a
 
 // ---- Sales ----
 $router->get('/lookup/sale-items', $A . 'SalesLookupController@items', ['auth']);
-$router->get('/lookup/sale-item', $A . 'SalesLookupController@one', ['auth']);
 $router->get('/lookup/stock', $A . 'SalesLookupController@stock', ['auth']);
 
 $router->get('/customers', $A . 'CustomerController@index', ['auth', 'perm:customers.view']);
@@ -238,8 +237,6 @@ $router->get('/sales/returns/create', $A . 'SalesReturnController@create', ['aut
 $router->post('/sales/returns', $A . 'SalesReturnController@store', ['auth', 'perm:sales.create']);
 $router->get('/sales/returns/{id}', $A . 'SalesReturnController@show', ['auth', 'perm:sales.view']);
 
-$router->get('/pos', $A . 'PosController@index', ['auth', 'perm:pos.use']);
-$router->post('/pos/checkout', $A . 'PosController@checkout', ['auth', 'perm:pos.use']);
 
 // ---- Settings ----
 $router->get('/settings', $A . 'SettingsController@index', ['auth', 'perm:settings.view']);

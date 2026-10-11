@@ -12,7 +12,7 @@
       <h2>Know exactly what you have, where it is, and what is selling.</h2>
       <ul>
         <li><i class="bi bi-check-circle-fill"></i>Roll-by-roll fabric tracking with rack locations</li>
-        <li><i class="bi bi-check-circle-fill"></i>Purchase, sales, returns and counter billing</li>
+        <li><i class="bi bi-check-circle-fill"></i>Purchase, sales, returns and stock by roll and rack</li>
         <li><i class="bi bi-check-circle-fill"></i>Reports, barcode labels and your own settings</li>
       </ul>
     </div>

@@ -1,7 +1,6 @@
 
 <?php ob_start(); ?>
       <a class="btn btn-sm btn-primary" target="_blank" href="<?= url("sales/invoices/{$i['id']}/print") ?>"><i class="bi bi-printer"></i> Print invoice</a>
-      <a class="btn btn-sm btn-outline-secondary" target="_blank" href="<?= url("sales/invoices/{$i['id']}/print?receipt=1") ?>">Receipt</a>
       <?php if (can('sales.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("sales/invoices/{$i['id']}/edit") ?>">Edit details</a><?php endif; ?>
       <?php if (can('sales.create') && $i['delivery_id']): ?><a class="btn btn-sm btn-outline-danger" href="<?= url('sales/returns/create?invoice=' . (int)$i['id']) ?>"><?= e(term('customer')) ?> return</a><?php endif; ?>
     <?php $actions = ob_get_clean(); ?>

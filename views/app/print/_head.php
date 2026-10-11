@@ -9,7 +9,7 @@ $accent = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tpl['accent'] ?? '')) ? $t
 <style>.doc-accent { color: <?= e($accent) ?>; } .doc-rule { border-bottom: 3px solid <?= e($accent) ?>; } .doc-table thead th { border-bottom: 2px solid <?= e($accent) ?>; }</style>
 <div class="d-flex justify-content-between align-items-start pb-2 mb-3 doc-rule">
   <div class="d-flex align-items-center gap-3">
-    <?php if ($logo): ?><img src="<?= e($logo) ?>" alt="" style="max-height:<?= !empty($receipt) ? 40 : 70 ?>px;max-width:180px"><?php endif; ?>
+    <?php if ($logo): ?><img src="<?= e($logo) ?>" alt="" style="max-height:70px;max-width:180px"><?php endif; ?>
     <div><div class="h5 mb-0"><?= e($companyName) ?></div>
       <?php if (!empty($tpl['show_company'])): ?>
         <?php if ($S('address') !== ''): ?><div class="small"><?= nl2br(e($S('address'))) ?></div><?php endif; ?>
