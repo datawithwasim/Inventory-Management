@@ -15,7 +15,7 @@ final class Reports
 {
     public const GROUPS = ['stock' => 'Stock', 'sales' => 'Sales', 'purchase' => 'Purchase', 'party' => 'Customers & suppliers'];
     public const MOVES = ['opening' => 'Opening stock', 'purchase' => 'Purchase receipt', 'purchase_return' => 'Purchase return', 'sale' => 'Sale / delivery',
-        'sales_return' => 'Sales return', 'adjustment' => 'Adjustment', 'stocktake' => 'Stock count', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out'];
+        'sales_return' => 'Sales return', 'adjustment' => 'Adjustment', 'stocktake' => 'Stock count', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back'];
 
     private static function t(): int
     {
@@ -150,10 +150,11 @@ final class Reports
             $where = 'b.tenant_id = ?';
             if ($f['category']) { $where .= ' AND i.category_id = ?'; $p[] = $f['category']; }
             if ($f['q'] !== '') { $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR b.batch_no LIKE ?)'; array_push($p, ...array_fill(0, 3, '%' . $f['q'] . '%')); }
-            $having = $f['status'] === 'open' ? 'HAVING balance > 0.0005' : ($f['status'] === 'finished' ? 'HAVING balance <= 0.0005' : '');
+            $having = $f['status'] === 'open' ? 'HAVING balance > 0.0005 OR in_transit > 0.0005' : ($f['status'] === 'finished' ? 'HAVING balance <= 0.0005 AND in_transit <= 0.0005' : '');
             $rows = DB::all(
                 "SELECT i.name AS item, v.name AS variant, b.batch_no, b.supplier_lot, b.received_date, b.received_qty,
                         COALESCE(bal.q,0) AS balance, DATEDIFF(CURDATE(), b.received_date) AS age,
+                        (SELECT COALESCE(SUM(l.qty - l.qty_received - l.qty_lost - l.qty_returned),0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.batch_id = b.id AND l.tenant_id = b.tenant_id) AS in_transit,
                         (SELECT GROUP_CONCAT(DISTINCT CONCAT(w.name, IF(l.code IS NULL, '', CONCAT(' / ', l.code))) ORDER BY w.name SEPARATOR ', ')
                            FROM stock_balances s2 JOIN warehouses w ON w.id = s2.warehouse_id LEFT JOIN locations l ON l.id = s2.location_id AND s2.location_id > 0
                           WHERE s2.batch_id = b.id AND s2.qty > 0.0005) AS racks
@@ -162,7 +163,7 @@ final class Reports
                  WHERE $where $having ORDER BY i.name, b.received_date, b.id LIMIT " . (int)$limit, $p);
             foreach ($rows as &$r) {
                 $r['used'] = round((float)$r['received_qty'] - (float)$r['balance'], 3);
-                $r['status'] = Stock::batchStatus((float)$r['balance'], (float)$r['received_qty']);
+                $r['status'] = Stock::batchStatus((float)$r['balance'], (float)$r['received_qty'], (float)$r['in_transit']);
                 $r['racks'] = (string)$r['racks'];
             }
             return $rows;
@@ -529,6 +530,38 @@ final class Reports
             },
         ];
 
+        $defs['transfers'] = [
+            'title' => 'Transfers: in transit & shortages', 'group' => 'stock',
+            'desc' => 'Every warehouse-to-warehouse transfer line: what was sent, what the other side received, what is still on the road, and what was lost or sent back.',
+            'filters' => ['from', 'to', 'warehouse', 'status'],
+            'select' => ['status' => ['all' => 'All transfers', 'open' => 'Still on the road', 'overdue' => 'Overdue (past expected date)', 'short' => 'With a shortage']],
+            'columns' => ['date' => $col('Dispatched', 'date'), 'doc_no' => $col('Transfer'), 'from_wh' => $col('From'), 'to_wh' => $col('To'), 'item' => $col('Item'), 'batch_no' => $col('Batch / roll'),
+                'sent' => $col('Sent', 'qty', true), 'received' => $col('Received', 'qty', true), 'pending' => $col('On the road', 'qty', true), 'lost' => $col('Lost', 'qty', true), 'returned' => $col('Sent back', 'qty', true),
+                'days' => $col('Days on road', 'int'), 'expected' => $col('Expected', 'date'), 'status' => $col('Status')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $p = [$t, $f['from'] . ' 00:00:00', $f['to'] . ' 23:59:59'];
+                $w = '';
+                if ($f['warehouse']) { $w .= ' AND (d.warehouse_id = ? OR d.to_warehouse_id = ?)'; array_push($p, $f['warehouse'], $f['warehouse']); }
+                if ($f['status'] === 'open') $w .= " AND d.status IN ('in_transit','partial')";
+                elseif ($f['status'] === 'overdue') $w .= " AND d.status IN ('in_transit','partial') AND d.expected_date IS NOT NULL AND d.expected_date < CURDATE()";
+                elseif ($f['status'] === 'short') $w .= ' AND (l.qty_lost > 0 OR l.qty_returned > 0)';
+                $rows = DB::all(
+                    "SELECT DATE(d.dispatched_at) AS date, d.doc_no, w1.name AS from_wh, w2.name AS to_wh, i.name AS item, b.batch_no, l.qty AS sent, l.qty_received AS received,
+                            (l.qty - l.qty_received - l.qty_lost - l.qty_returned) AS pending, l.qty_lost AS lost, l.qty_returned AS returned,
+                            DATEDIFF(COALESCE(DATE(d.received_at), CURDATE()), DATE(d.dispatched_at)) AS days, d.expected_date AS expected, d.status
+                     FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.to_warehouse_id <> d.warehouse_id
+                     JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id
+                     JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0
+                     WHERE l.tenant_id = ? AND d.dispatched_at BETWEEN ? AND ?$w ORDER BY d.id DESC, l.id LIMIT " . (int)$limit, $p);
+                $names = \App\Controllers\TransferController::STATUS;
+                foreach ($rows as &$r) {
+                    $late = in_array($r['status'], ['in_transit', 'partial'], true) && $r['expected'] !== null && $r['expected'] < date('Y-m-d');
+                    $r['status'] = ($names[$r['status']][0] ?? $r['status']) . ($late ? ' — overdue' : '');
+                }
+                return $rows;
+            },
+        ];
+
         // wrap runners that have a post step
         foreach ($defs as $k => $d) {
             if (!empty($d['post'])) {
@@ -625,7 +658,8 @@ final class Reports
         if ($category) { $w = ' AND i.category_id = ?'; $p[] = $category; }
         $rows = DB::all(
             "SELECT * FROM (SELECT i.id AS item_id, i.name AS item, i.reorder_level, i.reorder_qty, u.short_name AS unit, u.allow_decimal,
-                    (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s JOIN item_variants v2 ON v2.id = s.variant_id WHERE v2.item_id = i.id) AS on_hand,
+                    (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s JOIN item_variants v2 ON v2.id = s.variant_id WHERE v2.item_id = i.id)
+                      + (SELECT COALESCE(SUM(tl.qty - tl.qty_received - tl.qty_lost - tl.qty_returned),0) FROM stock_doc_lines tl JOIN stock_docs td ON td.id = tl.doc_id AND td.type = 'transfer' AND td.status IN ('in_transit','partial') JOIN item_variants v5 ON v5.id = tl.variant_id WHERE v5.item_id = i.id AND tl.tenant_id = i.tenant_id) AS on_hand,
                     (SELECT COALESCE(SUM(poi.qty_ordered - poi.qty_received),0) FROM purchase_order_items poi JOIN purchase_orders po ON po.id = poi.po_id
                       JOIN item_variants v3 ON v3.id = poi.variant_id WHERE v3.item_id = i.id AND po.status IN ('draft','pending_approval','approved','partial') AND poi.qty_ordered > poi.qty_received) AS on_order,
                     (SELECT v.id FROM item_variants v WHERE v.item_id = i.id AND v.is_active = 1 ORDER BY v.id LIMIT 1) AS variant_id,

@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/_types.php'; $st = App\Models\Stock::batchStatus((float)$balance, (float)$b['received_qty']); ?>
+<?php require_once __DIR__ . '/_types.php'; $st = App\Models\Stock::batchStatus((float)$balance, (float)$b['received_qty'], (float)array_sum(array_column($transit ?? [], 'qty'))); ?>
 <div class="row g-3 mb-3">
   <div class="col-md-4"><div class="card"><div class="card-body">
     <div class="text-muted small"><?= e(term('item')) ?></div><a href="<?= url("items/{$b['item_id']}") ?>"><?= e($b['item_name']) ?><?= $b['vname'] ? ' — ' . e($b['vname']) : '' ?></a>
@@ -13,7 +13,8 @@
   </div></div></div>
   <div class="col-md-4"><div class="card"><div class="card-header">Where it is</div><ul class="list-group list-group-flush">
     <?php foreach ($where as $w): ?><li class="list-group-item d-flex justify-content-between"><span><?= e($w['name']) ?> · <i class="bi bi-geo-alt"></i> <?= e($w['rack'] !== '' ? $w['rack'] : 'No rack') ?></span><strong><?= e(qty($w['qty'])) ?> <?= e($b['unit']) ?></strong></li><?php endforeach; ?>
-    <?php if (!$where): ?><li class="list-group-item text-muted">No stock left.</li><?php endif; ?>
+    <?php foreach ($transit ?? [] as $tr): ?><li class="list-group-item d-flex justify-content-between"><span><i class="bi bi-truck"></i> In transit to <?= e($tr['to_warehouse']) ?> · <a href="<?= url('stock/transfers/' . (int)$tr['id']) ?>"><?= e($tr['doc_no']) ?></a></span><strong><?= e(qty($tr['qty'])) ?> <?= e($b['unit']) ?></strong></li><?php endforeach; ?>
+    <?php if (!$where && empty($transit)): ?><li class="list-group-item text-muted">No stock left.</li><?php endif; ?>
   </ul></div></div>
 </div>
 <div class="card"><div class="card-header">History of this <?= e(term('batch', true)) ?></div>

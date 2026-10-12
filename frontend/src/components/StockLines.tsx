@@ -10,7 +10,7 @@ export type SL = {
 export const blankSl = (): SL => ({ variant_id: '', label: '', unit: '', dec: true, tb: false, batch_id: '', lot_no: '', location_id: '', to_location_id: '0', qty: '', unit_cost: '' });
 export type Racks = Record<string, { id: number; code: string }[]>;
 
-function Row({ l, mode, racks, from, to, patch, remove }: { l: SL; mode: 'adjust' | 'transfer'; racks: Racks; from: string; to: string; patch: (p: Partial<SL>) => void; remove: () => void }) {
+function Row({ l, mode, racks, from, to, between, patch, remove }: { l: SL; mode: 'adjust' | 'transfer'; racks: Racks; from: string; to: string; between: boolean; patch: (p: Partial<SL>) => void; remove: () => void }) {
   const { term } = useSession();
   const [batches, setBatches] = useState<any[]>([]);
   const [place, setPlace] = useState<any[] | null>(null);
@@ -64,7 +64,7 @@ function Row({ l, mode, racks, from, to, patch, remove }: { l: SL; mode: 'adjust
         {rackSel(l.location_id, (v) => patch({ location_id: v }), fromRacks)}
         {place && <div className="form-text small">{place.length ? 'In stock: ' + place.map((r) => `${r.code || 'No rack'} ${parseFloat(r.qty)}`).join(' · ') : 'Nothing in stock here'}</div>}
       </td>
-      {mode === 'transfer' && <td style={{ minWidth: 150 }}>{rackSel(l.to_location_id, (v) => patch({ to_location_id: v }), toRacks)}</td>}
+      {mode === 'transfer' && !between && <td style={{ minWidth: 150 }}>{rackSel(l.to_location_id, (v) => patch({ to_location_id: v }), toRacks)}</td>}
       <td className="text-nowrap">
         <input type="number" className="form-control form-control-sm d-inline-block" style={{ width: 110 }} step={l.dec ? '0.001' : '1'} min={mode === 'transfer' ? '0' : undefined} value={l.qty} onChange={(e) => patch({ qty: e.target.value })} />
         <span className="ms-1 text-muted small">{l.unit}</span>
@@ -77,14 +77,16 @@ function Row({ l, mode, racks, from, to, patch, remove }: { l: SL; mode: 'adjust
 
 /** The lines of a stock adjustment or transfer: item, roll (batch), rack(s) and quantity. */
 export default function StockLines({ mode, lines, setLines, racks, from, to = '' }: { mode: 'adjust' | 'transfer'; lines: SL[]; setLines: (f: (ls: SL[]) => SL[]) => void; racks: Racks; from: string; to?: string }) {
+  // between two warehouses the receiving side picks the rack when the goods arrive
+  const between = mode === 'transfer' && !!to && to !== from;
   const { term } = useSession();
   const patch = (i: number) => (p: Partial<SL>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));
   return (
     <div className="card mb-3"><div className="card-header d-flex justify-content-between align-items-center"><span>{term('item', true)}</span>
       <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setLines((ls) => [...ls, blankSl()])}><i className="bi bi-plus-lg" /> Add line</button></div>
       <div className="table-responsive" style={{ overflow: 'visible' }}><table className="table mb-0 align-middle">
-        <thead><tr><th>{term('item')}</th><th>{term('batch')}</th>{mode === 'adjust' ? <th>{term('rack')}</th> : <><th>From {term('rack').toLowerCase()}</th><th>To {term('rack').toLowerCase()}</th></>}<th>{mode === 'adjust' ? 'Qty change (− to remove)' : 'Qty to move'}</th>{mode === 'adjust' && <th>Cost / unit</th>}<th /></tr></thead>
-        <tbody>{lines.map((l, i) => <Row key={i} l={l} mode={mode} racks={racks} from={from} to={to} patch={patch(i)} remove={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [blankSl()]))} />)}</tbody>
+        <thead><tr><th>{term('item')}</th><th>{term('batch')}</th>{mode === 'adjust' ? <th>{term('rack')}</th> : between ? <th>Take from {term('rack').toLowerCase()}</th> : <><th>From {term('rack').toLowerCase()}</th><th>To {term('rack').toLowerCase()}</th></>}<th>{mode === 'adjust' ? 'Qty change (− to remove)' : 'Qty to move'}</th>{mode === 'adjust' && <th>Cost / unit</th>}<th /></tr></thead>
+        <tbody>{lines.map((l, i) => <Row key={i} l={l} mode={mode} racks={racks} from={from} to={to} between={between} patch={patch(i)} remove={() => setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [blankSl()]))} />)}</tbody>
       </table></div></div>
   );
 }

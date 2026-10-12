@@ -79,6 +79,8 @@ final class DashboardController extends Controller
             'buyNow' => array_sum($buys), 'buyPrev' => Metrics::purchases($p['prev_from'], $p['prev_to']),
             'receivable' => Metrics::due('sales'), 'payable' => Metrics::due('purchase'),
             'ordersOpen' => (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ? AND status IN ('confirmed','partial')", [$t]),
+            'transitOpen' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')", [$t]),
+            'transitLate' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()", [$t]),
             'lowCount' => Metrics::lowStockCount(), 'stockValue' => Metrics::stockValue(),
             'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE tenant_id = ? AND batch_id > 0 GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', [$t]),
             'topItems' => Metrics::topItems($p['from'], $p['to']),

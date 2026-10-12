@@ -25,7 +25,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`. Afterwards the page must say "The database is up to date."
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/app/` once with a hard refresh (Ctrl+F5) so the browser drops the old screens.
 
@@ -50,7 +50,15 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] Warehouse added; racks added as a range (A-01 … A-10).
 - [ ] Item with variants, "Track by roll" on; Item without roll tracking; a Set (bundle) of two items.
 - [ ] Stock adjustment (opening stock): fabric creates a roll with supplier lot and rack; non-roll item adds quantity.
-- [ ] Transfer between two racks and between two warehouses; stock-take: count, save, post — differences appear in the ledger.
+- [ ] Transfer between two racks of ONE warehouse: instant ("Moved").
+- [ ] Transfer between TWO warehouses (transport, vehicle, LR no., expected date): status **In transit**; the sender's stock drops, the receiver's does not rise yet; Stock page shows the quantity under "In transit"; the roll shows "In transit" (not "Finished").
+- [ ] Challan prints (logo, both warehouse addresses, transport, blank "Qty received / Put on rack" columns, signatures).
+- [ ] Receiver (a user with the **Receive** permission) opens the transfer → Receive goods → enters what arrived and the rack → stock appears on that rack, status "Partly received" or "Received". Receive the rest in a second go.
+- [ ] Shortage: settle the missing quantity as "lost" and as "send back" → status "Received (shortage)"; History lists every step with who did it.
+- [ ] Cancel a fresh dispatch → every roll is back on the rack it left.
+- [ ] A dispatcher without the Receive permission cannot receive; a receiver cannot dispatch or settle (Settings → Roles → Stock: View / Adjust / Transfer / **Receive**).
+- [ ] Reports → "Transfers: in transit & shortages"; Dashboard card "Transfers on the road"; overdue transfers (past expected date) show in red.
+- [ ] Stock-take: count, save, post — differences appear in the ledger.
 - [ ] Stock overview, Stock by rack, Rolls list + roll page history, Ledger filters.
 
 **Purchase**

@@ -1,6 +1,6 @@
 <?php
 $action = $role ? url("roles/{$role['id']}") : url('roles');
-$allActions = ['view', 'create', 'edit', 'delete', 'approve', 'adjust', 'transfer', 'use', 'export'];
+$allActions = ['view', 'create', 'edit', 'delete', 'approve', 'adjust', 'transfer', 'receive', 'use', 'export'];
 $isSystem = $role && $role['is_system'];
 ?>
 <form method="post" action="<?= $action ?>"><?= csrf_field() ?>

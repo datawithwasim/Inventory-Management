@@ -196,6 +196,10 @@ final class RecordView
             if (!empty($row['reason'])) $row['reason'] = \App\Controllers\AdjustmentController::REASONS[$row['reason']] ?? $row['reason'];
             $facts = ['date' => ['Date', e(fdate(substr((string)$row['created_at'], 0, 10))) . ' ' . e(substr((string)$row['created_at'], 11, 5))],
                 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
+            if ($entity === 'transfer') {
+                $facts['status'] = ['Status', e(\App\Controllers\TransferController::STATUS[$row['status']][0] ?? (string)$row['status'])];
+                $facts['received'] = ['Received', !empty($row['received_at']) ? e(fdate(substr((string)$row['received_at'], 0, 10))) . ' ' . e(substr((string)$row['received_at'], 11, 5)) : ''];
+            }
         }
         return [$row, $facts];
     }

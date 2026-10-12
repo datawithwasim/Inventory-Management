@@ -6,7 +6,7 @@ import { useSession } from '../../lib/session';
 import { Badge, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
 
-const rollStatus = (balance: number, received: number) => (balance <= 0.0005 ? 'Finished' : balance < received - 0.0005 ? 'Partially used' : 'Available');
+const rollStatus = (balance: number, received: number, transit = 0) => (balance <= 0.0005 && transit > 0.0005 ? 'In transit' : balance <= 0.0005 ? 'Finished' : balance < received - 0.0005 ? 'Partially used' : 'Available');
 
 export default function ItemDetail() {
   const { id } = useParams(); const nav = useNavigate();
@@ -82,13 +82,14 @@ function FragmentRows({ v, it, bundle, tracked, term }: { v: any; it: any; bundl
           <td className="small">
             {v.by_wh.map((w: any) => <span key={w.name} className="badge text-bg-light border fw-normal me-1">{w.name}: {qty(w.qty)}</span>)}
             {v.by_rack.map((r: any, i: number) => <span key={i} className={`badge text-bg-${r.rack === '' ? 'warning' : 'primary-subtle text-primary-emphasis'} fw-normal me-1`}><i className="bi bi-geo-alt" /> {r.rack !== '' ? r.rack : 'No rack'}: {qty(r.qty)}</span>)}
-            {!v.by_wh.length && <span className="text-muted">—</span>}</td></>}
+            {Number(v.in_transit) > 0.0005 && <Link to="/stock/transfers?status=open" className="badge text-bg-warning fw-normal me-1 text-decoration-none"><i className="bi bi-truck" /> In transit: {qty(v.in_transit)}</Link>}
+            {!v.by_wh.length && !(Number(v.in_transit) > 0.0005) && <span className="text-muted">—</span>}</td></>}
       </tr>
       {!bundle && tracked && (
         <tr className="var-rolls-row"><td colSpan={cols} className="p-0 border-0">
           <details className="var-rolls"><summary><i className="bi bi-layers" /> {v.batches.length} {term('batch', true).toLowerCase()}{v.batches.length ? ` · ${qty(v.batches.reduce((a: number, b: any) => a + Number(b.balance), 0))} ${it.unit} left` : ''}</summary>
             <table className="table table-sm mb-0"><thead><tr><th>{term('batch')}</th><th>{term('supplier')} lot</th><th>Received</th><th className="text-end">Roll size</th><th className="text-end">Balance</th><th>Status</th></tr></thead><tbody>
-              {v.batches.map((b: any) => <tr key={b.id}><td><Link to={`/stock/batches/${b.id}`}>{b.batch_no}</Link></td><td>{b.supplier_lot ?? ''}</td><td>{fdate(b.received_date)}</td><td className="text-end">{qty(b.received_qty)}</td><td className="text-end">{qty(b.balance)}</td><td>{rollStatus(Number(b.balance), Number(b.received_qty))}</td></tr>)}
+              {v.batches.map((b: any) => <tr key={b.id}><td><Link to={`/stock/batches/${b.id}`}>{b.batch_no}</Link></td><td>{b.supplier_lot ?? ''}</td><td>{fdate(b.received_date)}</td><td className="text-end">{qty(b.received_qty)}</td><td className="text-end">{qty(b.balance)}</td><td>{rollStatus(Number(b.balance), Number(b.received_qty), Number(b.in_transit ?? 0))}</td></tr>)}
               {!v.batches.length && <tr><td colSpan={6} className="text-muted">No {term('batch', true).toLowerCase()} yet.</td></tr>}</tbody></table></details></td></tr>
       )}
     </>

@@ -12,7 +12,7 @@ final class StockController extends Controller
 {
     private const PER_PAGE = 50;
     public const TYPES = [
-        'opening' => 'Opening stock', 'adjustment' => 'Adjustment', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out',
+        'opening' => 'Opening stock', 'adjustment' => 'Adjustment', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back',
         'stocktake' => 'Stock-take', 'purchase' => 'Purchase', 'purchase_return' => 'Purchase return', 'sale' => 'Sale', 'sales_return' => 'Sales return',
     ];
 
@@ -59,6 +59,9 @@ final class StockController extends Controller
              $base GROUP BY v.id, i.id, u.id ORDER BY i.name, v.name LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
         $this->attachRacks($rows, $wh);
         $this->attachReserved($rows, $wh);
+        $transit = Stock::transitByVariant(array_map(fn($r) => (int)$r['id'], $rows), $wh);
+        foreach ($rows as &$r) $r['in_transit'] = $transit[(int)$r['id']] ?? 0;
+        unset($r);
         $totalValue = (float)DB::val(
             'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0)
              FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
@@ -67,6 +70,7 @@ final class StockController extends Controller
         $this->view('app/stock/index', [
             'title' => 'Stock', 'rows' => $rows, 'q' => $q, 'wh' => $wh, 'low' => $low, 'warehouses' => $this->warehouses(),
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'totalValue' => $totalValue,
+            'transitTotal' => (float)DB::val('SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.tenant_id = ?" . ($wh ? ' AND d.to_warehouse_id = ?' : ''), $wh ? [$t, $wh] : [$t]),
         ]);
     }
 
@@ -160,16 +164,18 @@ final class StockController extends Controller
             $where .= ' AND (b.batch_no LIKE ? OR b.supplier_lot LIKE ? OR i.name LIKE ? OR v.sku LIKE ?)';
             array_push($params, $like, $like, $like, $like);
         }
+        $transitSql = '(SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.batch_id = b.id AND l.tenant_id = b.tenant_id)";
         $having = match ($status) {
-            'finished' => 'HAVING balance <= 0.0005',
+            'finished' => "HAVING balance <= 0.0005 AND transit <= 0.0005",
+            'transit' => 'HAVING transit > 0.0005',
             'all' => '',
-            default => 'HAVING balance > 0.0005',
+            default => 'HAVING balance > 0.0005 OR transit > 0.0005',
         };
         $base = "FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
                  LEFT JOIN stock_balances s ON s.batch_id = b.id AND s.tenant_id = b.tenant_id WHERE $where GROUP BY b.id $having";
-        $total = (int)DB::val("SELECT COUNT(*) FROM (SELECT b.id, COALESCE(SUM(s.qty),0) AS balance $base) x", $params);
+        $total = (int)DB::val("SELECT COUNT(*) FROM (SELECT b.id, COALESCE(SUM(s.qty),0) AS balance, $transitSql AS transit $base) x", $params);
         $rows = DB::all(
-            "SELECT b.*, i.name AS item_name, v.name AS vname, v.sku, u.short_name AS unit, COALESCE(SUM(s.qty),0) AS balance
+            "SELECT b.*, i.name AS item_name, v.name AS vname, v.sku, u.short_name AS unit, COALESCE(SUM(s.qty),0) AS balance, $transitSql AS transit
              $base ORDER BY b.id DESC LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
 
         $this->view('app/stock/batches', [
@@ -195,7 +201,7 @@ final class StockController extends Controller
              LEFT JOIN users u ON u.id = l.user_id WHERE l.tenant_id = ? AND l.batch_id = ? ORDER BY l.id', [$t, $b['id']]);
         $this->view('app/stock/batch', [
             'title' => 'Batch ' . $b['batch_no'], 'b' => $b, 'where' => $where, 'history' => $history,
-            'balance' => array_sum(array_column($where, 'qty')), 'types' => self::TYPES,
+            'balance' => array_sum(array_column($where, 'qty')), 'types' => self::TYPES, 'transit' => Stock::transitOfBatch((int)$b['id']),
         ]);
     }
 

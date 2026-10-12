@@ -29,7 +29,7 @@ import { ReturnList, ReturnCreate, ReturnDetail } from './pages/purchase/ReturnP
 import { WarehouseList, WarehouseDetail, WarehouseForm } from './pages/stock/WarehousePages';
 import { LocationList, LocationDetail, LocationForm } from './pages/stock/LocationPages';
 import { StockOverview, StockRacks, StockBatches, StockBatch, StockLedger } from './pages/stock/StockViews';
-import { AdjustmentList, AdjustmentForm, AdjustmentDetail, TransferList, TransferForm, TransferDetail, TakeList, TakeForm, TakeDetail } from './pages/stock/DocPages';
+import { AdjustmentList, AdjustmentForm, AdjustmentDetail, TransferForm, TakeList, TakeForm, TakeDetail } from './pages/stock/DocPages';
 import { OrderList, OrderForm, OrderDetail } from './pages/sales/OrderPages';
 import { DeliveryList, DeliveryForm, DeliveryDetail } from './pages/sales/DeliveryPages';
 import { InvoiceList, InvoiceDetail, InvoiceForm } from './pages/sales/InvoicePages';
@@ -40,6 +40,7 @@ import { UserList, UserForm, RoleList, RoleForm } from './pages/settings/Team';
 import { MasterList, MasterForm } from './pages/settings/Masters';
 import Profile from './pages/settings/Profile';
 import { AdminLogin, AdminLayout, AdminDashboard, TenantList, TenantForm, PlanList, PlanForm, AdminSystem, AdminAudit } from './pages/admin/Admin';
+import { TransferList, TransferDetail } from './pages/stock/TransferPages';
 import { legacyUrl } from './lib/api';
 
 function Protected() {

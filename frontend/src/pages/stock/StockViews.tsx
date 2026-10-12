@@ -12,8 +12,8 @@ const whSelect = (d: any, sp: URLSearchParams, term: (k: string, p?: boolean) =>
 );
 const when = (s: string) => <span className="text-nowrap">{fdate(String(s).slice(0, 10))} <span className="text-muted">{String(s).slice(11, 16)}</span></span>;
 const change = (v: any) => <span className={Number(v) < 0 ? 'text-danger' : 'text-success'}>{Number(v) > 0 ? '+' : ''}{qty(v)}</span>;
-export const batchTone = (st: string) => (st === 'Finished' ? 'secondary' : st === 'Available' ? 'success' : 'info');
-export const batchState = (balance: number, received: number) => (balance <= 0.0005 ? 'Finished' : balance < received - 0.0005 ? 'Partially used' : 'Available');
+export const batchTone = (st: string) => (st === 'Finished' ? 'secondary' : st === 'Available' ? 'success' : st === 'In transit' ? 'warning' : 'info');
+export const batchState = (balance: number, received: number, transit = 0) => (balance <= 0.0005 && transit > 0.0005 ? 'In transit' : balance <= 0.0005 ? 'Finished' : balance < received - 0.0005 ? 'Partially used' : 'Available');
 
 /** Stock on hand per item variant, with rack split, reserved quantity, value and low-stock flag. */
 export function StockOverview() {
@@ -31,6 +31,7 @@ export function StockOverview() {
       columns={[
         { head: term('item'), cell: (r) => <Link to={`/items/${r.item_id}`}>{r.name}{r.vname ? ` — ${r.vname}` : ''}</Link> }, { head: 'SKU', cell: (r) => r.sku },
         { head: 'On hand', className: 'text-end', cell: (r) => `${qty(r.qty)} ${r.unit}` },
+        { head: 'In transit', className: 'text-end', cell: (r) => Number(r.in_transit) > 0.0005 ? <Link to="/stock/transfers?status=open" className="text-warning" title="On its way between warehouses, not on any rack yet">{qty(r.in_transit)}</Link> : <span className="text-muted">—</span> },
         { head: 'Reserved', className: 'text-end', cell: (r) => Number(r.reserved) > 0.0005 ? <span className="text-warning">{qty(r.reserved)}<div className="small text-muted">free {qty(r.qty - r.reserved)}</div></span> : <span className="text-muted">—</span> },
         { head: `Where (${term('rack', true).toLowerCase()})`, className: 'small', cell: (r, d) => <>{(r.racks ?? []).slice(0, 4).map((k: any, i: number) => <span key={i} className={`badge text-bg-${k.code === '' ? 'warning' : 'primary'} me-1`}>{d.wh ? '' : `${k.warehouse} · `}{k.code !== '' ? k.code : 'No rack'}: {qty(k.qty)}</span>)}{(r.racks ?? []).length > 4 ? '…' : ''}</> },
         { head: term('rolls'), className: 'text-end', cell: (r) => Number(r.track_batch) ? r.batches : '—' }, { head: 'Value', className: 'text-end', cell: (r) => money(r.value) },
@@ -67,13 +68,13 @@ export function StockBatches() {
       filters={(_d, set, sp) => (
         <Filters names={['q', 'status']} sp={sp} set={set}>
           <div className="col-md-4"><input name="q" className="form-control" placeholder="Batch no., supplier lot, item, SKU" defaultValue={sp.get('q') ?? ''} /></div>
-          <div className="col-md-3"><select name="status" className="form-select" defaultValue={sp.get('status') ?? 'active'}><option value="active">In stock</option><option value="finished">Finished</option><option value="all">All</option></select></div>
+          <div className="col-md-3"><select name="status" className="form-select" defaultValue={sp.get('status') ?? 'active'}><option value="active">In stock / in transit</option><option value="transit">In transit</option><option value="finished">Finished</option><option value="all">All</option></select></div>
         </Filters>)}
       columns={[
         { head: term('batch'), cell: (r) => <Link to={`/stock/batches/${r.id}`}>{r.batch_no}</Link> }, { head: term('item'), cell: (r) => `${r.item_name}${r.vname ? ` — ${r.vname}` : ''}` },
         { head: `${term('supplier')} lot`, cell: (r) => r.supplier_lot ?? '' }, { head: 'Received', cell: (r) => fdate(r.received_date) },
         { head: 'Roll size', className: 'text-end', cell: (r) => `${qty(r.received_qty)} ${r.unit}` }, { head: 'Balance', className: 'text-end', cell: (r) => `${qty(r.balance)} ${r.unit}` },
-        { head: 'Status', cell: (r) => { const st = batchState(Number(r.balance), Number(r.received_qty)); return <Badge tone={batchTone(st)}>{st}</Badge>; } },
+        { head: 'Status', cell: (r) => { const st = batchState(Number(r.balance), Number(r.received_qty), Number(r.transit)); return <Badge tone={batchTone(st)}>{st}</Badge>; } },
       ]} />
   );
 }
@@ -84,7 +85,7 @@ export function StockBatch() {
   const q = useQuery({ queryKey: ['stock-batch', id], queryFn: async () => (await get(`/stock/batches/${id}`)).data });
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">{term('batch')} not found.</div>;
-  const b = d.b; const st = batchState(Number(d.balance), Number(b.received_qty)); const types = session?.stockTypes ?? d.types ?? {};
+  const b = d.b; const transit: any[] = d.transit ?? []; const st = batchState(Number(d.balance), Number(b.received_qty), transit.reduce((a, t) => a + Number(t.qty), 0)); const types = session?.stockTypes ?? d.types ?? {};
   return (
     <>
       <PageHead title={`${term('batch')} ${b.batch_no}`}><Link className="btn btn-outline-secondary" to="/stock/batches">All {term('rolls').toLowerCase()}</Link></PageHead>
@@ -102,7 +103,8 @@ export function StockBatch() {
         </div></div></div>
         <div className="col-md-4"><div className="card"><div className="card-header">Where it is</div><ul className="list-group list-group-flush">
           {d.where.map((w: any, i: number) => <li key={i} className="list-group-item d-flex justify-content-between"><span>{w.name} · <i className="bi bi-geo-alt" /> {w.rack !== '' ? w.rack : 'No rack'}</span><strong>{qty(w.qty)} {b.unit}</strong></li>)}
-          {!d.where.length && <li className="list-group-item text-muted">No stock left.</li>}
+          {transit.map((t: any) => <li key={t.id} className="list-group-item d-flex justify-content-between"><span><i className="bi bi-truck" /> In transit to {t.to_warehouse} · <Link to={`/stock/transfers/${t.id}`}>{t.doc_no}</Link></span><strong>{qty(t.qty)} {b.unit}</strong></li>)}
+          {!d.where.length && !transit.length && <li className="list-group-item text-muted">No stock left.</li>}
         </ul></div></div>
       </div>
       <div className="card"><div className="card-header">History of this {term('batch').toLowerCase()}</div>

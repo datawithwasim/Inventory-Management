@@ -59,3 +59,21 @@ function check(string $name, bool $ok): void
     echo ($ok ? '  PASS ' : '  FAIL ') . $name . "\n";
     if (!$ok) $fails++;
 }
+
+/** Receives everything still on the road of one transfer (racks: line id => rack; others use the rack suggested at dispatch). */
+function receive_all(Client $c, int $docId, array $racks = []): void
+{
+    $lines = [];
+    foreach (Core\DB::all('SELECT id, qty - qty_received - qty_lost - qty_returned AS pending FROM stock_doc_lines WHERE doc_id = ?', [$docId]) as $l) {
+        if ((float)$l['pending'] <= 0.0005) continue;
+        $row = ['qty' => (string)$l['pending']];
+        if (isset($racks[$l['id']])) $row['location_id'] = (string)$racks[$l['id']];
+        $lines[$l['id']] = $row;
+    }
+    if ($lines) $c->post("/stock/transfers/$docId/receive", ['lines' => $lines], "/stock/transfers/$docId");
+}
+/** The newest transfer document of a company. */
+function last_transfer(int $tenantId): int
+{
+    return (int)Core\DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tenantId]);
+}

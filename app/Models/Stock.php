@@ -171,7 +171,8 @@ final class Stock
     public static function batchesFor(int $variantId, ?int $warehouseId, bool $onlyInStock = true): array
     {
         $sql = 'SELECT b.id, b.batch_no, b.supplier_lot, b.received_date, b.received_qty,
-                       COALESCE(SUM(s.qty), 0) AS balance
+                       COALESCE(SUM(s.qty), 0) AS balance,
+                       (SELECT COALESCE(SUM' . self::TRANSIT_PENDING . ', 0) ' . self::TRANSIT_FROM . ' WHERE l.tenant_id = b.tenant_id AND l.batch_id = b.id) AS in_transit
                 FROM batches b LEFT JOIN stock_balances s
                   ON s.batch_id = b.id AND s.tenant_id = b.tenant_id' . ($warehouseId ? ' AND s.warehouse_id = ?' : '') . '
                 WHERE b.tenant_id = ? AND b.variant_id = ?
@@ -180,8 +181,34 @@ final class Stock
         return DB::all($sql, $params);
     }
 
-    public static function batchStatus(float $balance, float $received): string
+    /** What is on the road: dispatched between warehouses, not yet received, written off or sent back. */
+    public const TRANSIT_PENDING = '(l.qty - l.qty_received - l.qty_lost - l.qty_returned)';
+    private const TRANSIT_FROM = "FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial')";
+
+    /** In transit per variant: [variant_id => qty]. With $toWarehouse only what is on its way to that warehouse. */
+    public static function transitByVariant(array $variantIds, int $toWarehouse = 0): array
     {
+        if (!$variantIds) return [];
+        $in = implode(',', array_fill(0, count($variantIds), '?'));
+        $params = [self::tid(), ...array_map('intval', $variantIds)];
+        if ($toWarehouse) $params[] = $toWarehouse;
+        $out = [];
+        foreach (DB::all('SELECT l.variant_id, SUM' . self::TRANSIT_PENDING . ' AS q ' . self::TRANSIT_FROM . " WHERE l.tenant_id = ? AND l.variant_id IN ($in)" . ($toWarehouse ? ' AND d.to_warehouse_id = ?' : '') . ' GROUP BY l.variant_id', $params) as $r) {
+            if ((float)$r['q'] > 0.0005) $out[(int)$r['variant_id']] = round((float)$r['q'], 3);
+        }
+        return $out;
+    }
+
+    /** Open transfers a roll is on: [{id, doc_no, to_warehouse, qty}]. */
+    public static function transitOfBatch(int $batchId): array
+    {
+        return DB::all('SELECT d.id, d.doc_no, d.expected_date, w1.name AS from_warehouse, w2.name AS to_warehouse, ' . self::TRANSIT_PENDING . ' AS qty ' . self::TRANSIT_FROM
+            . ' JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id WHERE l.tenant_id = ? AND l.batch_id = ? AND ' . self::TRANSIT_PENDING . ' > 0.0005 ORDER BY d.id', [self::tid(), $batchId]);
+    }
+
+    public static function batchStatus(float $balance, float $received, float $transit = 0.0): string
+    {
+        if ($balance <= 0.0005 && $transit > 0.0005) return 'In transit';
         if ($balance <= 0.0005) return 'Finished';
         return $balance < $received - 0.0005 ? 'Partially used' : 'Available';
     }

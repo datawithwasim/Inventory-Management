@@ -115,6 +115,7 @@ final class ItemController extends Controller
                  WHERE s.tenant_id = ? AND s.variant_id = ? GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
                  ORDER BY w.name, l.code', [$t, $v['id']]);
             $v['total'] = array_sum(array_column($v['by_wh'], 'qty'));
+            $v['in_transit'] = Stock::transitByVariant([(int)$v['id']])[(int)$v['id']] ?? 0;
             $v['batches'] = $item['track_batch'] ? Stock::batchesFor((int)$v['id'], null, false) : [];
         }
         unset($v);

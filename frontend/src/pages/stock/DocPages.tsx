@@ -34,19 +34,6 @@ export function AdjustmentList() {
   );
 }
 
-export function TransferList() {
-  const { can, term } = useSession();
-  return (
-    <DocList title="Stock transfers" api="/stock/transfers" queryKey="stock-docs" empty="No transfers yet."
-      above={() => <div className="text-muted mb-3">Move stock between {term('warehouse', true).toLowerCase()}. {term('rolls')} (rolls) keep their identity.</div>}
-      actions={() => can('stock.transfer') ? <Link className="btn btn-primary" to="/stock/transfers/create"><i className="bi bi-plus-lg" /> New transfer</Link> : null}
-      columns={[
-        { head: 'No.', cell: (r) => <Link to={`/stock/transfers/${r.id}`}>{r.doc_no}</Link> }, { head: 'Date', cell: (r) => stamp(r.created_at) }, { head: 'From', cell: (r) => r.warehouse }, { head: 'To', cell: (r) => r.to_warehouse },
-        { head: 'Lines', cell: (r) => r.line_count }, { head: 'By', cell: (r) => r.user_name ?? '' },
-      ]} />
-  );
-}
-
 export function TakeList() {
   const { can, term } = useSession();
   return (
@@ -80,6 +67,9 @@ function StockDocForm({ mode }: { mode: 'adjust' | 'transfer' }) {
   }, [schema.data, src.data, values, mode]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;
   const from = String(values.warehouse_id ?? ''); const to = String(values.to_warehouse_id ?? '');
+  const between = mode === 'transfer' && !!to && to !== from;
+  // goods leaving for another warehouse also carry transport details; moving inside one warehouse does not
+  const shown = mode === 'transfer' && !between ? { ...schema.data, sections: schema.data.sections.map((sec) => ({ ...sec, fields: sec.fields.filter((k) => !['expected_date', 'transport', 'vehicle_no', 'lr_no'].includes(k)) })) } : schema.data;
   // changing a warehouse changes which rolls / racks exist: lines are re-pointed at the new place
   const onHeader = (v: Record<string, any>) => {
     if (v.warehouse_id !== values.warehouse_id) setLines((ls) => ls.map((l) => ({ ...l, location_id: '', batch_id: l.tb && mode === 'adjust' ? 'new' : '' })));
@@ -98,11 +88,12 @@ function StockDocForm({ mode }: { mode: 'adjust' | 'transfer' }) {
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <PageHead title={mode === 'adjust' ? 'New stock adjustment' : 'New stock transfer'} extra={schema.data.canDesign ? layoutLink(entity) : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(base)}>Cancel</button>
-        <button className="btn btn-primary" disabled={saving}>{saving ? 'Posting…' : mode === 'adjust' ? 'Post adjustment' : 'Transfer stock'}</button>
+        <button className="btn btn-primary" disabled={saving}>{saving ? 'Posting…' : mode === 'adjust' ? 'Post adjustment' : between ? 'Dispatch stock' : 'Move stock'}</button>
       </PageHead>
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body">
-        <SchemaForm schema={schema.data} values={values} onChange={onHeader} />
+        <SchemaForm schema={shown} values={values} onChange={onHeader} />
+        {between && <div className="alert alert-info py-2 small"><i className="bi bi-truck me-1" /><strong>Between two {term('warehouse', true).toLowerCase()}:</strong> the stock leaves the sender now and stays <strong>in transit</strong> until the other {term('warehouse').toLowerCase()} confirms what it received and puts it on a {term('rack').toLowerCase()}. Anything that does not arrive has to be settled.</div>}
         <p className="text-muted small mb-0">{mode === 'adjust'
           ? <>Use a positive quantity to add stock (for fabric, <strong>+ New {term('batch').toLowerCase()}</strong> creates a new roll) and a negative quantity to remove it from a chosen {term('batch').toLowerCase()}.</>
           : <>You can also move stock between {term('rack', true).toLowerCase()} <em>inside</em> one {term('warehouse').toLowerCase()}: choose the same {term('warehouse').toLowerCase()} on both sides and pick different {term('rack', true).toLowerCase()} on each line.</>}</p>
@@ -139,7 +130,6 @@ function StockDocDetail({ kind }: { kind: 'adjustment' | 'transfer' }) {
   );
 }
 export const AdjustmentDetail = () => <StockDocDetail kind="adjustment" />;
-export const TransferDetail = () => <StockDocDetail kind="transfer" />;
 
 // ------------------------------------------------------------------ stock-take
 

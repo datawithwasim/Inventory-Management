@@ -31,6 +31,7 @@ export default function Dashboard() {
         <Kpi label="Stock value" value={money(d.stockValue)} sub={`${d.rolls} ${term('batch', true).toLowerCase()} in stock`} />
         <Kpi label="Low stock" value={String(d.lowCount)} tone={d.lowCount > 0 ? 'text-danger' : ''} href={'/stock?low=1'} />
         <Kpi label="Open orders" value={String(d.ordersOpen)} href={'/sales/orders'} />
+        <Kpi label="Transfers on the road" value={String(d.transitOpen ?? 0)} sub={d.transitLate ? `${d.transitLate} overdue` : 'none overdue'} tone={d.transitLate ? 'text-danger' : ''} href={'/stock/transfers?status=open'} />
         <Kpi label="Team" value={`${d.userCount} users`} sub={`${d.roleCount} roles`} />
       </div>
       <div className="row g-3">

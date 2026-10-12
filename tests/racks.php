@@ -115,7 +115,11 @@ check('no new stock into an inactive rack', $ledger($tA) === $n);
 $a->post("/locations/$B3", ['code' => 'B-03', 'description' => '', 'is_active' => '1'], "/locations/$B3/edit");
 
 echo "Moving between racks\n";
-$tr = fn(int $from, int $to, array $lines) => $a->post('/stock/transfers', ['warehouse_id' => $from, 'to_warehouse_id' => $to, 'lines' => $lines], '/stock/transfers/create');
+$tr = function (int $from, int $to, array $lines) use ($a, $tA) {
+    $r = $a->post('/stock/transfers', ['warehouse_id' => $from, 'to_warehouse_id' => $to, 'lines' => $lines], '/stock/transfers/create');
+    receive_all($a, last_transfer($tA));   // the other warehouse confirms what arrived (on the rack suggested at dispatch)
+    return $r;
+};
 $tr($main, $main, [['variant_id' => $vel, 'batch_id' => $roll, 'qty' => 50, 'location_id' => $B2, 'to_location_id' => $B3]]);
 check('roll moved B-02 → B-03 inside the warehouse', $bal($tA, $vel, $main, $roll, $B2) === 0.0 && $bal($tA, $vel, $main, $roll, $B3) === 50.0);
 check('it is still the same batch, nothing lost', (float)$val('SELECT SUM(qty) FROM stock_balances WHERE batch_id = ?', [$roll]) === 50.0);
@@ -128,6 +132,8 @@ $tr($main, $show, [['variant_id' => $tbl, 'qty' => 5, 'location_id' => $B1, 'to_
 $lastTr = (int)$val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
 $tv = $a->get("/stock/transfers/$lastTr/voucher");
 check('a transfer has a voucher too, showing from-rack and to-rack', $tv['status'] === 200 && str_contains($tv['body'], 'Stock-out voucher') && str_contains($tv['body'], 'To rack'));
+$ch = $a->get("/stock/transfers/$lastTr/challan");
+check('a transfer between warehouses has a challan with blanks for the receiver', $ch['status'] === 200 && str_contains($ch['body'], 'Transfer challan') && str_contains($ch['body'], 'Qty received') && str_contains($ch['body'], 'Received by'));
 
 check('stock moved to a rack in another warehouse', $bal($tA, $tbl, $show, 0, $S1) === 5.0 && $bal($tA, $tbl, $main, 0, $B1) === 0.0);
 $n = $ledger($tA);

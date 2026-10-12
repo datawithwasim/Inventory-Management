@@ -90,7 +90,7 @@ export function RoleList() {
   );
 }
 
-const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'adjust', 'transfer', 'use', 'export'];
+const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'adjust', 'transfer', 'receive', 'use', 'export'];
 
 export function RoleForm() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();

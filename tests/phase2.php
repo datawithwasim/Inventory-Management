@@ -142,7 +142,11 @@ check('low-stock filter lists the table', str_contains($a->get('/stock?low=1')['
 check('bundle availability = 2 sets', str_contains($a->get("/items/$set")['body'], '2 set(s)'));
 
 echo "Transfers\n";
-$tr = fn(array $lines, ?int $to = null) => $a->post('/stock/transfers', ['warehouse_id' => $main, 'to_warehouse_id' => $to ?? $show, 'lines' => $lines], '/stock/transfers/create');
+$tr = function (array $lines, ?int $to = null) use ($a, $main, $show, $tA) {
+    $r = $a->post('/stock/transfers', ['warehouse_id' => $main, 'to_warehouse_id' => $to ?? $show, 'lines' => $lines], '/stock/transfers/create');
+    receive_all($a, last_transfer($tA));   // the other warehouse confirms what arrived
+    return $r;
+};
 $tr([['variant_id' => $grey, 'batch_id' => $batch, 'qty' => 10]]);
 check('roll moved: main 29.5, showroom 10, same batch', $bal($tA, $grey, $main, $batch) === 29.5 && $bal($tA, $grey, $show, $batch) === 10.0);
 check('transfer wrote out/in ledger rows', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND type IN ('transfer_out','transfer_in')", [$tA]) === 2);

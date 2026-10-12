@@ -103,6 +103,10 @@ $router->get('/stock/transfers', $A . 'TransferController@index', ['auth', 'perm
 $router->get('/stock/transfers/create', $A . 'TransferController@create', ['auth', 'perm:stock.transfer']);
 $router->post('/stock/transfers', $A . 'TransferController@store', ['auth', 'perm:stock.transfer']);
 $router->get('/stock/transfers/{id}', $A . 'TransferController@show', ['auth', 'perm:stock.view']);
+$router->post('/stock/transfers/{id}/receive', $A . 'TransferController@receive', ['auth', 'perm:stock.receive']);
+$router->post('/stock/transfers/{id}/settle', $A . 'TransferController@settle', ['auth', 'perm:stock.adjust']);
+$router->post('/stock/transfers/{id}/cancel', $A . 'TransferController@cancel', ['auth', 'perm:stock.transfer']);
+$router->get('/stock/transfers/{id}/challan', $A . 'TransferController@challan', ['auth', 'perm:stock.view']);
 
 $router->get('/stock/takes', $A . 'StocktakeController@index', ['auth', 'perm:stock.view']);
 $router->get('/stock/takes/create', $A . 'StocktakeController@create', ['auth', 'perm:stock.adjust']);

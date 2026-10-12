@@ -234,8 +234,37 @@ check('the adjustment page data has the document and its lines', ($r['json']['da
 $rec = $a->call('GET', "/record/adjustment/$adjId");
 check('the adjustment record page shows the reason as a label and who/when as facts', str_contains(json_encode($rec['json']), 'Opening stock') && str_contains(json_encode($rec['json']), '"By"'));
 
-$r = $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack2, 'qty' => '20']]]);
-check('a transfer moves part of a roll to the other warehouse rack', $r['status'] === 200 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh2, $rack2]) === 20.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?', [$tA, $bid2, $wh]) === 30.0);
+$bal = fn(int $w, int $loc = -1) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?' . ($loc >= 0 ? ' AND location_id = ' . $loc : ''), [$tA, $bid2, $w]);
+$r = $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'transport' => 'Shree Travels', 'vehicle_no' => 'MH12AB1234', 'lr_no' => 'LR-77', 'expected_date' => date('Y-m-d', strtotime('+2 days')),
+    'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack2, 'qty' => '20']]]);
+$trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+check('a transfer between warehouses is a dispatch: it leaves the sender and is NOT yet in the other warehouse', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'in_transit' && $bal($wh) === 30.0 && $bal($wh2) === 0.0);
+check('the dispatch keeps transport details and only an "out" ledger row exists', DB::val('SELECT transport FROM stock_docs WHERE id = ?', [$trfId]) === 'Shree Travels' && DB::val('SELECT lr_no FROM stock_docs WHERE id = ?', [$trfId]) === 'LR-77'
+    && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_out'", [$tA, $trfId]) === 1 && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_in'", [$trfId]) === 0);
+$r = $a->call('GET', "/stock?q=ARL-1");
+check('stock on hand shows 30 and the 20 m on the road separately', (float)$r['json']['data']['rows'][0]['qty'] === 30.0 && (float)$r['json']['data']['rows'][0]['in_transit'] === 20.0 && (float)$r['json']['data']['transitTotal'] === 20.0);
+$r = $a->call('GET', "/stock/transfers/$trfId");
+$tl = $r['json']['data']['lines'][0] ?? [];
+check('the transfer page data tracks sent / received / on the road with the status', ($r['json']['data']['between'] ?? false) === true && ($r['json']['data']['open'] ?? false) === true && (float)$r['json']['data']['sum']['pending'] === 20.0 && (float)$tl['pending'] === 20.0 && count($r['json']['data']['events']) === 1 && $r['json']['data']['events'][0]['event'] === 'dispatch');
+$lid = (string)$tl['id'];
+$r = $a->call('POST', "/stock/transfers/$trfId/receive", ['lines' => [$lid => ['qty' => '25', 'location_id' => $rack2]]]);
+check('receiving more than what is on the road is refused', $r['status'] === 422 && $bal($wh2) === 0.0);
+$r = $a->call('POST', "/stock/transfers/$trfId/receive", ['lines' => [$lid => ['qty' => '0']]]);
+check('receiving nothing is refused', $r['status'] === 422);
+$r = $a->call('POST', "/stock/transfers/$trfId/receive", ['lines' => [$lid => ['qty' => '5', 'location_id' => $rack1]]]);
+check('a rack of the SENDING warehouse cannot be used to receive', $r['status'] === 422 && $bal($wh2) === 0.0);
+$r = $a->call('POST', "/stock/transfers/$trfId/receive", ['note' => 'First lot', 'lines' => [$lid => ['qty' => '15', 'location_id' => $rack2, 'note' => 'one roll end wet']]]);
+check('a partial receipt puts that part on the rack and the status becomes "partly received"', $r['status'] === 200 && $bal($wh2, $rack2) === 15.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'partial');
+check('the same roll now exists in both warehouses (identity kept)', $bal($wh) === 30.0 && (int)DB::val('SELECT COUNT(DISTINCT batch_id) FROM stock_balances WHERE batch_id = ? AND qty > 0', [$bid2]) === 1);
+$r = $a->call('POST', "/stock/transfers/$trfId/cancel");
+check('a transfer that was partly received cannot be cancelled', $r['status'] === 422 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'partial');
+$r = $a->call('POST', "/stock/transfers/$trfId/receive", ['lines' => [$lid => ['qty' => '5']]]);
+check('the rest is received later, on the rack suggested at dispatch when none is said; the transfer is complete', $r['status'] === 200 && $bal($wh2, $rack2) === 20.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'received' && DB::val('SELECT received_at FROM stock_docs WHERE id = ?', [$trfId]) !== null);
+check('a finished transfer cannot be received again', $a->call('POST', "/stock/transfers/$trfId/receive", ['lines' => [$lid => ['qty' => '1']]])['status'] === 422);
+$r = $a->call('GET', "/stock/transfers/$trfId");
+check('the history lists the dispatch and both receipts with who and where', count($r['json']['data']['events']) === 3 && $r['json']['data']['events'][1]['event'] === 'receive' && ($r['json']['data']['events'][1]['rack'] ?? '') === 'B-1' && ($r['json']['data']['events'][1]['user_name'] ?? '') !== '' && $r['json']['data']['events'][1]['note'] === 'one roll end wet');
+$r = $a->call('GET', "/stock/transfers/$trfId/challan");
+check('the dispatch challan (paper that travels with the goods) has its data: both warehouses, transport and the lines', $r['status'] === 200 && ($r['json']['view'] ?? '') === 'app/print/transfer_challan' && ($r['json']['data']['doc']['lr_no'] ?? '') === 'LR-77' && ($r['json']['data']['to']['name'] ?? '') === 'Api Godown' && count($r['json']['data']['lines']) === 1);
 $r = $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh, 'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack1, 'qty' => '1']]]);
 check('moving to the very same place is refused', $r['status'] === 422);
 $trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
@@ -386,6 +415,89 @@ $ex = $a->call('GET', '/reports/stock-summary/export/csv?q=ARL-1');
 check('the CSV export is still the plain download', $ex['status'] === 200 && str_contains($ex['raw'], 'ARL-1') && $ex['json'] === null);
 $r = $a->call('POST', '/reports/low-stock/create-pos', ['pick' => []]);
 check('creating orders from low stock with nothing low explains itself', $r['status'] === 200 && str_contains(json_encode($r['json']['messages'] ?? []), 'Nothing'));
+
+echo "Transfers between warehouses: in transit, shortage, cancel, permissions\n";
+$a->call('POST', '/items', ['name' => 'Api Roll Two', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'reorder_level' => '100', 'variants' => [['name' => '', 'sku' => 'ARL-2', 'cost_price' => '150', 'sale_price' => '250']], 'cf' => (object)[]]);
+$rv2 = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'ARL-2'", [$tA]);
+$itm2 = (int)DB::val('SELECT item_id FROM item_variants WHERE id = ?', [$rv2]);
+$a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'T2', 'location_id' => $rack1, 'qty' => '40']]]);
+$rb2 = (int)DB::val('SELECT id FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$sendT = fn(array $extra = [], string $qty = '40', int $from = 0, int $to = 0, int $rack = 0) => $a->call('POST', '/stock/transfers', $extra + ['warehouse_id' => $from ?: $wh, 'to_warehouse_id' => $to ?: $wh2,
+    'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack ?: $rack1, 'qty' => $qty]]]);
+$bw = fn(int $w) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?', [$tA, $rb2, $w]);
+$lastT = fn() => (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+
+check('a past "expected arrival" date is refused', $sendT(['expected_date' => date('Y-m-d', strtotime('-1 day'))])['status'] === 422 && $bw($wh) === 40.0);
+check('the same roll listed twice on one dispatch is refused', $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '5'], ['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '5']]])['status'] === 422 && $bw($wh) === 40.0);
+$sendT(['transport' => 'Own truck']); $t2 = $lastT();
+check('the whole roll is dispatched: nothing left in the sender, nothing yet in the receiver', $bw($wh) === 0.0 && $bw($wh2) === 0.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t2]) === 'in_transit');
+$r = $a->call('GET', '/stock/batches?q=ARL-2');
+check('a roll on the road is listed as "In transit" (not "Finished") in the default roll list', ($r['json']['data']['rows'][0]['batch_no'] ?? '') !== '' && (float)$r['json']['data']['rows'][0]['balance'] === 0.0 && (float)$r['json']['data']['rows'][0]['transit'] === 40.0);
+check('"Finished" does not list it but "In transit" does', count($a->call('GET', '/stock/batches?q=ARL-2&status=finished')['json']['data']['rows']) === 0 && count($a->call('GET', '/stock/batches?q=ARL-2&status=transit')['json']['data']['rows']) === 1);
+$r = $a->call('GET', "/stock/batches/$rb2");
+check('the roll page shows where it is: on the road to the other warehouse, with the transfer', count($r['json']['data']['transit']) === 1 && (float)$r['json']['data']['transit'][0]['qty'] === 40.0 && $r['json']['data']['transit'][0]['to_warehouse'] === 'Api Godown');
+$r = $a->call('GET', "/items/$itm2");
+check('the item page shows the quantity in transit on the variant and the roll', (float)$r['json']['data']['variants'][0]['in_transit'] === 40.0 && (float)$r['json']['data']['variants'][0]['batches'][0]['in_transit'] === 40.0);
+$r = $a->call('GET', '/reports/batch-stock?q=ARL-2');
+check('the roll report says "In transit" too', ($r['json']['data']['rows'][0]['status'] ?? '') === 'In transit');
+$r = $a->call('GET', '/reports/low-stock');
+$low = array_values(array_filter($r['json']['data']['rows'], fn($x) => $x['sku'] === 'ARL-2'))[0] ?? null;
+check('low stock counts goods on the road as still owned (40 on hand, not 0)', $low && (float)$low['on_hand'] === 40.0);
+$r = $a->call('GET', '/reports/transfers?status=open');
+check('the transfers report lists what is on the road with days and status', count($r['json']['data']['rows']) >= 1 && ($r['json']['data']['rows'][0]['status'] ?? '') === 'In transit' && (float)$r['json']['data']['rows'][0]['pending'] > 0);
+check('the dashboard counts transfers on the road', (int)$a->call('GET', '/dashboard')['json']['data']['transitOpen'] >= 1);
+check('the transfer list filters and counts by status', count($a->call('GET', '/stock/transfers?status=open')['json']['data']['rows']) >= 1 && (int)$a->call('GET', '/stock/transfers')['json']['data']['counts']['open'] >= 1);
+$a->call('POST', "/stock/transfers/$t2/cancel");
+check('cancelling a dispatch puts every roll back on the rack it left', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t2]) === 'cancelled' && $bw($wh) === 40.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND location_id = ?', [$tA, $rb2, $rack1]) === 40.0
+    && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_return'", [$t2]) === 1);
+check('a cancelled transfer cannot be cancelled or received again', $a->call('POST', "/stock/transfers/$t2/cancel")['status'] === 422 && $a->call('POST', "/stock/transfers/$t2/receive", ['lines' => [(string)DB::val('SELECT id FROM stock_doc_lines WHERE doc_id = ?', [$t2]) => ['qty' => '1']]])['status'] === 422);
+
+$sendT(['expected_date' => date('Y-m-d', strtotime('+3 days'))]);
+$t3 = $lastT(); $l3 = (string)DB::val('SELECT id FROM stock_doc_lines WHERE doc_id = ?', [$t3]);
+$a->call('POST', "/stock/transfers/$t3/receive", ['lines' => [$l3 => ['qty' => '25', 'location_id' => $rack2]]]);
+check('25 of 40 arrive: 15 are still unaccounted for and the status is "partly received"', $bw($wh2) === 25.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t3]) === 'partial');
+check('settling more than is unaccounted for is refused', $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '16', 'action' => 'lost']]])['status'] === 422);
+check('settling without saying what happened is refused', $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '5']]])['status'] === 422);
+$a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '5', 'action' => 'lost', 'note' => 'Roll end lost at the transporter']]]);
+check('writing off 5 as lost changes no stock but is recorded; 10 are still unaccounted', $bw($wh) === 0.0 && $bw($wh2) === 25.0 && (float)DB::val('SELECT qty_lost FROM stock_doc_lines WHERE id = ?', [$l3]) === 5.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t3]) === 'partial');
+$a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '3', 'action' => 'return', 'location_id' => $rack1]]]);
+check('sending 3 back adds them to the sender\'s rack again', $bw($wh) === 3.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $rb2, $wh, $rack1]) === 3.0);
+$r = $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '2', 'action' => 'return', 'location_id' => $rack2]]]);
+check('"send back" onto a rack of the OTHER warehouse is refused', $r['status'] === 422 && $bw($wh) === 3.0);
+$a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '7', 'action' => 'lost']]]);
+check('once every metre is accounted for the transfer closes "received with a shortage"', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t3]) === 'received_short' && (float)DB::val('SELECT qty - qty_received - qty_lost - qty_returned FROM stock_doc_lines WHERE id = ?', [$l3]) === 0.0);
+$ev = $a->call('GET', "/stock/transfers/$t3")['json']['data']['events'];
+check('every step is in the history: dispatch, receipt, two write-offs, one send-back', array_count_values(array_column($ev, 'event')) === ['dispatch' => 1, 'receive' => 1, 'lost' => 2, 'returned' => 1]);
+$bad = DB::all('SELECT b.variant_id FROM stock_balances b LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger WHERE tenant_id = ? GROUP BY variant_id, warehouse_id, batch_id, location_id) l ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id WHERE b.tenant_id = ? AND ABS(b.qty - COALESCE(l.s,0)) > 0.0005', [$tA, $tA]);
+check('after all of that the ledger still equals the balances everywhere', !$bad);
+$r = $a->call('GET', '/reports/transfers?status=short');
+check('the shortage report shows what was lost and sent back', ($r['json']['data']['rows'][0]['doc_no'] ?? '') !== '' && (float)$r['json']['data']['rows'][0]['lost'] === 12.0 && (float)$r['json']['data']['rows'][0]['returned'] === 3.0 && str_contains($r['json']['data']['rows'][0]['status'], 'shortage'));
+$r = $a->call('GET', '/stock/ledger?type=transfer_return');
+check('"sent back" is a movement type of its own in the ledger', isset($r['json']['data']['types']['transfer_return']) && count($r['json']['data']['rows']) >= 2);
+
+// inside one warehouse a move is instant, with nothing to receive
+$a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'to_location_id' => (int)DB::val("SELECT id FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code = 'AP-02'", [$tA, $wh]), 'qty' => '1']]]);
+$t5 = $lastT();
+check('moving between racks of one warehouse stays instant (status "moved", nothing to receive)', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t5]) === 'posted' && (float)DB::val('SELECT qty_received FROM stock_doc_lines WHERE doc_id = ?', [$t5]) === 1.0 && $a->call('POST', "/stock/transfers/$t5/receive", ['lines' => []])['status'] === 422);
+
+// who may do what
+$a->call('POST', '/roles', ['name' => 'Dispatcher ' . $sfx, 'perms' => ['stock.view', 'stock.transfer', 'items.view']]);
+$a->call('POST', '/roles', ['name' => 'Receiver ' . $sfx, 'perms' => ['stock.view', 'stock.receive', 'items.view']]);
+$rDis = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Dispatcher ' . $sfx]); $rRec = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Receiver ' . $sfx]);
+foreach ([['dis', $rDis], ['rec', $rRec]] as [$k, $rid]) $a->call('POST', '/users', ['name' => ucfirst($k) . ' User', 'email' => "$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rid]);
+$dis = new J($base); $dis->session(); $dis->call('POST', '/login', ['email' => "dis-$sfx@test.local", 'password' => 'Password123']); $dis->session();
+$rec = new J($base); $rec->session(); $rec->call('POST', '/login', ['email' => "rec-$sfx@test.local", 'password' => 'Password123']); $rec->session();
+$r = $dis->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'expected_date' => date('Y-m-d', strtotime('+1 day')), 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '2']]]);
+$t6 = $lastT(); $l6 = (string)DB::val('SELECT id FROM stock_doc_lines WHERE doc_id = ?', [$t6]);
+check('a dispatcher can dispatch', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t6]) === 'in_transit');
+check('but cannot receive or settle (403)', $dis->call('POST', "/stock/transfers/$t6/receive", ['lines' => [$l6 => ['qty' => '2']]])['status'] === 403 && $dis->call('POST', "/stock/transfers/$t6/settle", ['lines' => [$l6 => ['qty' => '2', 'action' => 'lost']]])['status'] === 403);
+check('a receiver cannot dispatch, cancel or settle (403)', $rec->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '1']]])['status'] === 403
+    && $rec->call('POST', "/stock/transfers/$t6/cancel")['status'] === 403 && $rec->call('POST', "/stock/transfers/$t6/settle", ['lines' => [$l6 => ['qty' => '1', 'action' => 'lost']]])['status'] === 403);
+DB::run('UPDATE stock_docs SET expected_date = ? WHERE id = ?', [date('Y-m-d', strtotime('-1 day')), $t6]);
+check('a transfer past its expected date shows as overdue in the list, the counts and the dashboard', count($a->call('GET', '/stock/transfers?status=overdue')['json']['data']['rows']) >= 1 && (int)$a->call('GET', '/stock/transfers')['json']['data']['counts']['overdue'] >= 1 && (int)$a->call('GET', '/dashboard')['json']['data']['transitLate'] >= 1 && count($a->call('GET', '/reports/transfers?status=overdue')['json']['data']['rows']) >= 1);
+$r = $rec->call('POST', "/stock/transfers/$t6/receive", ['lines' => [$l6 => ['qty' => '2', 'location_id' => $rack2]]]);
+check('the receiver confirms it: the transfer closes and the name of who received it is kept', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t6]) === 'received' && (string)DB::val('SELECT u.name FROM stock_docs d JOIN users u ON u.id = d.received_by WHERE d.id = ?', [$t6]) === 'Rec User');
+check('the role form offers a "receive" permission on Stock', in_array('receive', $a->call('GET', '/roles/create')['json']['data']['modules']['stock']['actions'], true));
 
 echo "Settings, users, roles, masters and profile through the API\n";
 $r = $a->call('GET', '/settings/company');

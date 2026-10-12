@@ -42,7 +42,7 @@
         <tr class="var-rolls-row"><td colspan="6" class="p-0 border-0">
           <details class="var-rolls"><summary><i class="bi bi-layers"></i> <?= count($v['batches']) ?> <?= e(term('rolls', true)) ?><?= $v['batches'] ? ' · ' . e(qty(array_sum(array_column($v['batches'], 'balance')))) . ' ' . e($item['unit']) . ' left' : '' ?></summary>
             <table class="table table-sm mb-0"><thead><tr><th><?= e(term('batch')) ?></th><th><?= e(term('supplier')) ?> lot</th><th>Received</th><th class="text-end">Roll size</th><th class="text-end">Balance</th><th>Status</th></tr></thead><tbody>
-              <?php foreach ($v['batches'] as $b): $st = App\Models\Stock::batchStatus((float)$b['balance'], (float)$b['received_qty']); ?>
+              <?php foreach ($v['batches'] as $b): $st = App\Models\Stock::batchStatus((float)$b['balance'], (float)$b['received_qty'], (float)($b['in_transit'] ?? 0)); ?>
                 <tr><td><a href="<?= url("stock/batches/{$b['id']}") ?>"><?= e($b['batch_no']) ?></a></td><td><?= e($b['supplier_lot'] ?? '') ?></td><td><?= e(fdate($b['received_date'])) ?></td>
                   <td class="text-end"><?= e(qty($b['received_qty'])) ?></td><td class="text-end"><?= e(qty($b['balance'])) ?></td><td><?= e($st) ?></td></tr>
               <?php endforeach; ?>
