@@ -54,7 +54,7 @@ export default function ItemDetail() {
       )}
       <section className="card mb-3" id="variants"><div className="card-header d-flex justify-content-between align-items-center"><span>Variants &amp; stock <span className="act-n">{d.variants.length}</span></span>
         {can('items.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/items/${it.id}/edit`}><i className="bi bi-pencil" /> Edit variants</Link>}</div>
-        <div className="table-responsive"><table className="table var-table align-middle mb-0"><thead><tr><th>Variant</th><th>SKU</th><th className="text-end">Cost</th><th className="text-end">Sale</th>{!bundle && <><th className="text-end">In stock</th><th>Where</th></>}</tr></thead><tbody>
+        <div className="table-responsive"><table className="table var-table align-middle mb-0"><thead><tr><th>Variant</th><th>SKU</th><th className="text-end" title="Default cost: for stock value and as a last-resort price">Default cost</th><th className="text-end">Sale</th>{!bundle && <><th className="text-end">In stock</th><th>Where</th></>}</tr></thead><tbody>
           {d.variants.map((v: any) => (
             <FragmentRows key={v.id} v={v} it={it} bundle={bundle} tracked={tracked} term={term} />
           ))}</tbody></table></div></section>

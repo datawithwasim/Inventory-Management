@@ -68,6 +68,7 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 
 **Purchase**
 - [ ] Supplier with rate list and "Supplier items" (their name/code linked to our item).
+- [ ] Item ↔ supplier items: an item a supplier is linked to cannot be deleted (it says why); removing a variant that has supplier items / documents only hides it. Low stock → "Create draft purchase orders" picks the **preferred** supplier, its current rate and never less than its minimum order; "Turn into PO" on a requisition prices from the chosen supplier's rate list.
 - [ ] PO (with approval on/off as per your rule) → receive goods (one roll per line, rack, supplier lot) → bill → payment → status "Paid".
 - [ ] Purchase return reduces stock and credits the bill; requisition → "Turn into PO".
 

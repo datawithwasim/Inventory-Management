@@ -95,6 +95,32 @@ final class Purchase
              WHERE l.tenant_id = ? AND g.supplier_id = ? AND l.variant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [self::tid(), $supplierId, $variantId]);
     }
 
+    /** What to put on a purchase line: the supplier's current net rate, else what we last paid them, else the item's default cost. */
+    public static function priceFor(int $supplierId, int $variantId, float $defaultCost): float
+    {
+        $cur = self::currentRate($supplierId, $variantId);
+        if ($cur) return self::netRate($cur);
+        $last = self::lastPaid($supplierId, $variantId);
+        return $last ? (float)$last['unit_price'] : $defaultCost;
+    }
+
+    /** The smallest quantity this supplier sells of a variant (rate list first, then the supplier item), 0 when none is set. */
+    public static function minQty(int $supplierId, int $variantId): float
+    {
+        $cur = self::currentRate($supplierId, $variantId);
+        $si = self::productOf($supplierId, $variantId);
+        return max((float)($cur['min_qty'] ?? 0), (float)($si['min_order_qty'] ?? 0));
+    }
+
+    /** The preferred, active supplier item of an item (any of its variants; $preferVariant wins a tie), or null. */
+    public static function preferredSource(int $itemId, int $preferVariant = 0): ?array
+    {
+        return DB::one(
+            'SELECT p.supplier_id, p.variant_id, s.name AS supplier_name FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id JOIN item_variants v ON v.id = p.variant_id
+             WHERE p.tenant_id = ? AND v.item_id = ? AND p.is_preferred = 1 AND p.is_active = 1 AND s.is_active = 1 AND v.is_active = 1
+             ORDER BY (p.variant_id = ?) DESC, p.id LIMIT 1', [self::tid(), $itemId, $preferVariant]);
+    }
+
     // ------------------------------------------------------------ supplier product master
 
     /** The supplier's own name / code for one variant, or null when it is not in their catalogue. */

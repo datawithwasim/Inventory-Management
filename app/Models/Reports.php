@@ -513,7 +513,7 @@ final class Reports
             'filters' => ['category'],
             'columns' => ['item' => $col('Item'), 'sku' => $col('SKU'), 'on_hand' => $col('On hand', 'qty'), 'reorder_level' => $col('Reorder level', 'qty'),
                 'on_order' => $col('Already ordered / requested', 'qty'), 'suggest' => $col('Suggested order', 'qty'), 'unit' => $col('Unit'),
-                'supplier' => $col('Last supplier'), 'cost' => $col('Last cost', 'money')],
+                'supplier' => $col('Supplier (preferred, else last)'), 'cost' => $col('Cost', 'money')],
             'run' => fn(array $f, int $limit) => self::lowStock($f['category'], $limit),
         ];
 
@@ -677,19 +677,26 @@ final class Reports
              WHERE i.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 AND i.reorder_level > 0$w) z
              WHERE z.on_hand <= z.reorder_level AND z.variant_id IS NOT NULL ORDER BY z.item LIMIT " . (int)$limit, $p);
         foreach ($rows as &$r) {
+            // who to buy from: the item's preferred supplier item, else whoever we bought it from last
+            $pref = Purchase::preferredSource((int)$r['item_id'], (int)$r['variant_id']);
+            if ($pref) { $r['variant_id'] = $pref['variant_id']; }
             $v = DB::one('SELECT sku, cost_price FROM item_variants WHERE id = ?', [$r['variant_id']]);
-            $last = DB::one(
+            $last = $pref ? null : DB::one(
                 'SELECT g.supplier_id, s.name, gi.unit_price FROM grn_items gi JOIN grns g ON g.id = gi.grn_id JOIN suppliers s ON s.id = g.supplier_id
                  JOIN item_variants v ON v.id = gi.variant_id WHERE v.item_id = ? AND g.tenant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [$r['item_id'], $t]);
+            $sid = (int)($pref['supplier_id'] ?? $last['supplier_id'] ?? 0);
             $need = (float)$r['reorder_qty'] > 0 ? (float)$r['reorder_qty'] : max(1.0, (float)$r['reorder_level'] - (float)$r['on_hand']);
             $r['on_order'] = (float)$r['on_order'] + (float)$r['requested'];
             $need = max(0.0, $need - (float)$r['on_order']);
+            // never below the supplier's minimum order
+            if ($need > 0 && $sid) $need = max($need, Purchase::minQty($sid, (int)$r['variant_id']));
             $r['sku'] = $v['sku'];
             $r['suggest'] = $r['allow_decimal'] ? round($need, 3) : ceil($need);
-            $r['supplier_id'] = $last['supplier_id'] ?? null;
-            $r['supplier'] = $last['name'] ?? '— none yet —';
-            $r['cost'] = $last ? (float)$last['unit_price'] : (float)$v['cost_price'];
+            $r['supplier_id'] = $sid ?: null;
+            $r['supplier'] = $pref['supplier_name'] ?? $last['name'] ?? '— none yet —';
+            $r['cost'] = $sid ? Purchase::priceFor($sid, (int)$r['variant_id'], (float)$v['cost_price']) : (float)$v['cost_price'];
         }
+        unset($r);
         return $rows;
     }
 }

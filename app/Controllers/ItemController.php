@@ -45,6 +45,26 @@ final class ItemController extends Controller
         return $max > 0 && (int)DB::val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$this->tid()]) >= $max;
     }
 
+    /** Everything that points at a variant, as plain words ('supplier items', 'purchase orders'…). Empty when nothing does. */
+    private const VARIANT_USES = [
+        'stock history' => ['stock_ledger', 'variant_id'], 'stock' => ['stock_balances', 'variant_id'], 'rolls' => ['batches', 'variant_id'], 'stock documents' => ['stock_doc_lines', 'variant_id'],
+        'bundles' => ['bundle_components', 'component_variant_id'], 'supplier items' => ['supplier_items', 'variant_id'], 'supplier rates' => ['supplier_rates', 'variant_id'],
+        'purchase requisitions' => ['purchase_requisition_items', 'variant_id'], 'purchase orders' => ['purchase_order_items', 'variant_id'], 'goods receipts' => ['grn_items', 'variant_id'],
+        'purchase returns' => ['purchase_return_items', 'variant_id'], 'sales orders' => ['sales_order_items', 'variant_id'], 'deliveries' => ['delivery_items', 'variant_id'],
+        'sales returns' => ['sales_return_items', 'variant_id'], 'customer-group prices' => ['group_prices', 'variant_id'],
+    ];
+
+    private function variantUses(array $variantIds): array
+    {
+        if (!$variantIds) return [];
+        $in = implode(',', array_map('intval', $variantIds));
+        $found = [];
+        foreach (self::VARIANT_USES as $label => [$table, $col]) {
+            if (DB::val("SELECT 1 FROM `$table` WHERE `$col` IN ($in) LIMIT 1")) $found[] = $label;
+        }
+        return $found;
+    }
+
     private function hasMovements(int $itemId): bool
     {
         return (bool)DB::val(
@@ -299,8 +319,8 @@ final class ItemController extends Controller
         // Variants removed from the form: delete when never used, otherwise just hide them.
         foreach (DB::all('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ?', [$t, $itemId]) as $r) {
             if (in_array((int)$r['id'], $keep, true)) continue;
-            $used = DB::val('SELECT 1 FROM stock_ledger WHERE variant_id = ? LIMIT 1', [$r['id']])
-                || DB::val('SELECT 1 FROM bundle_components WHERE component_variant_id = ? LIMIT 1', [$r['id']]);
+            // used anywhere (stock, documents, supplier items and rates…) → keep it, hidden, so nothing that points at it disappears
+            $used = (bool)$this->variantUses([(int)$r['id']]);
             $used ? DB::run('UPDATE item_variants SET is_active = 0 WHERE id = ?', [$r['id']])
                   : DB::run('DELETE FROM item_variants WHERE id = ?', [$r['id']]);
         }
@@ -349,8 +369,10 @@ final class ItemController extends Controller
         $asComponent = DB::val(
             'SELECT 1 FROM bundle_components bc JOIN item_variants v ON v.id = bc.component_variant_id WHERE bc.tenant_id = ? AND v.item_id = ? LIMIT 1',
             [$this->tid(), $item['id']]);
-        if ($this->hasMovements((int)$item['id']) || $asComponent) {
-            flash('danger', $asComponent ? 'This item is part of a bundle and cannot be deleted.' : 'This item has stock history and cannot be deleted. Mark it inactive instead.');
+        $uses = $this->variantUses(array_map('intval', array_column(DB::all('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ?', [$this->tid(), $item['id']]), 'id')));
+        if ($asComponent || $uses) {
+            flash('danger', $asComponent ? 'This item is part of a bundle and cannot be deleted.'
+                : 'This item is used in ' . implode(', ', array_slice($uses, 0, 4)) . ' and cannot be deleted. Mark it inactive instead' . (in_array('supplier items', $uses, true) ? ' (or remove its supplier items first).' : '.'));
             redirect("items/{$item['id']}");
         }
         DB::run('DELETE FROM items WHERE tenant_id = ? AND id = ?', [$this->tid(), $item['id']]);

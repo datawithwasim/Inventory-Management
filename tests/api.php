@@ -189,6 +189,39 @@ check('the PO record page has its record-only facts (created by, total)', ($vals
 check('the GRN and bill record pages link their supplier, order and bill', str_contains(json_encode($a->call('GET', "/record/grn/$grnId")['json']), 'purchase\\/bills\\/' . $billId) && str_contains(json_encode($a->call('GET', "/record/bill/$billId")['json']), 'purchase\\/grns\\/' . $grnId));
 check('lists answer with rows and paging', count($a->call('GET', '/purchase/orders')['json']['data']['rows']) >= 2 && isset($a->call('GET', '/purchase/bills?status=paid')['json']['data']['totalDue']));
 
+echo "Items and their supplier items\n";
+$itemOf = fn(string $name) => (int)DB::val('SELECT id FROM items WHERE tenant_id = ? AND name = ?', [$tA, $name]);
+$vOf = fn(string $sku) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $sku]);
+$r = $a->call('POST', '/items/' . $itemOf('Api Velvet') . '/delete');
+check('an item that suppliers are linked to cannot be deleted (it would silently drop the supplier items and rates)', $r['status'] === 422 && DB::val('SELECT 1 FROM items WHERE tenant_id = ? AND name = ?', [$tA, 'Api Velvet']) && (int)DB::val('SELECT COUNT(*) FROM supplier_items WHERE variant_id = ?', [$vid]) === 1 && str_contains(json_encode($r['json']['messages']), 'supplier'));
+$a->call('POST', '/items', ['name' => 'Api Linked', 'unit_id' => $unit, 'variants' => [['sku' => 'LK-A', 'cost_price' => '10'], ['sku' => 'LK-B', 'cost_price' => '12']], 'cf' => (object)[]]);
+$lk = $itemOf('Api Linked');
+$a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Their B', 'supplier_code' => 'LKB', 'variant_id' => $vOf('LK-B')]);
+$a->call('POST', "/items/$lk", ['name' => 'Api Linked', 'unit_id' => $unit, 'variants' => [['id' => $vOf('LK-A'), 'sku' => 'LK-A', 'cost_price' => '10']], 'cf' => (object)[]]);
+check('taking a variant off an item keeps it (hidden) while a supplier item points at it, so the supplier item and its rates stay', (int)DB::val('SELECT is_active FROM item_variants WHERE id = ?', [$vOf('LK-B')]) === 0 && (int)DB::val("SELECT COUNT(*) FROM supplier_items WHERE supplier_code = 'LKB'") === 1);
+
+// reordering uses the supplier link: preferred supplier, its rate and its minimum order quantity
+$a->call('POST', '/items', ['name' => 'Api Reorder', 'unit_id' => $unit, 'reorder_level' => '10', 'reorder_qty' => '12', 'variants' => [['sku' => 'APR', 'cost_price' => '100']], 'cf' => (object)[]]);
+$rq = $vOf('APR'); $rqItem = $itemOf('Api Reorder');
+$a->call('POST', '/suppliers', ['name' => 'Api Other Mills']); $sid2 = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Api Other Mills'", [$tA]);
+$a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'AR', 'supplier_code' => 'AR-1', 'variant_id' => $rq, 'min_order_qty' => '50', 'is_preferred' => 1]);
+$a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid2, 'supplier_code' => 'AR-2', 'variant_id' => $rq]);
+$a->call('POST', "/suppliers/$sid/rates", ['variant_id' => $rq, 'rate' => '120', 'discount_pct' => '10']);
+$low = fn() => array_values(array_filter($a->call('GET', '/reports/low-stock')['json']['data']['rows'], fn($x) => $x['item'] === 'Api Reorder'))[0] ?? [];
+$row = $low();
+check('low stock suggests the preferred supplier, at its current rate, and never less than its minimum order', ($row['supplier'] ?? '') === 'Api Mills' && (float)($row['cost'] ?? 0) === 108.0 && (float)($row['suggest'] ?? 0) === 50.0);
+$a->call('POST', '/reports/low-stock/create-pos', ['pick' => [$rqItem]]);
+$poL = (int)DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+check('and the draft purchase order made from it carries that supplier, rate and quantity', (int)DB::val('SELECT supplier_id FROM purchase_orders WHERE id = ?', [$poL]) === $sid && (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [$poL]) === 108.0 && (float)DB::val('SELECT qty_ordered FROM purchase_order_items WHERE po_id = ?', [$poL]) === 50.0);
+$a->call('POST', '/purchase/requisitions', ['note' => 'Reorder', 'lines' => [['variant_id' => $rq, 'qty' => '5']]]);
+$rqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$a->call('POST', "/purchase/requisitions/$rqId/convert", ['supplier_id' => $sid, 'warehouse_id' => $wh]);
+$poR = (int)DB::val('SELECT po_id FROM purchase_requisitions WHERE id = ?', [$rqId]);
+check('turning a requisition into a PO prices the lines from that supplier\'s rate list, not the item\'s default cost', (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [$poR]) === 108.0);
+$rqId2 = 0; $a->call('POST', '/purchase/requisitions', ['note' => 'Other', 'lines' => [['variant_id' => $rq, 'qty' => '5']]]); $rqId2 = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$a->call('POST', "/purchase/requisitions/$rqId2/convert", ['supplier_id' => $sid2, 'warehouse_id' => $wh]);
+check('a supplier with no rate falls back to the item\'s default cost', (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [(int)DB::val('SELECT po_id FROM purchase_requisitions WHERE id = ?', [$rqId2])]) === 100.0);
+
 echo "Warehouses, racks and stock through the API\n";
 $r = $a->call('POST', '/warehouses', ['name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4']);
 $wh2 = (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA]);

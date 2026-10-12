@@ -73,15 +73,15 @@ export default function ItemForm() {
             {locked && <small className="text-muted">Locked: stock has already moved.</small>}</div>}
           <hr />
           <div className="mb-2"><label className="form-label">Reorder level</label><input type="number" step="0.001" min="0" className="form-control" value={opt.reorder_level} onChange={(e) => setOpt({ ...opt, reorder_level: e.target.value })} /></div>
-          <div className="mb-2"><label className="form-label">Reorder quantity</label><input type="number" step="0.001" min="0" className="form-control" value={opt.reorder_qty} onChange={(e) => setOpt({ ...opt, reorder_qty: e.target.value })} /></div>
+          <div className="mb-2"><label className="form-label">Reorder quantity</label><input type="number" step="0.001" min="0" className="form-control" value={opt.reorder_qty} onChange={(e) => setOpt({ ...opt, reorder_qty: e.target.value })} /><div className="form-text">Low-stock orders use the preferred supplier's rate and never go below their minimum order.</div></div>
           {editing && <div className="form-check mt-3"><input className="form-check-input" type="checkbox" id="isActive" checked={opt.is_active} onChange={(e) => setOpt({ ...opt, is_active: e.target.checked })} /><label className="form-check-label" htmlFor="isActive">Active</label></div>}
         </div></div></div>
       </div>
 
       <div className="mt-3">
-        <div className="card mb-3"><div className="card-header d-flex justify-content-between align-items-center"><span>{bundle ? 'Bundle SKU & price' : 'Variants'}</span>
+        <div className="card mb-3"><div className="card-header d-flex justify-content-between align-items-center"><span>{bundle ? 'Bundle SKU & price' : <>Variants <small className="text-muted ms-1">one row per colour / size you stock or sell separately — each has its own SKU, barcode, price and stock. No options? Keep one row.</small></>}</span>
           {!bundle && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setVariants((v) => [...v, blankVariant()])}><i className="bi bi-plus-lg" /> Add variant</button>}</div>
-          <div className="table-responsive"><table className="table mb-0 align-middle" id="variantTable"><thead><tr><th>Variant name</th><th>Colour</th><th>Size</th><th>SKU</th><th>Barcode</th><th>Cost</th><th>Sale price</th><th /></tr></thead><tbody>
+          <div className="table-responsive"><table className="table mb-0 align-middle" id="variantTable"><thead><tr><th>Variant name</th><th>Colour</th><th>Size</th><th>SKU</th><th>Barcode</th><th title="Used for stock value and as the price of last resort. Purchase orders take the supplier's rate list first, then what you last paid.">Default cost</th><th>Sale price</th><th /></tr></thead><tbody>
             {(bundle ? variants.slice(0, 1) : variants).map((r, i) => (
               <tr key={i}>
                 <td><input className="form-control form-control-sm" value={r.name} onChange={(e) => setV(i, 'name', e.target.value)} /></td>
