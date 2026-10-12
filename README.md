@@ -13,12 +13,12 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Phase 4 – Sales: done** (customers & groups with price lists, sales orders that reserve stock, deliveries cut from a chosen roll and rack,
   invoices with payments and advances, customer returns, set/bundle sales)
 - **Phase 5 – Customization: done** (company profile + logo, currency / date / digit formats, document number styles, workflow rules,
-  your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice, receipt,
+  your own words for menus and screens, custom fields on items / customers / suppliers, editable print templates for invoice,
   delivery note, purchase order)
 - **Phase 6 – Reports & dashboard: done** (dashboard with period filter, net sales hero, trend chart, top items, stock value, ageing, low-stock lists;
   14 reports with filters, Excel / CSV export and print-to-PDF; low-stock → draft purchase orders)
-- **Phase 8 – Extras: done** (barcode labels for items and rolls, one-click database backup, security hardening). REST API, 2FA, notifications and
-  multi-language/currency were intentionally left out.
+- **Phase 8 – Extras: done** (barcode labels for items and rolls, one-click database backup, security hardening). 2FA, notifications and
+  multi-language/currency were intentionally left out. (The JSON API under `/api/v1` exists only as the backend of the React screens.)
 - **Modern look & make-it-yours: done** — new app shell (grouped collapsible menu, global search with Ctrl+K, quick-create, light/dark mode, phone drawer),
   Bootstrap/icons/fonts now bundled locally (no CDN needed). Companies can customise: Appearance (brand colour, menu style, spacing, default theme),
   Modules & menu (switch parts off), Edit page layout (Zoho-style builder, opened from the Edit page of any form; Detail page tab picks the record summary; every module has a record page (supplier, customer, item, warehouse, rack, requisition, PO, GRN, bill, returns, sales order, delivery, invoice, stock documents) with Overview / Timeline / Notes and a Related list; migration 011) — full-screen builder for all forms: sections with 1–3 columns, drag fields, create new custom fields from a 13-type palette, hide/require, widths, hints, labels left/top, line-item columns, preview, undo; needs migration 008 — Super Admin → System → Run updates), Custom fields (now created inside the Form designer — 15 types incl. multi-select, date & time, "Unique"; migration 009; the separate Settings page is gone) on items, customers, suppliers, sales orders and
@@ -27,6 +27,11 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),
   Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type-aware attributes, HSN, colour & size per variant), and a **supplier-wise rate list**
   (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
+
+- **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles, Super Admin) is a React app at `/app`
+  (built files are committed in `public/ui/`, so the server needs no Node). The page layout designer and the print pages stay PHP. See `frontend/README.md`.
+- **POS removed** — this is an inventory app; counter billing is not part of it (migration 015).
+- Before going live, follow **GO_LIVE_CHECKLIST.md**.
 
 ### Updating an installed copy (cPanel)
 Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.

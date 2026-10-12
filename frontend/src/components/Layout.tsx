@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { legacyUrl, post } from '../lib/api';
 import { fdate } from '../lib/format';
@@ -37,6 +37,9 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(document.documentElement.classList.contains('sb-collapsed'));
   const [mobile, setMobile] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [denied, setDenied] = useState<number | null>(null);
+  useEffect(() => { const on = (e: Event) => setDenied((e as CustomEvent).detail); window.addEventListener('inv-denied', on); return () => window.removeEventListener('inv-denied', on); }, []);
+  useEffect(() => { setDenied(null); }, [loc.pathname]);
   if (!session?.authenticated || !session.menu || !session.user || !session.tenant) return null;
   const { menu, user, tenant } = session;
   const path = loc.pathname.replace(/\/+$/, '') || '/';
@@ -111,7 +114,7 @@ export default function Layout() {
             </Dropdown>
           </div>
         </header>
-        <main className="content" id="main"><Outlet /></main>
+        <main className="content" id="main">{denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<Outlet /></main>
       </div>
     </>
   );

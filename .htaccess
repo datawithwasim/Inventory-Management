@@ -9,7 +9,8 @@ RewriteEngine On
 # Never serve application code, config, SQL, logs or the .env file.
 RewriteRule ^(config|core|app|views|database|storage|tests|\.git)(/|$) - [F,L]
 RewriteRule ^\.env - [F,L]
-RewriteRule ^(composer\.(json|lock)|README\.md)$ - [F,L]
+RewriteRule ^(composer\.(json|lock))$ - [F,L]
+RewriteRule \.md$ - [F,L]
 
 # Public assets live in public/assets.
 RewriteRule ^assets/(.*)$ public/assets/$1 [L]
