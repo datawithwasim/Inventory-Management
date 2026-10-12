@@ -34,7 +34,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 Use a test company (Super Admin → Companies → New company) so real data is not touched. Delete or suspend it afterwards.
 
 **Sign-in and shell**
-- [ ] Super Admin sign-in works; Dashboard, Companies, Plans, System, Audit log all open.
+- [ ] Super Admin sign-in works; **"Forgot password?"** on the admin login mails a reset link (check the spam folder; if no mail arrives, the link is in `storage/logs/mail.log`, or run `php database/reset-admin.php <email> '<new password>'` from the cPanel Terminal); Dashboard, Companies, Plans, System, Audit log all open.
 - [ ] Create a company; "Open as owner" lands on the company dashboard with the support bar; "Back to admin" returns to Companies.
 - [ ] Company owner signs in at `/app/login`; wrong password shows an error; sign-out works.
 - [ ] Menu shows Inventory / Purchase / Sales / Insights; **no POS** anywhere (menu, "New" button, Settings → Modules, Roles).
@@ -97,6 +97,7 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 
 ## E. If something goes wrong
 
+- **Super Admin forgot the password and mail does not work:** `php database/reset-admin.php admin@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH), or in phpMyAdmin set `super_admins.password_hash` to a hash made by `php -r "echo password_hash('NewPassword123', PASSWORD_DEFAULT);"`.
 - **White page / "Unexpected answer" in the app:** check `storage/logs/` and the cPanel error log; the usual causes are PHP < 8.1, a missing extension, or `storage/` not writable.
 - **Screens look old after upload:** hard refresh; confirm `public/ui/index.html` points to the same `index-*.js` that exists in `public/ui/assets/`.
 - **A screen says "Opening…" and jumps to a classic page:** that screen has no React version (only the page-layout designer and print pages are PHP) — expected.

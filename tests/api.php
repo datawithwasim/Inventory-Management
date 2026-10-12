@@ -743,6 +743,26 @@ $acts = array_column($r['json']['data']['logs'], 'action');
 check('the audit log shows what happened (company created, support mode)', in_array('tenant_create', $acts, true) && in_array('impersonate_start', $acts, true) && in_array('db_backup', $acts, true));
 $sx->call('POST', '/admin/logout');
 check('admin sign-out ends the admin session', ($sx->call('GET', '/admin/session')['json']['authenticated'] ?? true) === false && $sx->call('GET', '/admin/plans')['status'] === 401);
+// forgotten Super Admin password (a throw-away admin, so the real one is untouched)
+$fe = "fa-$sfx@test.local";
+DB::insert('super_admins', ['name' => 'Forgetful', 'email' => $fe, 'password_hash' => password_hash('OldPassword1', PASSWORD_DEFAULT)]);
+$fx = new J($base); $r = $fx->call('GET', '/admin/session'); $fx->csrf = (string)$r['json']['csrf'];
+@unlink(ROOT . '/storage/logs/mail.log');
+$unknown = $fx->call('POST', '/admin/forgot-password', ['email' => "nobody-$sfx@test.local"]);
+$known = $fx->call('POST', '/admin/forgot-password', ['email' => $fe]);
+$mailLog = (string)@file_get_contents(ROOT . '/storage/logs/mail.log');
+check('"Forgot password" gives the same answer for any address, and mails a link only to a real Super Admin', $unknown['status'] === 200 && $known['status'] === 200 && ($unknown['json']['messages'] ?? null) === ($known['json']['messages'] ?? 0)
+    && !str_contains($mailLog, "nobody-$sfx") && preg_match('~admin/reset-password/([a-f0-9]{64})~', $mailLog, $mt) === 1);
+$tok = $mt[1] ?? 'x';
+check('a company-user reset page does not accept an admin token (and the reverse)', (new Client($base))->get("/reset-password/$tok")['status'] !== 200 || str_contains((new Client($base))->get("/reset-password/$tok")['body'], 'invalid'));
+check('a wrong confirmation or a short password is refused and changes nothing', $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'NewPassword1', 'password_confirm' => 'Different1'])['status'] === 422
+    && $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'short', 'password_confirm' => 'short'])['status'] === 422 && password_verify('OldPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
+$r = $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'NewPassword1', 'password_confirm' => 'NewPassword1']);
+check('the link sets the new password', $r['status'] === 200 && password_verify('NewPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
+check('the link works once only', $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'Another123', 'password_confirm' => 'Another123'])['status'] === 422 && password_verify('NewPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
+check('and the new password signs in (the old one does not)', $fx->call('POST', '/admin/login', ['email' => $fe, 'password' => 'OldPassword1'])['status'] === 422 && $fx->call('POST', '/admin/login', ['email' => $fe, 'password' => 'NewPassword1'])['status'] === 200);
+DB::run('DELETE FROM super_admins WHERE email = ?', [$fe]); DB::run('DELETE FROM password_resets WHERE email = ?', ['admin:' . $fe]);
+
 $ownerClient = new J($base); $ownerClient->session();
 $r = $ownerClient->call('POST', '/login', ['email' => $ownerEmail, 'password' => 'Password123']);
 check('the new company\'s owner can sign in', $r['status'] === 200 && ($ownerClient->session()['json']['authenticated'] ?? false) === true);

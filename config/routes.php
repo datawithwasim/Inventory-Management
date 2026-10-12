@@ -260,6 +260,10 @@ $router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
 // ---- Super Admin panel ----
 $router->get('/admin/login', $S . 'AuthController@showLogin', ['admin_guest']);
 $router->post('/admin/login', $S . 'AuthController@login', ['admin_guest']);
+$router->get('/admin/forgot-password', $S . 'AuthController@showForgot', ['admin_guest']);
+$router->post('/admin/forgot-password', $S . 'AuthController@forgot', ['admin_guest']);
+$router->get('/admin/reset-password/{token}', $S . 'AuthController@showReset', ['admin_guest']);
+$router->post('/admin/reset-password/{token}', $S . 'AuthController@reset', ['admin_guest']);
 $router->post('/admin/logout', $S . 'AuthController@logout', ['admin']);
 
 $router->get('/admin', $S . 'DashboardController@index', ['admin']);

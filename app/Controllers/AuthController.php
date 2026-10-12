@@ -66,7 +66,7 @@ final class AuthController extends Controller
     private function validReset(string $token): ?array
     {
         return DB::one(
-            'SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()',
+            "SELECT * FROM password_resets WHERE token_hash = ? AND email NOT LIKE 'admin:%' AND used_at IS NULL AND expires_at > NOW()",
             [hash('sha256', $token)]);
     }
 
