@@ -7,12 +7,26 @@ use Core\Audit;
 use Core\Auth;
 use Core\Controller;
 use Core\DB;
+use Core\Scope;
 
 final class WarehouseController extends Controller
 {
     private function load(string $id): array
     {
-        return DB::one('SELECT * FROM warehouses WHERE tenant_id = ? AND id = ?', [Auth::tenantId(), (int)$id]) ?? $this->notFound();
+        return DB::one('SELECT * FROM warehouses WHERE tenant_id = ? AND id = ?' . Scope::sql('id'), [Auth::tenantId(), (int)$id]) ?? $this->notFound();
+    }
+
+    /** Adding, removing and choosing the default warehouse are head-office jobs. */
+    private function headOfficeOnly(): void
+    {
+        if (!Scope::restricted()) return;
+        flash('danger', 'You work at ' . Scope::name() . '. Only head-office users can add, delete or change the default warehouse.');
+        redirect('warehouses');
+    }
+
+    private function peopleAt(int $id): int
+    {
+        return (int)DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ? AND warehouse_id = ?', [Auth::tenantId(), $id]);
     }
 
     private function limitReached(): bool
@@ -24,8 +38,8 @@ final class WarehouseController extends Controller
     public function index(): void
     {
         $rows = DB::all(
-            'SELECT w.*, COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = w.tenant_id AND s.warehouse_id = w.id), 0) AS total_qty
-             FROM warehouses w WHERE w.tenant_id = ? ORDER BY w.is_default DESC, w.name', [Auth::tenantId()]);
+            'SELECT w.*, (SELECT COUNT(*) FROM users u WHERE u.tenant_id = w.tenant_id AND u.warehouse_id = w.id) AS people, COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = w.tenant_id AND s.warehouse_id = w.id), 0) AS total_qty
+             FROM warehouses w WHERE w.tenant_id = ?' . Scope::sql('w.id') . ' ORDER BY w.is_default DESC, w.name', [Auth::tenantId()]);
         $this->view('app/warehouses/index', ['title' => term('warehouses'), 'rows' => $rows, 'limitReached' => $this->limitReached()]);
     }
 
@@ -47,6 +61,7 @@ final class WarehouseController extends Controller
 
     public function create(): void
     {
+        $this->headOfficeOnly();
         if ($this->limitReached()) {
             flash('warning', "Your plan's warehouse limit is reached.");
             redirect('warehouses');
@@ -70,6 +85,7 @@ final class WarehouseController extends Controller
 
     public function store(): void
     {
+        $this->headOfficeOnly();
         if ($this->limitReached()) redirect('warehouses');
         $data = $this->fields('warehouses/create', null);
         $data['is_active'] = 1;
@@ -88,7 +104,12 @@ final class WarehouseController extends Controller
     {
         $row = $this->load($id);
         $data = $this->fields("warehouses/$id/edit", (int)$row['id']);
-        if ($row['is_default']) $data['is_active'] = 1;
+        if ($row['is_default'] || Scope::restricted()) $data['is_active'] = (int)$row['is_active'];
+        if (!$data['is_active'] && $this->peopleAt((int)$row['id'])) {
+            flash('danger', 'People work at this warehouse. Move them to another warehouse before making it inactive.');
+            with_old($this->input());
+            redirect("warehouses/$id/edit");
+        }
         DB::run('UPDATE warehouses SET name=?, code=?, address=?, is_active=? WHERE tenant_id = ? AND id = ?',
             [...array_values($data), Auth::tenantId(), $row['id']]);
         Audit::log('warehouse_update', 'warehouse', (int)$row['id']);
@@ -98,6 +119,7 @@ final class WarehouseController extends Controller
 
     public function makeDefault(string $id): void
     {
+        $this->headOfficeOnly();
         $row = $this->load($id);
         DB::transaction(function () use ($row) {
             DB::run('UPDATE warehouses SET is_default = 0 WHERE tenant_id = ?', [Auth::tenantId()]);
@@ -109,7 +131,12 @@ final class WarehouseController extends Controller
 
     public function destroy(string $id): void
     {
+        $this->headOfficeOnly();
         $row = $this->load($id);
+        if ($this->peopleAt((int)$row['id'])) {
+            flash('danger', 'People work at this warehouse. Move them to another warehouse first.');
+            redirect('warehouses');
+        }
         $used = (int)DB::val('SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND warehouse_id = ?', [Auth::tenantId(), $row['id']]);
         if ($row['is_default'] || $used > 0) {
             flash('danger', $row['is_default'] ? 'The default warehouse cannot be deleted.' : 'This warehouse has stock history. Mark it inactive instead.');

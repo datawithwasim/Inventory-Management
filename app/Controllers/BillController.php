@@ -16,7 +16,7 @@ final class BillController extends PurchaseBase
     {
         return DB::one(
             'SELECT b.*, s.name AS supplier, g.grn_no FROM purchase_bills b JOIN suppliers s ON s.id = b.supplier_id
-             LEFT JOIN grns g ON g.id = b.grn_id WHERE b.tenant_id = ? AND b.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             LEFT JOIN grns g ON g.id = b.grn_id WHERE b.tenant_id = ? AND b.id = ?' . \Core\Scope::sql('g.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
@@ -25,7 +25,7 @@ final class BillController extends PurchaseBase
         $status = (string)($_GET['status'] ?? '');
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'b.tenant_id = ?';
+        $where = 'b.tenant_id = ?' . \Core\Scope::sql('(SELECT gg.warehouse_id FROM grns gg WHERE gg.id = b.grn_id)');
         $params = [$t];
         $due = '(b.total - b.returned_amount - b.paid_amount)';
         $where .= match ($status) {

@@ -7,6 +7,7 @@ use Core\Audit;
 use Core\Auth;
 use Core\Controller;
 use Core\DB;
+use Core\Scope;
 
 /** Racks / bins inside a warehouse. Stock can be kept per rack. */
 final class LocationController extends Controller
@@ -21,13 +22,13 @@ final class LocationController extends Controller
     private function load(string $id): array
     {
         return DB::one(
-            'SELECT l.*, w.name AS warehouse FROM locations l JOIN warehouses w ON w.id = l.warehouse_id WHERE l.tenant_id = ? AND l.id = ?',
+            'SELECT l.*, w.name AS warehouse FROM locations l JOIN warehouses w ON w.id = l.warehouse_id WHERE l.tenant_id = ? AND l.id = ?' . Scope::sql('l.warehouse_id'),
             [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     private function warehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
     }
 
     private function warehouseId(mixed $id, string $back): int
@@ -37,12 +38,17 @@ final class LocationController extends Controller
             with_old($this->input());
             redirect($back);
         }
+        if (!Scope::allows((int)$id)) {
+            flash('danger', 'You work at ' . Scope::name() . ', so you can only manage racks there.');
+            with_old($this->input());
+            redirect($back);
+        }
         return (int)$id;
     }
 
     public function index(): void
     {
-        $wh = (int)($_GET['warehouse'] ?? 0);
+        $wh = Scope::warehouse() ?? (int)($_GET['warehouse'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
         $where = 'l.tenant_id = ?';
         $params = [$this->tid()];
@@ -52,9 +58,9 @@ final class LocationController extends Controller
             "SELECT l.*, w.name AS warehouse,
                     (SELECT COUNT(DISTINCT s.variant_id) FROM stock_balances s WHERE s.location_id = l.id AND s.qty > 0.0005) AS items
              FROM locations l JOIN warehouses w ON w.id = l.warehouse_id WHERE $where ORDER BY w.name, l.code LIMIT 500", $params);
-        $unassigned = (int)DB::val('SELECT COUNT(DISTINCT variant_id) FROM stock_balances WHERE tenant_id = ? AND location_id = 0 AND qty > 0.0005', [$this->tid()]);
+        $unassigned = (int)DB::val('SELECT COUNT(DISTINCT variant_id) FROM stock_balances WHERE tenant_id = ? AND location_id = 0 AND qty > 0.0005' . Scope::sql('warehouse_id'), [$this->tid()]);
         $this->view('app/locations/index', ['title' => term('racks') . ' / locations', 'rows' => $rows, 'wh' => $wh, 'q' => $q,
-            'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY name', [$this->tid()]), 'unassigned' => $unassigned]);
+            'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ?' . Scope::sql('id') . ' ORDER BY name', [$this->tid()]), 'unassigned' => $unassigned]);
     }
 
     public function show(string $id): void

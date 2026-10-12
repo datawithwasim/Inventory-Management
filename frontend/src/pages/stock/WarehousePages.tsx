@@ -12,7 +12,7 @@ import RecordPage from '../../components/RecordPage';
 const refresh = (qc: ReturnType<typeof useQueryClient>) => ['warehouses', 'warehouse', 'record', 'racks', 'stock'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
 export function WarehouseList() {
-  const { can, term } = useSession(); const qc = useQueryClient();
+  const { can: canRaw, term, session } = useSession(); const staff = !!session?.user?.warehouse; const can = (p: string) => canRaw(p) && !(staff && /^warehouses\.(create|delete)$/.test(p)); const qc = useQueryClient();
   const act = async (path: string, ask?: string) => {
     if (ask && !confirm(ask)) return;
     const r = await post(path);
@@ -29,7 +29,7 @@ export function WarehouseList() {
         { head: 'Status', cell: (r) => Number(r.is_active) ? <Badge tone="success">Active</Badge> : <Badge tone="secondary">Inactive</Badge> },
         { head: '', className: 'text-end text-nowrap', cell: (r) => (<>
           {can('warehouses.edit') && <><Link className="btn btn-sm btn-outline-primary" to={`/warehouses/${r.id}/edit`}>Edit</Link>{' '}
-            {!Number(r.is_default) && <button className="btn btn-sm btn-outline-secondary" onClick={() => act(`/warehouses/${r.id}/default`)}>Make default</button>}{' '}</>}
+            {!staff && !Number(r.is_default) && <button className="btn btn-sm btn-outline-secondary" onClick={() => act(`/warehouses/${r.id}/default`)}>Make default</button>}{' '}</>}
           {can('warehouses.delete') && !Number(r.is_default) && <button className="btn btn-sm btn-outline-danger" onClick={() => act(`/warehouses/${r.id}/delete`, `Delete this ${term('warehouse').toLowerCase()}?`)}>Delete</button>}
         </>) },
       ]} />
@@ -38,7 +38,7 @@ export function WarehouseList() {
 
 export function WarehouseDetail() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();
-  const { can, term } = useSession();
+  const { can: canRaw, term, session } = useSession(); const staff = !!session?.user?.warehouse; const can = (p: string) => canRaw(p) && !(staff && /^warehouses\.(create|delete)$/.test(p));
   const q = useQuery({ queryKey: ['warehouse', id], queryFn: async () => (await get(`/warehouses/${id}`)).data });
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">{term('warehouse')} not found.</div>;
@@ -54,7 +54,7 @@ export function WarehouseDetail() {
       badges={<>{Number(w.is_default) ? <><Badge tone="primary">Default</Badge> </> : null}{Number(w.is_active) ? null : <Badge tone="secondary">Inactive</Badge>}</>}
       actions={can('warehouses.edit') ? <Link className="btn btn-sm btn-primary" to={`/warehouses/${w.id}/edit`}>Edit</Link> : null}
       menu={() => <>
-        {can('warehouses.edit') && !Number(w.is_default) && <li><button className="dropdown-item" onClick={() => act(`/warehouses/${w.id}/default`)}><i className="bi bi-star me-2 text-muted" />Make default</button></li>}
+        {can('warehouses.edit') && !staff && !Number(w.is_default) && <li><button className="dropdown-item" onClick={() => act(`/warehouses/${w.id}/default`)}><i className="bi bi-star me-2 text-muted" />Make default</button></li>}
         {can('warehouses.delete') && !Number(w.is_default) && <li><button className="dropdown-item text-danger" onClick={() => act(`/warehouses/${w.id}/delete`, `Delete this ${term('warehouse').toLowerCase()}?`, () => nav('/warehouses'))}><i className="bi bi-trash me-2" />Delete</button></li>}
       </>}
       related={[{ id: 'stats', label: 'Overview figures' }, { id: 'racks', label: term('rack', true) }, { id: 'stock', label: 'Stock here' }]}>

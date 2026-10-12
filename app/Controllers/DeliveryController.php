@@ -19,14 +19,14 @@ final class DeliveryController extends SalesBase
             'SELECT d.*, c.name AS customer, w.name AS warehouse, u.name AS user_name, o.order_no, i.id AS invoice_id, i.invoice_no
              FROM deliveries d JOIN customers c ON c.id = d.customer_id JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN users u ON u.id = d.created_by
              LEFT JOIN sales_orders o ON o.id = d.order_id LEFT JOIN sales_invoices i ON i.delivery_id = d.id AND i.tenant_id = d.tenant_id
-             WHERE d.tenant_id = ? AND d.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE d.tenant_id = ? AND d.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'd.tenant_id = ?';
+        $where = 'd.tenant_id = ?' . \Core\Scope::sql('d.warehouse_id');
         $params = [$this->tid()];
         if ($customer) { $where .= ' AND d.customer_id = ?'; $params[] = $customer; }
         if ($q !== '') { $where .= ' AND d.delivery_no LIKE ?'; $params[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
@@ -51,7 +51,7 @@ final class DeliveryController extends SalesBase
 
     private function openOrder(string $id): array
     {
-        $o = DB::one('SELECT o.*, c.name AS customer FROM sales_orders o JOIN customers c ON c.id = o.customer_id WHERE o.tenant_id = ? AND o.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+        $o = DB::one('SELECT o.*, c.name AS customer FROM sales_orders o JOIN customers c ON c.id = o.customer_id WHERE o.tenant_id = ? AND o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
         if (!in_array($o['status'], ['confirmed', 'partial'], true)) {
             flash('danger', 'Goods can only be delivered on a confirmed order that is not finished.');
             redirect("sales/orders/{$o['id']}");

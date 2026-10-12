@@ -31,6 +31,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles, Super Admin) is a React app at `/app`
   (built files are committed in `public/ui/`, so the server needs no Node). The page layout designer and the print pages stay PHP. See `frontend/README.md`.
 - **Transfers between warehouses are tracked:** dispatch (stock leaves the sender and is *in transit*) → the other warehouse confirms what arrived and puts it on racks → shortages are settled (lost / sent back); challan, overdue alerts, report and `stock.receive` permission (migration 016).
+- **Warehouse-wise users:** every user works at one warehouse (or "All warehouses" = head office; the Owner is never limited). Roles *Warehouse Incharge* and *Warehouse Operator* are tied to one warehouse; such users see and act on their own warehouse only (stock, racks, ledger, rolls, documents, reports, dashboard), only the receiving warehouse can receive a transfer and only the sender can cancel it. Any custom role can be marked "Warehouse staff" (migration 017, `core/Scope.php`).
 - **POS removed** — this is an inventory app; counter billing is not part of it (migration 015).
 - Before going live, follow **GO_LIVE_CHECKLIST.md**.
 

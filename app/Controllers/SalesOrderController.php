@@ -21,7 +21,7 @@ final class SalesOrderController extends SalesBase
             'SELECT o.*, c.name AS customer, c.credit_days, w.name AS warehouse, u.name AS user_name
              FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id
              LEFT JOIN users u ON u.id = o.created_by
-             WHERE o.tenant_id = ? AND o.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE o.tenant_id = ? AND o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     private function items(int $id): array
@@ -37,7 +37,7 @@ final class SalesOrderController extends SalesBase
         $status = (string)($_GET['status'] ?? '');
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'o.tenant_id = ?';
+        $where = 'o.tenant_id = ?' . \Core\Scope::sql('o.warehouse_id');
         $params = [$this->tid()];
         if ($status === 'open') $where .= " AND o.status IN ('confirmed','partial')";
         elseif (isset(Sales::ORDER_STATUS[$status])) { $where .= ' AND o.status = ?'; $params[] = $status; }

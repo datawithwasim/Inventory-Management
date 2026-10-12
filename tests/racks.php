@@ -191,7 +191,7 @@ check('no negative balances', !DB::val('SELECT 1 FROM stock_balances WHERE tenan
 
 echo "Permissions and isolation\n";
 $staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
-$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('staff can see racks and where stock is', $s->get('/locations')['status'] === 200 && $s->get('/stock/racks')['status'] === 200);

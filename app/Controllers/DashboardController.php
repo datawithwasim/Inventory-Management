@@ -71,22 +71,26 @@ final class DashboardController extends Controller
         [$labels, $sales] = Metrics::series('sales_invoices', 'invoice_date', $p['from'], $p['to']);
         [, $buys] = Metrics::series('purchase_bills', 'bill_date', $p['from'], $p['to']);
         $t = (int)Auth::tenantId();
+        $scoped = \Core\Scope::restricted();   // warehouse staff: their warehouse's stock and transfers, no company money figures
+        if ($scoped) { $sales = array_map(fn() => 0, $sales); $buys = array_map(fn() => 0, $buys); }
+        $mine = \Core\Scope::sqlEither('warehouse_id', 'to_warehouse_id');
         $this->view('app/dashboard', [
+            'scoped' => $scoped ? \Core\Scope::name() : null,
             'title' => 'Dashboard',
             'p' => $p, 'layout' => $this->layout(), 'setup' => $this->setupSteps(),
             'labels' => $labels, 'salesSeries' => $sales, 'buySeries' => $buys,
-            'salesNow' => array_sum($sales), 'salesPrev' => Metrics::sales($p['prev_from'], $p['prev_to']),
-            'buyNow' => array_sum($buys), 'buyPrev' => Metrics::purchases($p['prev_from'], $p['prev_to']),
-            'receivable' => Metrics::due('sales'), 'payable' => Metrics::due('purchase'),
-            'ordersOpen' => (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ? AND status IN ('confirmed','partial')", [$t]),
-            'transitOpen' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')", [$t]),
-            'transitLate' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()", [$t]),
-            'lowCount' => Metrics::lowStockCount(), 'stockValue' => Metrics::stockValue(),
-            'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE tenant_id = ? AND batch_id > 0 GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', [$t]),
-            'topItems' => Metrics::topItems($p['from'], $p['to']),
+            'salesNow' => $scoped ? 0 : array_sum($sales), 'salesPrev' => $scoped ? 0 : Metrics::sales($p['prev_from'], $p['prev_to']),
+            'buyNow' => $scoped ? 0 : array_sum($buys), 'buyPrev' => $scoped ? 0 : Metrics::purchases($p['prev_from'], $p['prev_to']),
+            'receivable' => $scoped ? 0 : Metrics::due('sales'), 'payable' => $scoped ? 0 : Metrics::due('purchase'),
+            'ordersOpen' => (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ? AND status IN ('confirmed','partial')" . \Core\Scope::sql('warehouse_id'), [$t]),
+            'transitOpen' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')$mine", [$t]),
+            'transitLate' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()$mine", [$t]),
+            'lowCount' => $scoped ? 0 : Metrics::lowStockCount(), 'stockValue' => Metrics::stockValue(),
+            'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE tenant_id = ? AND batch_id > 0' . \Core\Scope::sql('warehouse_id') . ' GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', [$t]),
+            'topItems' => $scoped ? [] : Metrics::topItems($p['from'], $p['to']),
             'byCategory' => Metrics::stockByCategory(),
-            'ageRec' => Metrics::ageing('sales'), 'agePay' => Metrics::ageing('purchase'),
-            'low' => Metrics::lowStock(), 'overdue' => Metrics::overdueInvoices(), 'orders' => Metrics::openOrders(),
+            'ageRec' => $scoped ? [] : Metrics::ageing('sales'), 'agePay' => $scoped ? [] : Metrics::ageing('purchase'),
+            'low' => $scoped ? [] : Metrics::lowStock(), 'overdue' => $scoped ? [] : Metrics::overdueInvoices(), 'orders' => $scoped ? [] : Metrics::openOrders(),
             'userCount' => User::count(), 'roleCount' => Role::count(),
             'u' => Auth::user(),
         ]);

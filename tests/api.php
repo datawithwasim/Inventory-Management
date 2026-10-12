@@ -484,7 +484,7 @@ check('moving between racks of one warehouse stays instant (status "moved", noth
 $a->call('POST', '/roles', ['name' => 'Dispatcher ' . $sfx, 'perms' => ['stock.view', 'stock.transfer', 'items.view']]);
 $a->call('POST', '/roles', ['name' => 'Receiver ' . $sfx, 'perms' => ['stock.view', 'stock.receive', 'items.view']]);
 $rDis = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Dispatcher ' . $sfx]); $rRec = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Receiver ' . $sfx]);
-foreach ([['dis', $rDis], ['rec', $rRec]] as [$k, $rid]) $a->call('POST', '/users', ['name' => ucfirst($k) . ' User', 'email' => "$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rid]);
+foreach ([['dis', $rDis], ['rec', $rRec]] as [$k, $rid]) $a->call('POST', '/users', ['name' => ucfirst($k) . ' User', 'email' => "$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rid, 'warehouse_id' => '0']);
 $dis = new J($base); $dis->session(); $dis->call('POST', '/login', ['email' => "dis-$sfx@test.local", 'password' => 'Password123']); $dis->session();
 $rec = new J($base); $rec->session(); $rec->call('POST', '/login', ['email' => "rec-$sfx@test.local", 'password' => 'Password123']); $rec->session();
 $r = $dis->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'expected_date' => date('Y-m-d', strtotime('+1 day')), 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '2']]]);
@@ -498,6 +498,86 @@ check('a transfer past its expected date shows as overdue in the list, the count
 $r = $rec->call('POST', "/stock/transfers/$t6/receive", ['lines' => [$l6 => ['qty' => '2', 'location_id' => $rack2]]]);
 check('the receiver confirms it: the transfer closes and the name of who received it is kept', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t6]) === 'received' && (string)DB::val('SELECT u.name FROM stock_docs d JOIN users u ON u.id = d.received_by WHERE d.id = ?', [$t6]) === 'Rec User');
 check('the role form offers a "receive" permission on Stock', in_array('receive', $a->call('GET', '/roles/create')['json']['data']['modules']['stock']['actions'], true));
+
+echo "Warehouse-wise users: every person works at one warehouse\n";
+$rIn = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Warehouse Incharge'", [$tA]); $rOp = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Warehouse Operator'", [$tA]);
+check('the Warehouse Incharge and Warehouse Operator roles exist and are tied to a warehouse', $rIn > 0 && $rOp > 0 && (int)DB::val('SELECT COUNT(*) FROM roles WHERE id IN (?, ?) AND warehouse_bound = 1', [$rIn, $rOp]) === 2);
+$a->call('POST', '/warehouses', ['name' => 'Api Third', 'code' => 'AP3']);
+$wh3 = (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Third'", [$tA]);
+$a->call('POST', '/locations', ['warehouse_id' => $wh3, 'mode' => 'single', 'code' => 'T-1']);
+$mk = fn(string $k, int $role, string $w) => $a->call('POST', '/users', ['name' => "WH $k", 'email' => "wh$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $role, 'warehouse_id' => $w]);
+check('a user must be given a warehouse (or "all warehouses")', $a->call('POST', '/users', ['name' => 'No WH', 'email' => "nowh-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rOp])['status'] === 422 && !DB::val('SELECT 1 FROM users WHERE email = ?', ["nowh-$sfx@test.local"]));
+check('an operator or incharge cannot be "all warehouses"', $mk('x', $rOp, '0')['status'] === 422 && $mk('x', $rIn, '0')['status'] === 422);
+check('and the warehouse must be a real one', $mk('x', $rOp, '999999')['status'] === 422);
+$mk('in', $rIn, (string)$wh); $mk('op2', $rOp, (string)$wh2); $mk('op3', $rOp, (string)$wh3);
+check('operators and incharges are saved with their warehouse', (int)DB::val('SELECT warehouse_id FROM users WHERE email = ?', ["whin-$sfx@test.local"]) === $wh && (int)DB::val('SELECT warehouse_id FROM users WHERE email = ?', ["whop2-$sfx@test.local"]) === $wh2);
+$login = function (string $k) use ($base, $sfx): J { $c = new J($base); $c->session(); $c->call('POST', '/login', ['email' => "wh$k-$sfx@test.local", 'password' => 'Password123']); $c->session(); return $c; };
+$wIn = $login('in'); $wOp2 = $login('op2'); $wOp3 = $login('op3');
+check('the session says where the person works', ($wIn->session()['json']['user']['warehouse']['id'] ?? 0) === $wh && array_key_exists('warehouse', $a->session()['json']['user']) && $a->session()['json']['user']['warehouse'] === null);
+$names = fn(array $r) => array_column($r['json']['options'] ?? [], 'name');
+check('the warehouse pick-lists show only their own warehouse; transfers can still go to any warehouse', count($wOp2->call('GET', '/options/warehouses')['json']['options']) === 1 && count($wOp2->call('GET', '/options/all_warehouses')['json']['options']) >= 3 && count($a->call('GET', '/options/warehouses')['json']['options']) >= 3);
+
+$a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'WW', 'location_id' => $rack1, 'qty' => '10']]]);
+$rw = (int)DB::val('SELECT MAX(id) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh2, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'W2', 'location_id' => $rack2, 'qty' => '7']]]);
+$rw2 = (int)DB::val('SELECT MAX(id) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$adj = fn(J $c, int $w, int $rack) => $c->call('POST', '/stock/adjustments', ['warehouse_id' => $w, 'reason' => 'correction', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'ZZ', 'location_id' => $rack, 'qty' => '1']]]);
+$before = (int)DB::val('SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ?', [$tA]);
+check('an incharge can add stock at their warehouse but not at another', $adj($wIn, $wh, $rack1)['status'] === 200 && $adj($wIn, $wh2, $rack2)['status'] === 422 && (int)DB::val('SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ?', [$tA]) === $before + 1);
+check('and cannot send out stock that sits in another warehouse', $wOp2->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rw, 'location_id' => $rack1, 'qty' => '1']]])['status'] === 422);
+
+$r = $wIn->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rw, 'location_id' => $rack1, 'qty' => '3']]]);
+$tw = $lastT(); $lw = (string)DB::val('SELECT id FROM stock_doc_lines WHERE doc_id = ?', [$tw]);
+check('the incharge dispatches from their warehouse to another', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$tw]) === 'in_transit');
+$sh = fn(J $c) => $c->call('GET', "/stock/transfers/$tw");
+check('the sending side sees it but may not receive it', ($sh($wIn)['json']['data']['can']['receive'] ?? true) === false && ($sh($wIn)['json']['data']['can']['cancel'] ?? false) === true
+    && $wIn->call('POST', "/stock/transfers/$tw/receive", ['lines' => [$lw => ['qty' => '3']]])['status'] === 422 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$tw]) === 'in_transit');
+check('a third warehouse cannot see it at all (not in the list, 404 on the page)', $sh($wOp3)['status'] === 404 && !in_array($tw, array_map('intval', array_column($wOp3->call('GET', '/stock/transfers')['json']['data']['rows'], 'id')), true)
+    && $wOp3->call('POST', "/stock/transfers/$tw/receive", ['lines' => [$lw => ['qty' => '3']]])['status'] === 404);
+check('only the sender can cancel; the receiver is refused', ($sh($wOp2)['json']['data']['can']['cancel'] ?? true) === false && $wOp2->call('POST', "/stock/transfers/$tw/cancel")['status'] === 422 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$tw]) === 'in_transit');
+check('the receiving warehouse sees it as incoming and may receive', ($sh($wOp2)['json']['data']['can']['receive'] ?? false) === true && in_array($tw, array_map('intval', array_column($wOp2->call('GET', '/stock/transfers')['json']['data']['rows'], 'id')), true));
+check('and cannot put it on a rack of another warehouse', $wOp2->call('POST', "/stock/transfers/$tw/receive", ['lines' => [$lw => ['qty' => '2', 'location_id' => $rack1]]])['status'] === 422);
+$r = $wOp2->call('POST', "/stock/transfers/$tw/receive", ['lines' => [$lw => ['qty' => '2', 'location_id' => $rack2]]]);
+check('the receiver books what arrived: partly received', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$tw]) === 'partial');
+check('only someone who can adjust stock settles the shortage (an operator cannot; the incharge of the sender can)',
+    $wOp2->call('POST', "/stock/transfers/$tw/settle", ['lines' => [$lw => ['qty' => '1', 'action' => 'lost']]])['status'] === 403
+    && $wIn->call('POST', "/stock/transfers/$tw/settle", ['lines' => [$lw => ['qty' => '1', 'action' => 'lost']]])['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$tw]) === 'received_short');
+
+$whOf = fn(array $rows, string $key) => array_unique(array_map(fn($x) => (string)($x[$key] ?? ''), $rows));
+$w2name = (string)DB::val('SELECT name FROM warehouses WHERE id = ?', [$wh2]);
+$st = $wOp2->call('GET', "/stock?warehouse=$wh")['json']['data'];
+check('the stock list is always held to their warehouse, whatever the filter says', $st['wh'] === $wh2 && count($st['warehouses']) === 1 && !array_filter($st['rows'], fn($x) => array_filter($x['racks'], fn($k) => $k['warehouse'] !== $w2name)));
+$rk = $wOp2->call('GET', "/stock/racks?warehouse=$wh")['json']['data'];
+check('stock by rack and the ledger show their warehouse only', $rk['rows'] && $whOf($rk['rows'], 'warehouse') === [$w2name] && $whOf($wOp2->call('GET', "/stock/ledger?warehouse=$wh")['json']['data']['rows'], 'warehouse') === [$w2name]);
+check('the roll list only has rolls that were in their warehouse or are on the way to it', in_array($rw2, array_map('intval', array_column($wOp2->call('GET', '/stock/batches?status=all')['json']['data']['rows'], 'id')), true)
+    && !in_array($rb2, array_map('intval', array_column($wOp3->call('GET', '/stock/batches?status=all')['json']['data']['rows'], 'id')), true));
+check('a roll that never touched their warehouse is a 404, and the history of a shared roll shows their side only',
+    $wOp3->call('GET', "/stock/batches/$rw")['status'] === 404 && $wOp2->call('GET', "/stock/batches/$rw")['status'] === 200
+    && $whOf($wOp2->call('GET', "/stock/batches/$rw")['json']['data']['history'], 'warehouse') === [$w2name]);
+check('racks can be listed and shown for their warehouse only', $wOp2->call('GET', '/locations')['status'] === 200 && $whOf($wOp2->call('GET', "/locations?warehouse=$wh")['json']['data']['rows'], 'warehouse') === [$w2name] && $wOp2->call('GET', "/locations/$rack1")['status'] === 404);
+check('the warehouse list shows only theirs; head-office jobs are refused', count($wOp2->call('GET', '/warehouses')['json']['data']['rows']) === 1 && $wOp2->call('GET', "/warehouses/$wh")['status'] === 404
+    && $wIn->call('POST', '/warehouses', ['name' => 'Sneaky', 'code' => 'SN'])['status'] === 422 && $wIn->call('POST', "/warehouses/$wh/default")['status'] === 422);
+check('the item page counts their warehouse only', array_sum(array_map(fn($v) => (float)$v['total'], $wOp2->call('GET', "/items/$itm2")['json']['data']['variants'])) === (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ?', [$tA, $rv2, $wh2]));
+
+$d = $wOp2->call('GET', '/dashboard')['json']['data'];
+check('the dashboard is theirs: warehouse stock and transfers, no company money figures', $d['scoped'] === $w2name && (float)$d['salesNow'] === 0.0 && (float)$d['receivable'] === 0.0 && $d['overdue'] === []);
+$g = $wIn->call('GET', '/reports')['json']['data']['groups'];
+check('reports: only the ones that have a warehouse filter', isset($g['stock']['stock-summary']) && !isset($g['sales']) && $wIn->call('GET', '/reports/sales-register')['status'] === 404 && $wIn->call('GET', '/reports/low-stock')['status'] === 404);
+$rs = $wIn->call('GET', "/reports/stock-summary?warehouse=$wh2")['json']['data'];
+check('and a warehouse report is held to their warehouse whatever the filter says', ($rs['f']['warehouse'] ?? 0) === $wh && count($rs['lists']['warehouse']) === 1);
+
+$a->call('POST', '/roles', ['name' => 'Site lead ' . $sfx, 'perms' => ['users.view', 'users.create', 'users.edit', 'stock.view'], 'warehouse_bound' => '1']);
+$rLead = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Site lead ' . $sfx]);
+check('a role can be marked "warehouse staff"', (int)DB::val('SELECT warehouse_bound FROM roles WHERE id = ?', [$rLead]) === 1);
+$mk('lead', $rLead, (string)$wh3); $lead = $login('lead');
+$r = $lead->call('POST', '/users', ['name' => 'By Lead', 'email' => "bylead-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rOp, 'warehouse_id' => '0']);
+check('a warehouse user who adds people can only add them to their own warehouse (and only warehouse roles)', $r['status'] === 200 && (int)DB::val('SELECT warehouse_id FROM users WHERE email = ?', ["bylead-$sfx@test.local"]) === $wh3
+    && $lead->call('POST', '/users', ['name' => 'By Lead 2', 'email' => "bylead2-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rDis, 'warehouse_id' => (string)$wh3])['status'] === 403);
+$ul = $lead->call('GET', '/users')['json']['data']['users'];
+check('and sees only the people of that warehouse', $ul && count(array_unique(array_column($ul, 'warehouse'))) === 1 && !in_array("rec-$sfx@test.local", array_column($ul, 'email'), true));
+check('a warehouse with people cannot be deleted or made inactive', $a->call('POST', "/warehouses/$wh3/delete")['status'] === 422 && $a->call('POST', "/warehouses/$wh3", ['name' => 'Api Third', 'code' => 'AP3'])['status'] === 422 && DB::val('SELECT is_active FROM warehouses WHERE id = ?', [$wh3]) == 1);
+check('the user list and form show where people work', in_array('Api Third', array_column($a->call('GET', '/users')['json']['data']['users'], 'warehouse'), true) && count($a->call('GET', '/users/create')['json']['data']['warehouses']) >= 3);
+check('the owner (not tied to any warehouse) still works across all of them', $a->call('GET', '/stock/batches?status=all')['status'] === 200 && count($a->call('GET', '/warehouses')['json']['data']['rows']) >= 3);
 
 echo "Settings, users, roles, masters and profile through the API\n";
 $r = $a->call('GET', '/settings/company');
@@ -578,12 +658,12 @@ $roleId = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Cou
 check('a role is created with its permissions', $roleId > 0 && (int)DB::val('SELECT COUNT(*) FROM role_permissions WHERE role_id = ?', [$roleId]) === 3);
 check('its permissions come back on the edit form', count($a->call('GET', "/roles/$roleId/edit")['json']['data']['granted']) === 3);
 check('a duplicate role name is refused', $a->call('POST', '/roles', ['name' => 'Counter staff', 'perms' => []])['status'] === 422);
-$r = $a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'short', 'role_id' => $roleId]);
+$r = $a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'short', 'role_id' => $roleId, 'warehouse_id' => '0']);
 check('a short password for a new user is refused', $r['status'] === 422);
-$a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId]);
+$a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId, 'warehouse_id' => '0']);
 $uid = (int)DB::val("SELECT id FROM users WHERE tenant_id = ? AND email = ?", [$tA, 'sita-' . $sfx . '@test.local']);
 check('a user is added on that role', $uid > 0 && (int)DB::val('SELECT role_id FROM users WHERE id = ?', [$uid]) === $roleId);
-check('a duplicate email is refused', $a->call('POST', '/users', ['name' => 'Sita 2', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId])['status'] === 422);
+check('a duplicate email is refused', $a->call('POST', '/users', ['name' => 'Sita 2', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId, 'warehouse_id' => '0'])['status'] === 422);
 $r = $a->call('GET', "/users/$uid/edit");
 check('the user form data has the user and the roles they may be given', ($r['json']['data']['user']['name'] ?? '') === 'Sita' && count($r['json']['data']['roles']) >= 2 && !str_contains($r['raw'], 'password_hash'));
 check('the user list shows role names', in_array('Counter staff', array_column($a->call('GET', '/users')['json']['data']['users'], 'role_name'), true));

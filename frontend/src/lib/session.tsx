@@ -5,7 +5,7 @@ import { setFormat } from './format';
 export type MenuItem = { label: string; icon: string; path: string; href: string; exact?: boolean };
 export type Session = {
   authenticated: boolean; csrf: string; base: string;
-  user?: { name: string; email: string; role: string; owner: boolean };
+  user?: { name: string; email: string; role: string; owner: boolean; warehouse: { id: number; name: string } | null };
   tenant?: { name: string; plan: string; status: string; expires: string | null; logo: string | null };
   perms?: string[]; menu?: { dashboard: MenuItem; groups: Record<string, { label: string; icon: string; items: MenuItem[] }>; account: MenuItem[] };
   fmt?: { decimals: number; grouping: string; symbol: string; position: string; date: string };

@@ -8,6 +8,8 @@ use App\Models\User;
 use Core\Audit;
 use Core\Auth;
 use Core\Controller;
+use Core\DB;
+use Core\Scope;
 
 final class UserController extends Controller
 {
@@ -15,7 +17,41 @@ final class UserController extends Controller
     private function assignableRoles(): array
     {
         $me = Auth::user();
-        return array_values(array_filter(Role::all('name'), fn($r) => !$r['is_owner'] || $me['is_owner']));
+        // owners hand out any role; a warehouse user can only add people to their own warehouse's kind of role
+        return array_values(array_filter(Role::all('name'), fn($r) => (!$r['is_owner'] || $me['is_owner']) && (!Scope::restricted() || $r['warehouse_bound'])));
+    }
+
+    private function warehouseChoices(): array
+    {
+        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [(int)Auth::tenantId()]);
+    }
+
+    /** Which warehouse the person works at: a chosen one, or null for head office (all warehouses). Operators / incharges must have one. */
+    private function warehouseOf(array $d, int $roleId, string $back): ?int
+    {
+        if (Scope::restricted()) return Scope::warehouse();
+        $role = Role::find($roleId);
+        if ($role && $role['is_owner']) return null;
+        $raw = $d['warehouse_id'] ?? null;
+        if ($raw === null || $raw === '') {
+            flash('danger', 'Choose the warehouse this person works at (or "All warehouses" for head office).');
+            with_old($d);
+            redirect($back);
+        }
+        if ((string)$raw === '0') {
+            if ($role && $role['warehouse_bound']) {
+                flash('danger', 'People on the role "' . $role['name'] . '" belong to one warehouse. Choose it.');
+                with_old($d);
+                redirect($back);
+            }
+            return null;
+        }
+        if (!DB::val('SELECT 1 FROM warehouses WHERE tenant_id = ? AND id = ? AND is_active = 1', [(int)Auth::tenantId(), (int)$raw])) {
+            flash('danger', 'Choose a valid warehouse.');
+            with_old($d);
+            redirect($back);
+        }
+        return (int)$raw;
     }
 
     private function limitReached(): bool
@@ -28,12 +64,15 @@ final class UserController extends Controller
     {
         $user = User::withRole($id) ?? $this->notFound();
         if ($user['is_owner'] && !Auth::user()['is_owner']) $this->forbidden();
+        if (Scope::restricted() && (int)$user['warehouse_id'] !== Scope::warehouse()) $this->notFound();
         return $user;
     }
 
     public function index(): void
     {
-        $this->view('app/users/index', ['title' => 'Users', 'users' => User::withRoles(), 'limitReached' => $this->limitReached()]);
+        $users = User::withRoles();
+        if (Scope::restricted()) $users = array_values(array_filter($users, fn($u) => (int)$u['warehouse_id'] === Scope::warehouse()));
+        $this->view('app/users/index', ['title' => 'Users', 'users' => $users, 'limitReached' => $this->limitReached()]);
     }
 
     public function create(): void
@@ -42,7 +81,7 @@ final class UserController extends Controller
             flash('warning', 'Your plan\'s user limit is reached. Upgrade your plan to add more users.');
             redirect('users');
         }
-        $this->view('app/users/form', ['title' => 'Add user', 'user' => null, 'roles' => $this->assignableRoles()]);
+        $this->view('app/users/form', ['title' => 'Add user', 'user' => null, 'roles' => $this->assignableRoles(), 'warehouses' => $this->warehouseChoices(), 'restricted' => Scope::restricted()]);
     }
 
     public function store(): void
@@ -60,8 +99,9 @@ final class UserController extends Controller
             with_old($d);
             redirect('users/create');
         }
+        $wh = $this->warehouseOf($d, (int)$d['role_id'], 'users/create');
         $id = User::create([
-            'name' => trim($d['name']), 'email' => $email, 'role_id' => (int)$d['role_id'],
+            'name' => trim($d['name']), 'email' => $email, 'role_id' => (int)$d['role_id'], 'warehouse_id' => $wh,
             'password_hash' => password_hash($d['password'], PASSWORD_DEFAULT),
         ]);
         Audit::log('user_create', 'user', $id, $email);
@@ -72,7 +112,7 @@ final class UserController extends Controller
     public function edit(string $id): void
     {
         $user = $this->loadManageable((int)$id);
-        $this->view('app/users/form', ['title' => 'Edit user', 'user' => $user, 'roles' => $this->assignableRoles()]);
+        $this->view('app/users/form', ['title' => 'Edit user', 'user' => $user, 'roles' => $this->assignableRoles(), 'warehouses' => $this->warehouseChoices(), 'restricted' => Scope::restricted()]);
     }
 
     public function update(string $id): void
@@ -92,7 +132,7 @@ final class UserController extends Controller
             flash('danger', 'The company needs at least one Owner.');
             redirect("users/$id/edit");
         }
-        $data = ['name' => trim($d['name']), 'email' => $email, 'role_id' => $roleId];
+        $data = ['name' => trim($d['name']), 'email' => $email, 'role_id' => $roleId, 'warehouse_id' => $this->warehouseOf($d + ['warehouse_id' => $user['warehouse_id'] ?? '0'], $roleId, "users/$id/edit")];
         if (($d['password'] ?? '') !== '') {
             if (strlen($d['password']) < 8) {
                 flash('danger', 'Password must be at least 8 characters.');

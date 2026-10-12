@@ -24,7 +24,7 @@ final class GrnController extends PurchaseBase
              FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id
              LEFT JOIN purchase_orders p ON p.id = g.po_id LEFT JOIN users u ON u.id = g.created_by
              LEFT JOIN purchase_bills b ON b.grn_id = g.id AND b.tenant_id = g.tenant_id
-             WHERE g.tenant_id = ? AND g.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE g.tenant_id = ? AND g.id = ?' . \Core\Scope::sql('g.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
@@ -32,7 +32,7 @@ final class GrnController extends PurchaseBase
         $t = $this->tid();
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'g.tenant_id = ?';
+        $where = 'g.tenant_id = ?' . \Core\Scope::sql('g.warehouse_id');
         $params = [$t];
         if ($supplier) { $where .= ' AND g.supplier_id = ?'; $params[] = $supplier; }
         if ($q !== '') { $where .= ' AND (g.grn_no LIKE ? OR g.supplier_ref LIKE ?)'; $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; array_push($params, $like, $like); }
@@ -64,7 +64,7 @@ final class GrnController extends PurchaseBase
 
     private function openPo(string $id): array
     {
-        $po = DB::one('SELECT p.*, s.name AS supplier FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.tenant_id = ? AND p.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+        $po = DB::one('SELECT p.*, s.name AS supplier FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.tenant_id = ? AND p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
         if (!in_array($po['status'], ['approved', 'partial'], true)) {
             flash('danger', 'Goods can only be received against an approved purchase order that is not finished.');
             redirect("purchase/orders/{$po['id']}");

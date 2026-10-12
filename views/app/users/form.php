@@ -11,6 +11,10 @@
         <option value="<?= (int)$r['id'] ?>" <?= (int)old('role_id', $user['role_id'] ?? 0) === (int)$r['id'] ? 'selected' : '' ?>><?= e($r['name']) ?></option>
       <?php endforeach; ?>
     </select></div>
+  <?php if (empty($restricted)): ?><div class="mb-3"><label class="form-label">Works at</label>
+    <select name="warehouse_id" class="form-select"><option value="">— choose —</option><option value="0" <?= (string)old('warehouse_id', isset($user) ? ($user['warehouse_id'] ?? '0') : '') === '0' ? 'selected' : '' ?>>All warehouses (head office)</option>
+      <?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>" <?= (int)old('warehouse_id', $user['warehouse_id'] ?? 0) === (int)$w['id'] ? 'selected' : '' ?>><?= e($w['name']) ?></option><?php endforeach; ?></select>
+    <div class="form-text">A warehouse operator / incharge sees and works on that warehouse only.</div></div><?php endif; ?>
   <div class="mb-3"><label class="form-label"><?= $user ? 'New password (leave blank to keep)' : 'Password' ?></label>
     <input type="password" name="password" class="form-control" minlength="8" <?= $user ? '' : 'required' ?>></div>
   <button class="btn btn-primary">Save</button>

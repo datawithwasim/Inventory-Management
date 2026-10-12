@@ -5,7 +5,7 @@ Tick each line. Sections A–B are done on the server, C is a click-through on t
 ## A. Already verified (on the dev copy, before upload)
 
 - [x] Every PHP file passes `php -l` (no syntax errors).
-- [x] All 13 test suites pass: smoke, phase2, racks, purchase, sales, settings, reports, personalise, extras, robust, records, masters, api (≈ 700 checks).
+- [x] All 13 test suites pass: smoke, phase2, racks, purchase, sales, settings, reports, personalise, extras, robust, records, masters, api (≈ 780 checks).
 - [x] `npm run build` type-checks and produces the same `public/ui/` that is committed (nothing left over).
 - [x] Browser run-through with no console or network errors: sales (order → deliver → invoice → payment → return), stock (adjust, transfer, stock-take), reports (incl. low stock → draft POs), settings, users/roles, Super Admin (create company, open as owner, back to admin).
 - [x] PHP 8.3 with `pdo_mysql, mbstring, gd, zip, fileinfo, json, openssl, curl` loaded.
@@ -25,7 +25,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`. Afterwards the page must say "The database is up to date."
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/app/` once with a hard refresh (Ctrl+F5) so the browser drops the old screens.
 
@@ -56,6 +56,11 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] Receiver (a user with the **Receive** permission) opens the transfer → Receive goods → enters what arrived and the rack → stock appears on that rack, status "Partly received" or "Received". Receive the rest in a second go.
 - [ ] Shortage: settle the missing quantity as "lost" and as "send back" → status "Received (shortage)"; History lists every step with who did it.
 - [ ] Cancel a fresh dispatch → every roll is back on the rack it left.
+- [ ] **Warehouse-wise users** (Settings → Users): adding a user asks "Works at" — a warehouse, or "All warehouses (head office)". The roles **Warehouse Incharge** and **Warehouse Operator** must be tied to one warehouse (head office is refused). Existing users keep working as head office until you edit them.
+- [ ] Sign in as an operator of warehouse B: Stock, Stock by rack, Ledger, Rolls, Racks and Warehouses show **only B**; the Dashboard shows only B's stock and transfers (no sales / purchase / money figures); Reports lists only warehouse reports and the warehouse filter is fixed to B.
+- [ ] Transfer A → B: the operator of **A** sees it but cannot receive it; the operator of **B** can receive it but cannot cancel it; an operator of a third warehouse C does not see it at all (404). Settling a shortage needs "Adjust" and either side.
+- [ ] An operator of B cannot add stock, send stock or receive goods for warehouse A; cannot add or delete warehouses or change the default.
+- [ ] A warehouse that still has people cannot be deleted or made inactive.
 - [ ] A dispatcher without the Receive permission cannot receive; a receiver cannot dispatch or settle (Settings → Roles → Stock: View / Adjust / Transfer / **Receive**).
 - [ ] Reports → "Transfers: in transit & shortages"; Dashboard card "Transfers on the road"; overdue transfers (past expected date) show in red.
 - [ ] Stock-take: count, save, post — differences appear in the ledger.
@@ -101,5 +106,6 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 
 - Page layout designer / custom fields (Settings → "Page layout & custom fields") and all print pages are still PHP pages.
 - "Walk-in customer" is kept for deliveries made without a registered customer.
+- A user belongs to one warehouse (or none = head office). Company-wide screens (sales / purchase registers, invoices money figures, low-stock list) are hidden from warehouse-tied users; the Owner is never limited.
 - Invoices, payments and customer/supplier statements remain (basic receivable/payable tracking). Remove them only by a separate decision.
 - The browser may show a favicon 404 in the console; it has no effect.

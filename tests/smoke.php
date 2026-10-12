@@ -43,7 +43,7 @@ check('both companies created', str_contains($list, "Acme $suffix") && str_conta
 check('duplicate owner email rejected, company not created', substr_count($admin->get('/admin/tenants')['body'], "Dup $suffix") === 0);
 $tA = (int)Core\DB::val('SELECT id FROM tenants WHERE name = ?', ["Acme $suffix"]);
 $tB = (int)Core\DB::val('SELECT id FROM tenants WHERE name = ?', ["Beta $suffix"]);
-check('default roles provisioned', (int)Core\DB::val('SELECT COUNT(*) FROM roles WHERE tenant_id = ?', [$tA]) === 3);
+check('default roles provisioned', (int)Core\DB::val('SELECT COUNT(*) FROM roles WHERE tenant_id = ?', [$tA]) === 5);
 
 echo "Company owner\n";
 $a = new Client($base);
@@ -51,11 +51,11 @@ $r = $a->post('/login', ['email' => "owner-a-$suffix@test.local", 'password' => 
 check('owner A signs in', str_ends_with((string)$r['location'], '/dashboard'));
 check('dashboard shows company name', str_contains($a->get('/dashboard')['body'], "Acme $suffix"));
 $staffRole = (int)Core\DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
-$r = $a->post('/users', ['name' => 'Staff One', 'email' => "staff-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$r = $a->post('/users', ['name' => 'Staff One', 'email' => "staff-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 check('owner adds a staff user', str_contains($a->get('/users')['body'], "staff-$suffix@test.local"));
-$a->post('/users', ['name' => 'Staff Two', 'email' => "staff2-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$a->post('/users', ['name' => 'Staff Two', 'email' => "staff2-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 check('plan user limit (3) enforced', !str_contains($a->get('/users')['body'], "staff3-$suffix") && (int)Core\DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ?', [$tA]) === 3);
-$a->post('/users', ['name' => 'Staff Three', 'email' => "staff3-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users');
+$a->post('/users', ['name' => 'Staff Three', 'email' => "staff3-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users');
 check('4th user blocked by limit', (int)Core\DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ?', [$tA]) === 3);
 
 echo "Roles\n";
@@ -81,7 +81,7 @@ check('owner A cannot delete company B user', (int)Core\DB::val('SELECT COUNT(*)
 $roleB = (int)Core\DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = "Staff"', [$tB]);
 check('owner A cannot open company B role (404)', $a->get("/roles/$roleB/edit")['status'] === 404);
 check('cross-tenant role assignment rejected', (function () use ($a, $roleB, $suffix) {
-    $a->post('/users', ['name' => 'X', 'email' => "x-$suffix@test.local", 'password' => 'Password123', 'role_id' => $roleB], '/users');
+    $a->post('/users', ['name' => 'X', 'email' => "x-$suffix@test.local", 'password' => 'Password123', 'role_id' => $roleB, 'warehouse_id' => '0'], '/users');
     return !Core\DB::val('SELECT 1 FROM users WHERE email = ?', ["x-$suffix@test.local"]);
 })());
 

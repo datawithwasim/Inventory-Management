@@ -19,14 +19,14 @@ final class SalesReturnController extends SalesBase
         return DB::one(
             'SELECT r.*, c.name AS customer, i.invoice_no, w.name AS warehouse, u.name AS user_name FROM sales_returns r JOIN customers c ON c.id = r.customer_id
              JOIN sales_invoices i ON i.id = r.invoice_id JOIN warehouses w ON w.id = r.warehouse_id LEFT JOIN users u ON u.id = r.created_by
-             WHERE r.tenant_id = ? AND r.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE r.tenant_id = ? AND r.id = ?' . \Core\Scope::sql('r.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
-        [$page, $pages, $limit] = $this->pageOf('sales_returns', 'tenant_id = ?', [$this->tid()]);
+        [$page, $pages, $limit] = $this->pageOf('sales_returns', 'tenant_id = ?' . \Core\Scope::sql('warehouse_id'), [$this->tid()]);
         $rows = DB::all("SELECT r.*, c.name AS customer, i.invoice_no FROM sales_returns r JOIN customers c ON c.id = r.customer_id JOIN sales_invoices i ON i.id = r.invoice_id
-                         WHERE r.tenant_id = ? ORDER BY r.id DESC $limit", [$this->tid()]);
+                         WHERE r.tenant_id = ?" . \Core\Scope::sql('r.warehouse_id') . " ORDER BY r.id DESC $limit", [$this->tid()]);
         $this->view('app/sales/return_index', ['title' => 'Sales returns', 'rows' => $rows, 'page' => $page, 'pages' => $pages]);
     }
 
@@ -36,7 +36,7 @@ final class SalesReturnController extends SalesBase
         $invId = (int)($_GET['invoice'] ?? 0);
         if (!$invId) {
             $q = trim((string)($_GET['q'] ?? ''));
-            $where = 'i.tenant_id = ? AND i.delivery_id IS NOT NULL';
+            $where = 'i.tenant_id = ? AND i.delivery_id IS NOT NULL' . \Core\Scope::sql('(SELECT dd.warehouse_id FROM deliveries dd WHERE dd.id = i.delivery_id)');
             $params = [$t];
             if ($q !== '') { $where .= ' AND (i.invoice_no LIKE ? OR c.name LIKE ?)'; $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; array_push($params, $like, $like); }
             $rows = DB::all("SELECT i.id, i.invoice_no, i.invoice_date, i.total, c.name AS customer FROM sales_invoices i JOIN customers c ON c.id = i.customer_id WHERE $where ORDER BY i.id DESC LIMIT 30", $params);
@@ -44,7 +44,7 @@ final class SalesReturnController extends SalesBase
             return;
         }
         $i = DB::one('SELECT i.*, c.name AS customer, d.warehouse_id, w.name AS warehouse FROM sales_invoices i JOIN customers c ON c.id = i.customer_id
-                      JOIN deliveries d ON d.id = i.delivery_id JOIN warehouses w ON w.id = d.warehouse_id WHERE i.tenant_id = ? AND i.id = ?', [$t, $invId]) ?? $this->notFound();
+                      JOIN deliveries d ON d.id = i.delivery_id JOIN warehouses w ON w.id = d.warehouse_id WHERE i.tenant_id = ? AND i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$t, $invId]) ?? $this->notFound();
         $items = DeliveryController::rows((int)$i['delivery_id'], $t);
         foreach ($items as &$l) $l['returnable'] = round((float)$l['qty'] - (float)$l['qty_returned'], 3);
         unset($l);
@@ -58,7 +58,7 @@ final class SalesReturnController extends SalesBase
         $invId = (int)($d['invoice_id'] ?? 0);
         $back = "sales/returns/create?invoice=$invId";
         $this->enforceFields('sales_return', $back);
-        $i = DB::one('SELECT i.*, d.warehouse_id, d.delivery_no FROM sales_invoices i JOIN deliveries d ON d.id = i.delivery_id WHERE i.tenant_id = ? AND i.id = ?', [$t, $invId]) ?? $this->notFound();
+        $i = DB::one('SELECT i.*, d.warehouse_id, d.delivery_no FROM sales_invoices i JOIN deliveries d ON d.id = i.delivery_id WHERE i.tenant_id = ? AND i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$t, $invId]) ?? $this->notFound();
         $date = $this->date($d['return_date'] ?? '', 'Return date', $back);
         $reason = $this->text($d['reason'] ?? '', 150, 'Reason', $back);
 

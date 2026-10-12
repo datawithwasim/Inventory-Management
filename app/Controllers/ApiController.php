@@ -30,7 +30,8 @@ final class ApiController extends Controller
             foreach (TERMS as $k => $pair) $terms[$k] = [term($k), term($pair[1])];
             $expiry = $u['tenant_status'] === 'trial' ? $u['trial_ends_at'] : $u['subscription_ends_at'];
             $out += [
-                'user' => ['name' => $u['name'], 'email' => $u['email'] ?? '', 'role' => $u['role_name'], 'owner' => (bool)$u['is_owner']],
+                'user' => ['name' => $u['name'], 'email' => $u['email'] ?? '', 'role' => $u['role_name'], 'owner' => (bool)$u['is_owner'],
+                    'warehouse' => \Core\Scope::restricted() ? ['id' => \Core\Scope::warehouse(), 'name' => \Core\Scope::name()] : null],
                 'tenant' => ['name' => $u['tenant_name'], 'plan' => $u['plan_name'], 'status' => $u['tenant_status'], 'expires' => $expiry, 'logo' => company_logo_url()],
                 'perms' => $perms, 'menu' => Menu::sidebar(), 'quick' => Menu::quick(), 'terms' => $terms, 'supportMode' => Auth::impersonating(),
                 'fmt' => ['decimals' => max(0, min(3, (int)\Core\Settings::get('currency.decimals'))), 'grouping' => \Core\Settings::get('number.grouping'), 'symbol' => \Core\Settings::get('currency.symbol'),
@@ -73,7 +74,9 @@ final class ApiController extends Controller
         $t = (int)Auth::tenantId();
         $rows = match ($source) {
             'suppliers', 'customers' => DB::all("SELECT id, name FROM $source WHERE tenant_id = ? AND is_active = 1 ORDER BY name", [$t]),
-            'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$t]),
+            // a warehouse user only picks their own warehouse; "all_warehouses" is for the receiving side of a transfer
+            'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . \Core\Scope::sql('id') . ' ORDER BY is_default DESC, name', [$t]),
+            'all_warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$t]),
             'customer_groups' => DB::all('SELECT id, CONCAT(name, IF(discount_pct > 0, CONCAT(" (", TRIM(TRAILING "." FROM TRIM(TRAILING "0" FROM discount_pct)), "% off)"), "")) AS name FROM customer_groups WHERE tenant_id = ? ORDER BY name', [$t]),
             'categories', 'brands' => DB::all("SELECT id, name FROM $source WHERE tenant_id = ? ORDER BY name", [$t]),
             'units' => DB::all('SELECT id, CONCAT(name, " (", short_name, ")") AS name FROM units WHERE tenant_id = ? ORDER BY name', [$t]),

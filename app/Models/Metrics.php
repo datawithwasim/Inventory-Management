@@ -104,14 +104,14 @@ final class Metrics
             'SELECT COALESCE(c.name, \'Uncategorised\') AS name, SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)) AS value
              FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id JOIN items i ON i.id = v.item_id
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
-             WHERE s.tenant_id = ? GROUP BY c.id, c.name HAVING value > 0.004 ORDER BY value DESC LIMIT ' . (int)$limit, [self::t()]);
+             WHERE s.tenant_id = ?' . \Core\Scope::sql('s.warehouse_id') . ' GROUP BY c.id, c.name HAVING value > 0.004 ORDER BY value DESC LIMIT ' . (int)$limit, [self::t()]);
     }
 
     public static function stockValue(): float
     {
         return (float)DB::val(
             'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0) FROM stock_balances s
-             JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0 WHERE s.tenant_id = ?', [self::t()]);
+             JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0 WHERE s.tenant_id = ?' . \Core\Scope::sql('s.warehouse_id'), [self::t()]);
     }
 
     public static function lowStock(int $limit = 6): array

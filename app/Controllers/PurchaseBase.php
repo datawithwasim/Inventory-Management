@@ -63,6 +63,7 @@ abstract class PurchaseBase extends Controller
     {
         $w = Stock::warehouse((int)$id);
         if (!$w || !$w['is_active']) $this->bounce('Choose a valid warehouse.', $back);
+        if (!\Core\Scope::allows((int)$w['id'])) $this->bounce('You work at ' . \Core\Scope::name() . ', so you can only do this for ' . \Core\Scope::name() . '.', $back);
         return $w;
     }
 
@@ -80,7 +81,7 @@ abstract class PurchaseBase extends Controller
 
     protected function warehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . \Core\Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
     }
 
     protected function racksByWarehouse(): array

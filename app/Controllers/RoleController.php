@@ -43,7 +43,7 @@ final class RoleController extends Controller
             with_old($d);
             redirect('roles/create');
         }
-        $id = Role::create(['name' => $name]);
+        $id = Role::create(['name' => $name, 'warehouse_bound' => empty($d['warehouse_bound']) ? 0 : 1]);
         Role::savePermissions($id, (array)($d['perms'] ?? []));
         Audit::log('role_create', 'role', $id, $name);
         flash('success', 'Role created.');
@@ -74,6 +74,7 @@ final class RoleController extends Controller
             }
             Role::update((int)$role['id'], ['name' => $name]);
         }
+        Role::update((int)$role['id'], ['warehouse_bound' => empty($d['warehouse_bound']) ? 0 : 1]);
         Role::savePermissions((int)$role['id'], (array)($d['perms'] ?? []));
         Audit::log('role_update', 'role', (int)$role['id']);
         flash('success', 'Role updated.');

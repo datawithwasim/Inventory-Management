@@ -7,6 +7,7 @@ use App\Models\Stock;
 use Core\Auth;
 use Core\Controller;
 use Core\DB;
+use Core\Scope;
 
 /** Shared helpers for stock documents (adjustments, transfers, stock-takes). */
 abstract class StockDocController extends Controller
@@ -18,6 +19,12 @@ abstract class StockDocController extends Controller
 
     protected function activeWarehouses(): array
     {
+        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
+    }
+
+    /** Every active warehouse (the receiving side of a transfer may be anyone's). */
+    protected function allActiveWarehouses(): array
+    {
         return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$this->tid()]);
     }
 
@@ -28,10 +35,12 @@ abstract class StockDocController extends Controller
         redirect($back);
     }
 
-    protected function activeWarehouse(mixed $id, string $back, string $what = 'warehouse'): array
+    /** A valid active warehouse. $ownOnly: a warehouse user may only use the warehouse they work at. */
+    protected function activeWarehouse(mixed $id, string $back, string $what = 'warehouse', bool $ownOnly = true): array
     {
         $w = Stock::warehouse((int)$id);
         if (!$w || !$w['is_active']) $this->bounce("Choose a valid $what.", $back);
+        if ($ownOnly && !Scope::allows((int)$w['id'])) $this->bounce('You work at ' . Scope::name() . ', so you can only do this for ' . Scope::name() . '.', $back);
         return $w;
     }
 
@@ -47,11 +56,15 @@ abstract class StockDocController extends Controller
 
     protected function loadDoc(string $id, string $type): array
     {
-        return DB::one(
+        $doc = DB::one(
             'SELECT d.*, w.name AS warehouse, w2.name AS to_warehouse, u.name AS user_name
              FROM stock_docs d JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN warehouses w2 ON w2.id = d.to_warehouse_id
              LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.id = ? AND d.type = ?',
             [$this->tid(), (int)$id, $type]) ?? $this->notFound();
+        $own = Scope::warehouse();
+        // a warehouse user sees documents of their warehouse; a transfer also when it is on its way to / from them
+        if ($own !== null && (int)$doc['warehouse_id'] !== $own && !($type === 'transfer' && (int)$doc['to_warehouse_id'] === $own)) $this->notFound();
+        return $doc;
     }
 
     protected function docLines(int $docId): array
@@ -69,12 +82,12 @@ abstract class StockDocController extends Controller
     protected function docList(string $type, string $title, string $view): void
     {
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $total = (int)DB::val('SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = ?', [$this->tid(), $type]);
+        $total = (int)DB::val('SELECT COUNT(*) FROM stock_docs d WHERE d.tenant_id = ? AND d.type = ?' . Scope::sql('d.warehouse_id'), [$this->tid(), $type]);
         $rows = DB::all(
             'SELECT d.*, w.name AS warehouse, w2.name AS to_warehouse, u.name AS user_name,
                     (SELECT COUNT(*) FROM stock_doc_lines l WHERE l.doc_id = d.id) AS line_count
              FROM stock_docs d JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN warehouses w2 ON w2.id = d.to_warehouse_id
-             LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.type = ? ORDER BY d.id DESC LIMIT 30 OFFSET ' . (($page - 1) * 30),
+             LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.type = ?' . Scope::sql('d.warehouse_id') . ' ORDER BY d.id DESC LIMIT 30 OFFSET ' . (($page - 1) * 30),
             [$this->tid(), $type]);
         $this->view($view, ['title' => $title, 'rows' => $rows, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30))]);
     }

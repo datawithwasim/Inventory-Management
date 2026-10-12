@@ -267,7 +267,7 @@ check('a set is returned as the set line (credit 8960) plus its parts back on ra
 
 echo "Permissions\n";
 $staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
-$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('staff can view sales pages', $s->get('/sales/orders')['status'] === 200 && $s->get("/sales/invoices/$inv1")['status'] === 200 && $s->get('/customers')['status'] === 200);

@@ -20,13 +20,13 @@ final class PurchaseReturnController extends PurchaseBase
             'SELECT r.*, s.name AS supplier, w.name AS warehouse, g.grn_no, b.bill_no, u.name AS user_name
              FROM purchase_returns r JOIN suppliers s ON s.id = r.supplier_id JOIN warehouses w ON w.id = r.warehouse_id JOIN grns g ON g.id = r.grn_id
              LEFT JOIN purchase_bills b ON b.id = r.bill_id LEFT JOIN users u ON u.id = r.created_by
-             WHERE r.tenant_id = ? AND r.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE r.tenant_id = ? AND r.id = ?' . \Core\Scope::sql('r.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
         $t = $this->tid();
-        [$page, $pages, $limit] = $this->pageOf('purchase_returns', 'tenant_id = ?', [$t]);
+        [$page, $pages, $limit] = $this->pageOf('purchase_returns', 'tenant_id = ?' . \Core\Scope::sql('warehouse_id'), [$t]);
         $rows = DB::all(
             "SELECT r.*, s.name AS supplier, g.grn_no FROM purchase_returns r JOIN suppliers s ON s.id = r.supplier_id JOIN grns g ON g.id = r.grn_id
              WHERE r.tenant_id = ? ORDER BY r.id DESC $limit", [$t]);
@@ -40,7 +40,7 @@ final class PurchaseReturnController extends PurchaseBase
         $grnId = (int)($_GET['grn'] ?? 0);
         if (!$grnId) {
             $q = trim((string)($_GET['q'] ?? ''));
-            $where = 'g.tenant_id = ?';
+            $where = 'g.tenant_id = ?' . \Core\Scope::sql('g.warehouse_id');
             $params = [$t];
             if ($q !== '') { $where .= ' AND (g.grn_no LIKE ? OR s.name LIKE ? OR g.supplier_ref LIKE ?)'; $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; array_push($params, $like, $like, $like); }
             $rows = DB::all(
@@ -50,7 +50,7 @@ final class PurchaseReturnController extends PurchaseBase
             $this->view('app/purchase/return_pick', ['title' => 'New purchase return', 'rows' => $rows, 'q' => $q]);
             return;
         }
-        $g = DB::one('SELECT g.*, s.name AS supplier, w.name AS warehouse FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id WHERE g.tenant_id = ? AND g.id = ?', [$t, $grnId]) ?? $this->notFound();
+        $g = DB::one('SELECT g.*, s.name AS supplier, w.name AS warehouse FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id WHERE g.tenant_id = ? AND g.id = ?' . \Core\Scope::sql('g.warehouse_id'), [$t, $grnId]) ?? $this->notFound();
         $items = DB::all(
             'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no
              FROM grn_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id

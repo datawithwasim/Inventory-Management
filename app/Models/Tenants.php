@@ -23,6 +23,13 @@ final class Tenants
         return array_values(array_merge($perms, ['sales.create']));
     }
 
+    /** Warehouse Incharge / Operator: the people who work inside one warehouse. */
+    private static function warehousePermissions(bool $incharge): array
+    {
+        $op = ['items.view', 'warehouses.view', 'stock.view', 'stock.transfer', 'stock.receive'];
+        return $incharge ? array_merge($op, ['masters.view', 'warehouses.create', 'warehouses.edit', 'stock.adjust', 'purchase.view', 'purchase.create', 'sales.view', 'reports.view']) : $op;
+    }
+
     public static function uniqueSlug(string $name): string
     {
         $base = slugify($name);
@@ -63,10 +70,12 @@ final class Tenants
                 'Owner' => ['owner' => 1, 'perms' => []],
                 'Admin' => ['owner' => 0, 'perms' => self::allPermissions()],
                 'Staff' => ['owner' => 0, 'perms' => self::staffPermissions()],
+                'Warehouse Incharge' => ['owner' => 0, 'perms' => self::warehousePermissions(true), 'bound' => 1],
+                'Warehouse Operator' => ['owner' => 0, 'perms' => self::warehousePermissions(false), 'bound' => 1],
             ];
             foreach ($defs as $name => $def) {
                 $rid = DB::insert('roles', ['tenant_id' => $tenantId, 'name' => $name,
-                    'is_owner' => $def['owner'], 'is_system' => 1]);
+                    'is_owner' => $def['owner'], 'is_system' => 1, 'warehouse_bound' => $def['bound'] ?? 0]);
                 $roleIds[$name] = $rid;
                 foreach ($def['perms'] as $p) DB::insert('role_permissions', ['role_id' => $rid, 'permission' => $p]);
             }

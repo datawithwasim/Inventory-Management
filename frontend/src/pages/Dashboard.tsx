@@ -23,17 +23,21 @@ export default function Dashboard() {
   return (
     <>
       <PageHead title={`Hello, ${session?.user?.name.split(' ')[0]}`} />
+      {d.scoped && <div className="alert alert-info py-2"><i className="bi bi-building" /> You work at <strong>{d.scoped}</strong> — the figures below are for this warehouse.</div>}
       <div className="row g-3 mb-3">
-        <Kpi label="Sales" value={money(d.salesNow)} sub={trend(sc)} />
-        <Kpi label="Purchases" value={money(d.buyNow)} sub={trend(bc)} />
-        <Kpi label="To receive from customers" value={money(d.receivable)} tone={d.receivable > 0 ? 'text-warning' : ''} href={'/sales/invoices?status=unpaid'} />
-        <Kpi label="To pay suppliers" value={money(d.payable)} tone={d.payable > 0 ? 'text-danger' : ''} href={'/purchase/bills?status=unpaid'} />
+        {!d.scoped && <>
+          <Kpi label="Sales" value={money(d.salesNow)} sub={trend(sc)} />
+          <Kpi label="Purchases" value={money(d.buyNow)} sub={trend(bc)} />
+          <Kpi label="To receive from customers" value={money(d.receivable)} tone={d.receivable > 0 ? 'text-warning' : ''} href={'/sales/invoices?status=unpaid'} />
+          <Kpi label="To pay suppliers" value={money(d.payable)} tone={d.payable > 0 ? 'text-danger' : ''} href={'/purchase/bills?status=unpaid'} />
+        </>}
         <Kpi label="Stock value" value={money(d.stockValue)} sub={`${d.rolls} ${term('batch', true).toLowerCase()} in stock`} />
-        <Kpi label="Low stock" value={String(d.lowCount)} tone={d.lowCount > 0 ? 'text-danger' : ''} href={'/stock?low=1'} />
+        {!d.scoped && <Kpi label="Low stock" value={String(d.lowCount)} tone={d.lowCount > 0 ? 'text-danger' : ''} href={'/stock?low=1'} />}
         <Kpi label="Open orders" value={String(d.ordersOpen)} href={'/sales/orders'} />
         <Kpi label="Transfers on the road" value={String(d.transitOpen ?? 0)} sub={d.transitLate ? `${d.transitLate} overdue` : 'none overdue'} tone={d.transitLate ? 'text-danger' : ''} href={'/stock/transfers?status=open'} />
-        <Kpi label="Team" value={`${d.userCount} users`} sub={`${d.roleCount} roles`} />
+        {!d.scoped && <Kpi label="Team" value={`${d.userCount} users`} sub={`${d.roleCount} roles`} />}
       </div>
+      {!d.scoped && (
       <div className="row g-3">
         <div className="col-lg-6"><div className="card h-100"><div className="card-header">Top selling {term('item', true).toLowerCase()}</div>
           <table className="table table-sm mb-0"><tbody>
@@ -48,6 +52,7 @@ export default function Dashboard() {
             {(d.low ?? []).slice(0, 8).map((l: any, i: number) => <tr key={i}><td><Link to={`/items/${l.id}`}>{l.name}</Link></td><td className="text-end">{qty(l.stock)} {l.unit}</td><td className="text-end text-muted small">reorder at {qty(l.reorder_level)}</td></tr>)}
             {!(d.low ?? []).length && <tr><td className="text-muted">Everything is above its reorder level.</td></tr>}</tbody></table></div></div>
       </div>
+      )}
     </>
   );
 }

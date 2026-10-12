@@ -20,7 +20,7 @@ final class PurchaseOrderController extends PurchaseBase
             'SELECT p.*, s.name AS supplier, w.name AS warehouse, u1.name AS created_name, u2.name AS approved_name
              FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id JOIN warehouses w ON w.id = p.warehouse_id
              LEFT JOIN users u1 ON u1.id = p.created_by LEFT JOIN users u2 ON u2.id = p.approved_by
-             WHERE p.tenant_id = ? AND p.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE p.tenant_id = ? AND p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     private function items(int $poId): array
@@ -39,10 +39,10 @@ final class PurchaseOrderController extends PurchaseBase
         $status = (string)($_GET['status'] ?? '');
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'p.tenant_id = ?';
+        $where = 'p.tenant_id = ?' . \Core\Scope::sql('p.warehouse_id');
         $params = [$t];
         if (isset(Purchase::PO_STATUS[$status])) { $where .= ' AND p.status = ?'; $params[] = $status; }
-        if ($status === 'open') { $where = 'p.tenant_id = ? AND p.status IN (\'pending_approval\',\'approved\',\'partial\')'; }
+        if ($status === 'open') { $where = 'p.tenant_id = ?' . \Core\Scope::sql('p.warehouse_id') . ' AND p.status IN (\'pending_approval\',\'approved\',\'partial\')'; }
         if ($supplier) { $where .= ' AND p.supplier_id = ?'; $params[] = $supplier; }
         if ($q !== '') { $where .= ' AND p.po_no LIKE ?'; $params[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
         [$page, $pages, $limit] = $this->pageOf('purchase_orders p', $where, $params);

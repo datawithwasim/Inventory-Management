@@ -20,8 +20,8 @@ export function UserList() {
       <Messages items={msgs} onClose={() => setMsgs([])} />
       <div className="text-muted mb-2">{d.users.length} user(s)</div>
       <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th /></tr></thead><tbody>
-          {d.users.map((x: any) => <tr key={x.id}><td>{x.name}</td><td>{x.email}</td><td><Badge>{x.role_name}</Badge></td><td>{Number(x.is_active) ? <Badge tone="success">Active</Badge> : <Badge tone="danger">Disabled</Badge>}</td>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Works at</th><th>Status</th><th>Last login</th><th /></tr></thead><tbody>
+          {d.users.map((x: any) => <tr key={x.id}><td>{x.name}</td><td>{x.email}</td><td><Badge>{x.role_name}</Badge></td><td>{x.warehouse ?? <span className="text-muted">All warehouses</span>}</td><td>{Number(x.is_active) ? <Badge tone="success">Active</Badge> : <Badge tone="danger">Disabled</Badge>}</td>
             <td className="text-muted small">{x.last_login_at ? `${fdate(String(x.last_login_at).slice(0, 10))} ${String(x.last_login_at).slice(11, 16)}` : '—'}</td>
             <td className="text-end text-nowrap">
               {can('users.edit') && <><Link className="btn btn-sm btn-outline-primary" to={`/users/${x.id}/edit`}>Edit</Link>{' '}<button className="btn btn-sm btn-outline-warning" onClick={() => act(`/users/${x.id}/toggle`)}>{Number(x.is_active) ? 'Disable' : 'Enable'}</button>{' '}</>}
@@ -40,7 +40,7 @@ export function UserForm() {
     if (src.data.redirect && !src.data.data) { nav('/' + String(src.data.redirect).replace(/^\//, ''), { replace: true }); return; }
     if (v || !src.data.data) return;
     const u = src.data.data.user ?? {};
-    setV({ name: u.name ?? '', email: u.email ?? '', role_id: String(u.role_id ?? src.data.data.roles?.[0]?.id ?? ''), password: '' });
+    setV({ name: u.name ?? '', email: u.email ?? '', role_id: String(u.role_id ?? src.data.data.roles?.[0]?.id ?? ''), warehouse_id: u.warehouse_id ? String(u.warehouse_id) : (u.id ? '0' : ''), password: '' });
   }, [src.data, v, nav]);
   if (src.isLoading || !v || !src.data) return <Spinner />;
   const d = src.data.data;
@@ -60,6 +60,17 @@ export function UserForm() {
         <div className="mb-3"><label className="form-label">Name</label><input className="form-control" required maxLength={120} value={v.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div className="mb-3"><label className="form-label">Email</label><input type="email" className="form-control" required value={v.email} onChange={(e) => set('email', e.target.value)} /></div>
         <div className="mb-3"><label className="form-label">Role</label><select className="form-select" required value={v.role_id} onChange={(e) => set('role_id', e.target.value)}>{d.roles.map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
+        {!d.restricted && !(d.roles.find((r: any) => String(r.id) === v.role_id)?.is_owner > 0) && (() => {
+          const bound = Number(d.roles.find((r: any) => String(r.id) === v.role_id)?.warehouse_bound) > 0;
+          return <div className="mb-3"><label className="form-label">Works at</label>
+            <select className="form-select" required value={v.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)}>
+              <option value="">— choose —</option>
+              {!bound && <option value="0">All warehouses (head office)</option>}
+              {d.warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <div className="form-text">{bound ? 'This role belongs to one warehouse: the person only sees and works on that warehouse.' : 'Pick a warehouse to limit this person to it, or "All warehouses" for head office.'}</div></div>;
+        })()}
+        {d.restricted && <div className="mb-3 text-muted small">This person will work at <strong>your warehouse</strong>.</div>}
         <div className="mb-1"><label className="form-label">{id ? 'New password (leave blank to keep)' : 'Password'}</label><input type="password" className="form-control" minLength={8} required={!id} autoComplete="new-password" value={v.password} onChange={(e) => set('password', e.target.value)} /></div>
       </div></div>
     </form>
@@ -81,7 +92,7 @@ export function RoleList() {
       <div className="text-muted mb-2">Control what each team member can see and do.</div>
       <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">
         <thead><tr><th>Role</th><th>Users</th><th>Type</th><th /></tr></thead><tbody>
-          {d.roles.map((r: any) => <tr key={r.id}><td>{r.name}</td><td>{r.user_count}</td><td>{Number(r.is_owner) ? 'Full access' : Number(r.is_system) ? 'Default' : 'Custom'}</td>
+          {d.roles.map((r: any) => <tr key={r.id}><td>{r.name}</td><td>{r.user_count}</td><td>{Number(r.is_owner) ? 'Full access' : Number(r.is_system) ? 'Default' : 'Custom'}{Number(r.warehouse_bound) ? ' · warehouse staff' : ''}</td>
             <td className="text-end text-nowrap">
               {!Number(r.is_owner) && can('roles.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/roles/${r.id}/edit`}>Permissions</Link>}{' '}
               {!Number(r.is_system) && can('roles.delete') && <button className="btn btn-sm btn-outline-danger" onClick={() => del(r.id)}>Delete</button>}</td></tr>)}
@@ -95,20 +106,20 @@ const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'adjust', 'trans
 export function RoleForm() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();
   const src = useQuery({ queryKey: ['role-form', id ?? 'new'], gcTime: 0, queryFn: async () => await get(id ? `/roles/${id}/edit` : '/roles/create') });
-  const [name, setName] = useState<string | null>(null); const [perms, setPerms] = useState<Set<string>>(new Set());
+  const [name, setName] = useState<string | null>(null); const [bound, setBound] = useState(false); const [perms, setPerms] = useState<Set<string>>(new Set());
   const [msgs, setMsgs] = useState<Msg[]>([]); const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!src.data) return;
     if (src.data.redirect && !src.data.data) { nav('/' + String(src.data.redirect).replace(/^\//, ''), { replace: true }); return; }
     if (name !== null || !src.data.data) return;
-    setName(src.data.data.role?.name ?? ''); setPerms(new Set(src.data.data.granted ?? []));
+    setName(src.data.data.role?.name ?? ''); setBound(!!Number(src.data.data.role?.warehouse_bound)); setPerms(new Set(src.data.data.granted ?? []));
   }, [src.data, name, nav]);
   if (src.isLoading || name === null || !src.data) return <Spinner />;
   const d = src.data.data; const system = !!Number(d.role?.is_system);
   const toggle = (p: string) => setPerms((s) => { const n = new Set(s); n.has(p) ? n.delete(p) : n.add(p); return n; });
   const save = async () => {
     setSaving(true); setMsgs([]);
-    const r = await post(id ? `/roles/${id}` : '/roles', { name, perms: [...perms] });
+    const r = await post(id ? `/roles/${id}` : '/roles', { name, perms: [...perms], warehouse_bound: bound ? '1' : '' });
     setSaving(false);
     if (!r.ok) { setMsgs(r.messages ?? []); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     qc.invalidateQueries({ queryKey: ['roles'] }); nav('/roles');
@@ -117,7 +128,9 @@ export function RoleForm() {
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <PageHead title={id ? 'Edit role' : 'New role'}><button type="button" className="btn btn-outline-secondary" onClick={() => nav('/roles')}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save role'}</button></PageHead>
       <Messages items={msgs} />
-      <div className="card mb-3" style={{ maxWidth: 560 }}><div className="card-body"><label className="form-label">Role name</label><input className="form-control" maxLength={80} readOnly={system} required={!system} value={name} onChange={(e) => setName(e.target.value)} /></div></div>
+      <div className="card mb-3" style={{ maxWidth: 560 }}><div className="card-body"><label className="form-label">Role name</label><input className="form-control" maxLength={80} readOnly={system} required={!system} value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="form-check mt-3"><input className="form-check-input" type="checkbox" id="wb" checked={bound} onChange={(e) => setBound(e.target.checked)} /><label className="form-check-label" htmlFor="wb">Warehouse staff role</label>
+          <div className="form-text">People on this role belong to one warehouse and can only see and act on that warehouse (e.g. Operator, Incharge).</div></div></div></div>
       <div className="card"><div className="table-responsive"><table className="table perm-table mb-0">
         <thead><tr><th>Module</th>{ACTIONS.map((a) => <th key={a} className="text-center text-capitalize">{a}</th>)}</tr></thead><tbody>
           {Object.entries(d.modules as Record<string, { label: string; actions: string[] }>).map(([key, def]) => (

@@ -230,7 +230,7 @@ check('formula-looking names are exported safely', str_contains($a->get('/items/
 
 echo "Permissions\n";
 $staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
-$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('staff can view items and stock', $s->get('/items')['status'] === 200 && $s->get('/stock')['status'] === 200 && $s->get("/stock/batches/$batch")['status'] === 200);

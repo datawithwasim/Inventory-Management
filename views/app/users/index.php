@@ -10,13 +10,14 @@
 </div>
 <div class="card"><div class="table-responsive">
 <table class="table table-hover mb-0 align-middle">
-  <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Works at</th><th>Status</th><th>Last login</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($users as $x): ?>
     <tr>
       <td><?= e($x['name']) ?></td>
       <td><?= e($x['email']) ?></td>
       <td><span class="badge text-bg-secondary"><?= e($x['role_name']) ?></span></td>
+      <td><?= e($x['warehouse'] ?? 'All warehouses') ?></td>
       <td><?= $x['is_active'] ? '<span class="badge text-bg-success">Active</span>' : '<span class="badge text-bg-danger">Disabled</span>' ?></td>
       <td class="text-muted small"><?= e($x['last_login_at'] ?? '—') ?></td>
       <td class="text-end text-nowrap">

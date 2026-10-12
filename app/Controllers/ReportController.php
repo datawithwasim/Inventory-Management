@@ -19,7 +19,7 @@ final class ReportController extends PurchaseBase
     public function index(): void
     {
         $groups = [];
-        foreach (Reports::all() as $slug => $d) $groups[$d['group']][$slug] = $d;
+        foreach (Reports::available() as $slug => $d) $groups[$d['group']][$slug] = $d;
         $this->view('app/reports/index', ['title' => 'Reports', 'groups' => $groups, 'names' => Reports::GROUPS]);
     }
 
@@ -87,6 +87,10 @@ final class ReportController extends PurchaseBase
     {
         $t = $this->tid();
         $back = 'reports/low-stock';
+        if (\Core\Scope::restricted()) {
+            flash('warning', 'Purchase orders from the low-stock list are raised by head office.');
+            redirect('reports');
+        }
         $pick = array_map('intval', (array)($_POST['pick'] ?? []));
         $rows = array_filter(Reports::lowStock(0), fn($r) => (float)$r['suggest'] > 0 && (!$pick || in_array((int)$r['item_id'], $pick, true)));
         if (!$rows) {

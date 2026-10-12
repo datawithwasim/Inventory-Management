@@ -24,9 +24,17 @@ final class Reports
 
     public static function find(string $slug): ?array
     {
-        $all = self::all();
+        $all = self::available();
         if (!isset($all[$slug])) return null;
         return ['slug' => $slug] + $all[$slug];
+    }
+
+    /** What the signed-in user may open. A warehouse-bound user gets the warehouse reports only (the rest are company-wide). */
+    public static function available(): array
+    {
+        $all = self::all();
+        if (!\Core\Scope::restricted()) return $all;
+        return array_filter($all, fn($d) => in_array('warehouse', $d['filters'], true));
     }
 
     /** Parse and sanitise the filters a report accepts. */
@@ -41,7 +49,7 @@ final class Reports
                     $f[$name] = $ok ? $v : ($name === 'from' ? date('Y-m-d', strtotime('-29 days')) : date('Y-m-d'));
                     break;
                 case 'warehouse': case 'category': case 'customer': case 'supplier':
-                    $f[$name] = (int)$v;
+                    $f[$name] = $name === 'warehouse' ? (\Core\Scope::warehouse() ?? (int)$v) : (int)$v;
                     break;
                 case 'days':
                     $f[$name] = max(1, min(3650, (int)($v === '' ? ($def['days'] ?? 90) : $v)));
@@ -63,7 +71,7 @@ final class Reports
     {
         $t = self::t();
         return [
-            'warehouse' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY is_default DESC, name', [$t]),
+            'warehouse' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ?' . \Core\Scope::sql('id') . ' ORDER BY is_default DESC, name', [$t]),
             'category' => DB::all('SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY name', [$t]),
             'customer' => DB::all('SELECT id, name FROM customers WHERE tenant_id = ? ORDER BY name', [$t]),
             'supplier' => DB::all('SELECT id, name FROM suppliers WHERE tenant_id = ? ORDER BY name', [$t]),

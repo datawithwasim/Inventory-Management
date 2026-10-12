@@ -82,9 +82,9 @@ export function TransferDetail() {
     <RecordPage entity="transfer" id={doc.id} name={doc.doc_no} back="/stock/transfers"
       badges={between ? <StatusBadge r={doc} statuses={d.statuses} /> : <Badge tone="light">{d.heading}</Badge>}
       actions={<>
-        {open && can('stock.receive') && pendingLines.length > 0 && <button className="btn btn-sm btn-success" onClick={() => begin('receive')}><i className="bi bi-box-arrow-in-down" /> Receive goods</button>}
-        {open && can('stock.adjust') && pendingLines.length > 0 && <button className="btn btn-sm btn-outline-warning" onClick={() => begin('settle')}>Settle shortage</button>}
-        {doc.status === 'in_transit' && can('stock.transfer') && <button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => send('cancel', {}, 'Cancel this dispatch? Every roll goes back to the rack it left.')}>Cancel dispatch</button>}
+        {d.can?.receive && pendingLines.length > 0 && <button className="btn btn-sm btn-success" onClick={() => begin('receive')}><i className="bi bi-box-arrow-in-down" /> Receive goods</button>}
+        {d.can?.settle && pendingLines.length > 0 && <button className="btn btn-sm btn-outline-warning" onClick={() => begin('settle')}>Settle shortage</button>}
+        {d.can?.cancel && <button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => send('cancel', {}, 'Cancel this dispatch? Every roll goes back to the rack it left.')}>Cancel dispatch</button>}
         {between && <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/stock/transfers/${doc.id}/challan`)}><i className="bi bi-file-earmark-text" /> Challan</a>}
         <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/stock/transfers/${doc.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>
       </>}

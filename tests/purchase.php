@@ -120,7 +120,7 @@ $poA = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA
 $a->post("/purchase/orders/$poA/submit", [], "/purchase/orders/$poA");
 check('with approval on, submit waits for approval', $val('SELECT status FROM purchase_orders WHERE id = ?', [$poA]) === 'pending_approval');
 $staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
-$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole], '/users/create');
+$a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
 $s->post("/purchase/orders/$poA/approve", [], '/purchase/orders');

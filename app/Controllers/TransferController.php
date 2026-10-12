@@ -9,6 +9,7 @@ use Core\Audit;
 use Core\Auth;
 use Core\DB;
 use Core\Numbering;
+use Core\Scope;
 
 /**
  * Stock transfers.
@@ -39,6 +40,7 @@ final class TransferController extends StockDocController
         elseif ($status === 'overdue') $where .= " AND d.status IN ('in_transit','partial') AND d.expected_date IS NOT NULL AND d.expected_date < CURDATE()";
         elseif (isset(self::STATUS[$status])) { $where .= ' AND d.status = ?'; $params[] = $status; }
         if ($wh) { $where .= ' AND (d.warehouse_id = ? OR d.to_warehouse_id = ?)'; array_push($params, $wh, $wh); }
+        $where .= Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id');   // a warehouse user sees what they send and what is sent to them
         $total = (int)DB::val("SELECT COUNT(*) FROM stock_docs d WHERE $where", $params);
         $rows = DB::all(
             "SELECT d.*, w.name AS warehouse, w2.name AS to_warehouse, u.name AS user_name,
@@ -52,9 +54,9 @@ final class TransferController extends StockDocController
             'title' => 'Stock transfers', 'rows' => $rows, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30)), 'status' => $status, 'wh' => $wh,
             'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY name', [$t]), 'statuses' => self::STATUS,
             'counts' => [
-                'open' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')", [$t]),
-                'overdue' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()", [$t]),
-                'short' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status = 'received_short'", [$t]),
+                'open' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
+                'overdue' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
+                'short' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status = 'received_short'" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
             ],
         ]);
     }
@@ -64,7 +66,7 @@ final class TransferController extends StockDocController
     public function create(): void
     {
         $this->view('app/stock/transfer_form', [
-            'title' => 'New stock transfer', 'warehouses' => $this->activeWarehouses(), 'oldLines' => $this->oldLines(), 'racks' => $this->racksByWarehouse(),
+            'title' => 'New stock transfer', 'warehouses' => $this->activeWarehouses(), 'all_warehouses' => $this->allActiveWarehouses(), 'oldLines' => $this->oldLines(), 'racks' => $this->racksByWarehouse(),
         ]);
     }
 
@@ -82,7 +84,7 @@ final class TransferController extends StockDocController
         $this->enforceFields('transfer', $back);
         $d = $this->input();
         $from = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back, 'source warehouse');
-        $to = $this->activeWarehouse($d['to_warehouse_id'] ?? 0, $back, 'destination warehouse');
+        $to = $this->activeWarehouse($d['to_warehouse_id'] ?? 0, $back, 'destination warehouse', false);
         $sameWh = (int)$from['id'] === (int)$to['id'];
         $note = $this->optionalText($d['note'] ?? '', 255, 'Note', $back);
         $transport = $this->optionalText($d['transport'] ?? '', 100, 'Transporter', $back);
@@ -195,14 +197,37 @@ final class TransferController extends StockDocController
             'events' => $this->events((int)$doc['id']), 'sum' => $sum, 'between' => $between, 'open' => in_array($doc['status'], self::OPEN, true),
             'racks' => $this->racksByWarehouse(), 'statuses' => self::STATUS,
             'overdue' => in_array($doc['status'], self::OPEN, true) && $doc['expected_date'] !== null && $doc['expected_date'] < date('Y-m-d'),
+            // what this user may do with it (their warehouse and their role)
+            'can' => [
+                'receive' => $between && in_array($doc['status'], self::OPEN, true) && \Core\Auth::can('stock.receive') && Scope::allows((int)$doc['to_warehouse_id']),
+                'settle' => $between && in_array($doc['status'], self::OPEN, true) && \Core\Auth::can('stock.adjust') && (Scope::warehouse() === null || in_array(Scope::warehouse(), [(int)$doc['warehouse_id'], (int)$doc['to_warehouse_id']], true)),
+                'cancel' => $between && $doc['status'] === 'in_transit' && \Core\Auth::can('stock.transfer') && Scope::allows((int)$doc['warehouse_id']),
+            ],
         ]);
     }
 
-    private function openDoc(string $id, string $back = ''): array
+    /** Warehouse users act only on their side of a transfer: 'to' = the receiver, 'from' = the sender, 'either' = settling a shortage. */
+    private function guard(array $doc, string $side, string $back): void
+    {
+        $own = Scope::warehouse();
+        if ($own === null) return;
+        $from = (int)$doc['warehouse_id'] === $own; $to = (int)$doc['to_warehouse_id'] === $own;
+        $ok = match ($side) { 'to' => $to, 'from' => $from, default => $from || $to };
+        if ($ok) return;
+        $name = fn(int $id) => (string)DB::val('SELECT name FROM warehouses WHERE id = ?', [$id]);
+        $this->bounce(match ($side) {
+            'to' => 'Only ' . $name((int)$doc['to_warehouse_id']) . ', the receiving warehouse, can receive this transfer.',
+            'from' => 'Only ' . $name((int)$doc['warehouse_id']) . ', the sending warehouse, can cancel this transfer.',
+            default => 'Only the sending or the receiving warehouse can settle this transfer.',
+        }, $back);
+    }
+
+    private function openDoc(string $id, string $side, string $back = ''): array
     {
         $doc = $this->loadDoc($id, 'transfer');
         $back = $back ?: "stock/transfers/{$doc['id']}";
         if (!in_array($doc['status'], self::OPEN, true)) $this->bounce('This transfer is not waiting for anything any more.', $back);
+        $this->guard($doc, $side, $back);
         return $doc;
     }
 
@@ -225,7 +250,7 @@ final class TransferController extends StockDocController
     /** The receiving warehouse confirms what arrived and puts it on racks. Can be done in several goes. */
     public function receive(string $id): void
     {
-        $doc = $this->openDoc($id);
+        $doc = $this->openDoc($id, 'to');
         $back = "stock/transfers/{$doc['id']}";
         $d = $this->input();
         $note = $this->optionalText($d['note'] ?? '', 255, 'Note', $back);
@@ -275,7 +300,7 @@ final class TransferController extends StockDocController
     /** What did not arrive: write it off as lost, or send it back to the sender's racks. */
     public function settle(string $id): void
     {
-        $doc = $this->openDoc($id);
+        $doc = $this->openDoc($id, 'either');
         $back = "stock/transfers/{$doc['id']}";
         $d = $this->input();
         $in = (array)($d['lines'] ?? []);
@@ -324,7 +349,7 @@ final class TransferController extends StockDocController
     /** Takes a dispatch back before anything arrived: every roll goes back to the rack it left. */
     public function cancel(string $id): void
     {
-        $doc = $this->openDoc($id);
+        $doc = $this->openDoc($id, 'from');
         $back = "stock/transfers/{$doc['id']}";
         $touched = (float)DB::val('SELECT COALESCE(SUM(qty_received + qty_lost + qty_returned),0) FROM stock_doc_lines WHERE tenant_id = ? AND doc_id = ?', [$this->tid(), $doc['id']]);
         if ($touched > 0.0005 || $doc['status'] !== 'in_transit') $this->bounce('Part of this transfer was already received or settled, so it cannot be cancelled.', $back);

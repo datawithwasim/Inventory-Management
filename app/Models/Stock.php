@@ -5,6 +5,7 @@ namespace App\Models;
 
 use Core\Auth;
 use Core\DB;
+use Core\Scope;
 use Core\Settings;
 
 /**
@@ -172,7 +173,7 @@ final class Stock
     {
         $sql = 'SELECT b.id, b.batch_no, b.supplier_lot, b.received_date, b.received_qty,
                        COALESCE(SUM(s.qty), 0) AS balance,
-                       (SELECT COALESCE(SUM' . self::TRANSIT_PENDING . ', 0) ' . self::TRANSIT_FROM . ' WHERE l.tenant_id = b.tenant_id AND l.batch_id = b.id) AS in_transit
+                       (SELECT COALESCE(SUM' . self::TRANSIT_PENDING . ', 0) ' . self::TRANSIT_FROM . ' WHERE l.tenant_id = b.tenant_id AND l.batch_id = b.id' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ') AS in_transit
                 FROM batches b LEFT JOIN stock_balances s
                   ON s.batch_id = b.id AND s.tenant_id = b.tenant_id' . ($warehouseId ? ' AND s.warehouse_id = ?' : '') . '
                 WHERE b.tenant_id = ? AND b.variant_id = ?
@@ -203,7 +204,7 @@ final class Stock
     public static function transitOfBatch(int $batchId): array
     {
         return DB::all('SELECT d.id, d.doc_no, d.expected_date, w1.name AS from_warehouse, w2.name AS to_warehouse, ' . self::TRANSIT_PENDING . ' AS qty ' . self::TRANSIT_FROM
-            . ' JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id WHERE l.tenant_id = ? AND l.batch_id = ? AND ' . self::TRANSIT_PENDING . ' > 0.0005 ORDER BY d.id', [self::tid(), $batchId]);
+            . ' JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id WHERE l.tenant_id = ? AND l.batch_id = ? AND ' . self::TRANSIT_PENDING . ' > 0.0005' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ' ORDER BY d.id', [self::tid(), $batchId]);
     }
 
     public static function batchStatus(float $balance, float $received, float $transit = 0.0): string
@@ -218,7 +219,7 @@ final class Stock
     {
         $rows = DB::all(
             'SELECT bc.qty, COALESCE((SELECT SUM(s.qty) FROM stock_balances s
-                    WHERE s.tenant_id = bc.tenant_id AND s.variant_id = bc.component_variant_id), 0) AS have
+                    WHERE s.tenant_id = bc.tenant_id AND s.variant_id = bc.component_variant_id' . Scope::sql('s.warehouse_id') . '), 0) AS have
              FROM bundle_components bc WHERE bc.tenant_id = ? AND bc.bundle_item_id = ?', [self::tid(), $itemId]);
         if (!$rows) return 0;
         return (int)min(array_map(fn($r) => floor((float)$r['have'] / max((float)$r['qty'], 0.001)), $rows));

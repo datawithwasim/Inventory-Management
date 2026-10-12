@@ -18,7 +18,7 @@ final class InvoiceController extends SalesBase
         return DB::one(
             'SELECT i.*, c.name AS customer, c.address AS cust_address, c.phone AS cust_phone, c.tax_no AS cust_tax, d.delivery_no, d.ship_to, o.order_no
              FROM sales_invoices i JOIN customers c ON c.id = i.customer_id LEFT JOIN deliveries d ON d.id = i.delivery_id LEFT JOIN sales_orders o ON o.id = i.order_id
-             WHERE i.tenant_id = ? AND i.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE i.tenant_id = ? AND i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
@@ -26,7 +26,7 @@ final class InvoiceController extends SalesBase
         $status = (string)($_GET['status'] ?? '');
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'i.tenant_id = ?';
+        $where = 'i.tenant_id = ?' . \Core\Scope::sql('(SELECT dd.warehouse_id FROM deliveries dd WHERE dd.id = i.delivery_id)');
         $params = [$this->tid()];
         $due = '(i.total - i.returned_amount - i.paid_amount)';
         $where .= match ($status) {

@@ -9,6 +9,7 @@ use Core\Audit;
 use Core\Auth;
 use Core\Controller;
 use Core\DB;
+use Core\Scope;
 use Core\Numbering;
 
 final class ItemController extends Controller
@@ -72,7 +73,7 @@ final class ItemController extends Controller
             $where .= ' AND i.category_id = ?';
             $params[] = $cat;
         }
-        $stockSql = '(SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id WHERE v.item_id = i.id)';
+        $stockSql = '(SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id WHERE v.item_id = i.id' . Scope::sql('s.warehouse_id') . ')';
         if ($low) $where .= " AND i.is_bundle = 0 AND i.reorder_level > 0 AND $stockSql <= i.reorder_level";
 
         $total = (int)DB::val("SELECT COUNT(*) FROM items i WHERE $where", $params);
@@ -108,20 +109,21 @@ final class ItemController extends Controller
         foreach ($variants as &$v) {
             $v['by_wh'] = DB::all(
                 'SELECT w.name, SUM(s.qty) AS qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
-                 WHERE s.tenant_id = ? AND s.variant_id = ? GROUP BY w.id, w.name HAVING qty <> 0 ORDER BY w.name', [$t, $v['id']]);
+                 WHERE s.tenant_id = ? AND s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name HAVING qty <> 0 ORDER BY w.name', [$t, $v['id']]);
             $v['by_rack'] = DB::all(
                 'SELECT w.name AS warehouse, COALESCE(l.code, \'\') AS rack, SUM(s.qty) AS qty FROM stock_balances s
                  JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
-                 WHERE s.tenant_id = ? AND s.variant_id = ? GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
+                 WHERE s.tenant_id = ? AND s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
                  ORDER BY w.name, l.code', [$t, $v['id']]);
             $v['total'] = array_sum(array_column($v['by_wh'], 'qty'));
-            $v['in_transit'] = Stock::transitByVariant([(int)$v['id']])[(int)$v['id']] ?? 0;
-            $v['batches'] = $item['track_batch'] ? Stock::batchesFor((int)$v['id'], null, false) : [];
+            $v['in_transit'] = Stock::transitByVariant([(int)$v['id']], Scope::warehouse() ?? 0)[(int)$v['id']] ?? 0;
+            $v['batches'] = $item['track_batch'] ? Stock::batchesFor((int)$v['id'], Scope::warehouse(), false) : [];
+            if (Scope::restricted()) $v['batches'] = array_values(array_filter($v['batches'], fn($b) => (float)$b['balance'] > 0.0005 || (float)$b['in_transit'] > 0.0005));
         }
         unset($v);
         $components = $item['is_bundle'] ? DB::all(
             'SELECT bc.qty, v.sku, v.name AS vname, i.name AS iname, u.short_name AS unit,
-                    COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = bc.tenant_id AND s.variant_id = v.id),0) AS have
+                    COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = bc.tenant_id AND s.variant_id = v.id' . Scope::sql('s.warehouse_id') . '),0) AS have
              FROM bundle_components bc JOIN item_variants v ON v.id = bc.component_variant_id
              JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              WHERE bc.tenant_id = ? AND bc.bundle_item_id = ?', [$t, $item['id']]) : [];
@@ -130,7 +132,7 @@ final class ItemController extends Controller
              JOIN item_variants v ON v.id = l.variant_id JOIN warehouses w ON w.id = l.warehouse_id
              LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
              LEFT JOIN batches b ON b.id = l.batch_id
-             WHERE l.tenant_id = ? AND v.item_id = ? ORDER BY l.id DESC LIMIT 20', [$t, $item['id']]);
+             WHERE l.tenant_id = ? AND v.item_id = ?' . Scope::sql('l.warehouse_id') . ' ORDER BY l.id DESC LIMIT 20', [$t, $item['id']]);
         $meta = DB::one(
             'SELECT c.name AS category, b.name AS brand, x.name AS tax, x.rate FROM items i
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands b ON b.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id

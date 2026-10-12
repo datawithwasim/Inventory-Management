@@ -98,10 +98,10 @@ export default function Layout() {
             )}
             <Dropdown button={() => (
               <button className="user-btn" aria-label="Account menu"><span className="avatar">{initial}</span>
-                <span className="d-none d-md-block text-start lh-sm"><span className="d-block fw-semibold small">{user.name}</span><span className="d-block text-muted" style={{ fontSize: '.72rem' }}>{user.role}</span></span><i className="bi bi-chevron-down small d-none d-md-block" /></button>
+                <span className="d-none d-md-block text-start lh-sm"><span className="d-block fw-semibold small">{user.name}</span><span className="d-block text-muted" style={{ fontSize: '.72rem' }}>{user.role}{user.warehouse ? ` · ${user.warehouse.name}` : ''}</span></span><i className="bi bi-chevron-down small d-none d-md-block" /></button>
             )} menuClass="pm">
               {(close) => <>
-                <div className="pm-head"><span className="avatar avatar-lg">{initial}</span><div className="pm-who"><div className="pm-name">{user.name}</div><div className="pm-mail">{user.email}</div><div className="pm-role">{user.role} · {tenant.name}</div></div></div>
+                <div className="pm-head"><span className="avatar avatar-lg">{initial}</span><div className="pm-who"><div className="pm-name">{user.name}</div><div className="pm-mail">{user.email}</div><div className="pm-role">{user.role} · {user.warehouse ? user.warehouse.name : tenant.name}</div></div></div>
                 <div className="pm-list">{menu.account.map((it) => <AppLink key={it.path} item={it} className="pm-item" onClick={close}><i className={`bi bi-${it.icon}`} /><span>{it.label}</span></AppLink>)}</div>
                 <div className="pm-theme"><span><i className="bi bi-circle-half" /> Theme</span>
                   <div className="pm-seg" role="group" aria-label="Theme">
