@@ -57,6 +57,7 @@ $mk = function (string $name) use ($admin, $pro, $sfx): array {
 echo "Session and sign-in\n";
 $a = new J($base);
 $s = $a->session();
+check('signed out: the session carries the product colours, never a company\'s', str_contains((string)($s['json']['themeCss'] ?? ''), '--brand:#4f46e5'));
 check('signed out: the session call answers JSON with a CSRF token and no user', $s['status'] === 200 && ($s['json']['authenticated'] ?? null) === false && strlen($a->csrf) >= 32 && !isset($s['json']['user']));
 $r = $a->call('GET', '/customers');
 check('a protected route answers 401 JSON instead of redirecting to the login page', $r['status'] === 401 && ($r['json']['ok'] ?? null) === false);

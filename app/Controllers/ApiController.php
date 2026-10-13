@@ -23,7 +23,9 @@ final class ApiController extends Controller
     public function session(): void
     {
         $u = Auth::user();
-        $out = ['ok' => true, 'authenticated' => (bool)$u, 'csrf' => csrf_token(), 'base' => rtrim(url(''), '/')];
+        $out = ['ok' => true, 'authenticated' => (bool)$u, 'csrf' => csrf_token(), 'base' => rtrim(url(''), '/'),
+            // signed out, this is the product's own colours: the sign-in page must not keep the colours of the company that just left
+            'themeCss' => preg_replace('~</?style[^>]*>~', '', Theme::css())];
         if ($u) {
             $perms = $u['is_owner'] ? ['*'] : array_column(DB::all('SELECT permission FROM role_permissions WHERE role_id = ?', [$u['role_id']]), 'permission');
             $terms = [];
@@ -37,7 +39,6 @@ final class ApiController extends Controller
                 'fmt' => ['decimals' => max(0, min(3, (int)\Core\Settings::get('currency.decimals'))), 'grouping' => \Core\Settings::get('number.grouping'), 'symbol' => \Core\Settings::get('currency.symbol'),
                     'position' => \Core\Settings::get('currency.position'), 'date' => \Core\Settings::get('date.format') ?: 'Y-m-d'],
                 'stockTypes' => StockController::TYPES, 'poStatus' => Purchase::PO_STATUS, 'soStatus' => \App\Models\Sales::ORDER_STATUS, 'payStatus' => Purchase::PAY_STATUS, 'payMethods' => Purchase::METHODS,
-                'themeCss' => preg_replace('~</?style[^>]*>~', '', Theme::css()),
                 'theme' => ['brand' => Theme::get('appearance.brand'), 'sidebar' => Theme::get('appearance.sidebar'), 'density' => Theme::get('appearance.density'), 'mode' => Theme::get('appearance.mode')],
             ];
         }

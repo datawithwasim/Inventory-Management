@@ -38,7 +38,9 @@ export default function Layout() {
   const [mode, setModeState] = useState(currentMode());
   const [collapsed, setCollapsed] = useState(document.documentElement.classList.contains('sb-collapsed'));
   const [mobile, setMobile] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // one group open at a time (like an accordion); until one is clicked, the group of the current page is the open one
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  useEffect(() => { setOpenKey(null); }, [loc.pathname]);
   const [denied, setDenied] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearching(true); } }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
@@ -91,10 +93,10 @@ export default function Layout() {
           <AppLink item={menu.dashboard} className="sb-link" onClick={() => setMobile(false)}><i className={`bi bi-${menu.dashboard.icon}`} /><span>Dashboard</span></AppLink>
           {Object.entries(menu.groups).map(([key, g]) => {
             const active = g.items.some((it) => crumbItem === it);
-            const open = openGroups[key] ?? active;
+            const open = openKey === null ? active : openKey === key;
             return (
               <div key={key} className={`sb-group ${open ? 'open' : ''}`} data-group={key}>
-                <button type="button" className="sb-group-head" aria-expanded={open} title={g.label} onClick={() => setOpenGroups((s) => ({ ...s, [key]: !open }))}>
+                <button type="button" className="sb-group-head" aria-expanded={open} title={g.label} onClick={() => setOpenKey(open ? '' : key)}>
                   <i className={`bi bi-${g.icon} sb-gicon`} /><span>{g.label}</span><i className="bi bi-chevron-down sb-caret" />
                 </button>
                 <div className="sb-items"><div className="sb-items-inner">
