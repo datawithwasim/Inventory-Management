@@ -40,6 +40,13 @@ export default function Layout() {
   const [denied, setDenied] = useState<number | null>(null);
   useEffect(() => { const on = (e: Event) => setDenied((e as CustomEvent).detail); window.addEventListener('inv-denied', on); return () => window.removeEventListener('inv-denied', on); }, []);
   useEffect(() => { setDenied(null); }, [loc.pathname]);
+  // the tab title the classic pages had: page · company
+  useEffect(() => {
+    if (!session?.tenant || !session.menu) return;
+    const p = loc.pathname.replace(/\/+$/, '') || '/dashboard';
+    const item = bestMatch(p, session)[1];
+    document.title = `${item ? item.label : 'Dashboard'} · ${session.tenant.name}`;
+  }, [loc.pathname, session]);
   if (!session?.authenticated || !session.menu || !session.user || !session.tenant) return null;
   const { menu, user, tenant } = session;
   const path = loc.pathname.replace(/\/+$/, '') || '/';
@@ -63,7 +70,7 @@ export default function Layout() {
             const active = g.items.some((it) => crumbItem === it);
             const open = openGroups[key] ?? active;
             return (
-              <div key={key} className={`sb-group ${open ? 'open' : ''}`}>
+              <div key={key} className={`sb-group ${open ? 'open' : ''}`} data-group={key}>
                 <button type="button" className="sb-group-head" aria-expanded={open} title={g.label} onClick={() => setOpenGroups((s) => ({ ...s, [key]: !open }))}>
                   <i className={`bi bi-${g.icon} sb-gicon`} /><span>{g.label}</span><i className="bi bi-chevron-down sb-caret" />
                 </button>

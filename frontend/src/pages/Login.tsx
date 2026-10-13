@@ -4,6 +4,9 @@ import { legacyUrl, post, type Msg } from '../lib/api';
 import { useSession } from '../lib/session';
 import { Messages } from '../components/ui';
 
+/** The product name the server put in the page (the same one the classic sign-in page shows). */
+const appName = (document.querySelector('meta[name="app-title"]') as HTMLMetaElement | null)?.content || 'Inventory';
+
 export default function Login() {
   const { session, reload } = useSession();
   const nav = useNavigate();
@@ -21,10 +24,10 @@ export default function Login() {
   return (
     <div className="auth-split">
       <section className="auth-hero">
-        <div className="auth-logo"><span className="sb-mark"><i className="bi bi-box-seam" /></span>Inventory</div>
+        <div className="auth-logo"><span className="sb-mark"><i className="bi bi-box-seam" /></span>{appName}</div>
         <div><h2>Know exactly what you have, where it is, and what is selling.</h2>
           <ul><li><i className="bi bi-check-circle-fill" />Roll-by-roll fabric tracking with rack locations</li><li><i className="bi bi-check-circle-fill" />Purchase, sales, returns and stock by roll and rack</li><li><i className="bi bi-check-circle-fill" />Reports, barcode labels and your own settings</li></ul></div>
-        <div className="small opacity-75">&copy; {new Date().getFullYear()} Inventory</div>
+        <div className="small opacity-75">&copy; {new Date().getFullYear()} {appName}</div>
       </section>
       <section className="auth-pane"><div className="auth-card"><div className="card"><div className="card-body p-4">
         <Messages items={msgs} />

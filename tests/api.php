@@ -347,6 +347,17 @@ $r = $a->call('POST', "/warehouses/$wh2/default");
 check('a warehouse can be made the default', $r['status'] === 200 && (int)DB::val('SELECT is_default FROM warehouses WHERE id = ?', [$wh2]) === 1);
 $a->call('POST', "/warehouses/$wh/default");
 
+echo "Dashboard through the API\n";
+$r = $a->call('GET', '/dashboard?range=90')['json']['data'];
+check('the dashboard hands over its widgets drawn like the classic page (charts, ageing bars, lists), the period buttons and the layout', str_contains($r['html']['trend'], 'viz-svg') && str_contains($r['html']['kpi'], 'Net sales') && isset($r['html']['age_rec']) && $r['ranges']['90'] === '90 days' && $r['p']['key'] === '90' && $r['spans']['trend'] === 12 && !isset($r['html']['setup']) && isset($r['layout']['order']));
+$a->call('POST', '/dashboard/layout', ['order' => ['trend', 'kpi', 'bogus'], 'show' => ['trend', 'kpi']]);
+$lay = $a->call('GET', '/dashboard')['json']['data']['layout'];
+check('the dashboard can be customised: order and hidden widgets are kept per user, unknown ones ignored, and reset brings the default back', array_slice(array_values(array_diff($lay['order'], ['setup'])), 0, 2) === ['trend', 'kpi'] && in_array('low', $lay['hidden'], true) && !in_array('bogus', $lay['order'], true));
+$a->call('POST', '/dashboard/layout', ['reset' => 1]);
+check('reset restores the standard layout', $a->call('GET', '/dashboard')['json']['data']['layout']['hidden'] === []);
+$cls = new Client($base); $cls->post('/login', ['email' => $emA, 'password' => 'Password123'], '/login'); $dh = $cls->get('/dashboard')['body'];
+check('the classic dashboard page still draws completely (layout, charts, customize panel)', str_contains($dh, 'class="dash-grid"') && str_contains($dh, 'viz-svg') && str_contains($dh, 'Customize dashboard') && str_contains($dh, 'rel="icon"'));
+
 echo "Sales documents through the API\n";
 check('the session names the sales order statuses', ($a->session()['json']['soStatus']['confirmed'][0] ?? '') === 'Confirmed');
 $r = $a->call('GET', '/sales/orders/create');
@@ -872,6 +883,7 @@ check('a plain page request still works and is still HTML (nothing changed for t
 echo "The React shell\n";
 $spa = (new Client($base))->get('/app/customers/12');
 check('/app/... serves the built React page (any deep link), without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));
+check('the app page has the product icon, the product name as its title and the brand colours from the first paint (so the sign-in page is never unstyled)', str_contains($spa['body'], 'rel="icon"') && str_contains($spa['body'], '<title>' . config('name') . '</title>') && str_contains($spa['body'], 'id="brand-vars">:root{--brand:#') && str_contains($spa['body'], 'name="app-title"') && str_contains($spa['body'], '/assets/js/charts.js'));
 check('its built files are reachable', preg_match('~src="(/ui/assets/[^"]+\.js)"~', $spa['body'], $m) === 1 && (new Client($base))->get($m[1])['status'] === 200);
 
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";

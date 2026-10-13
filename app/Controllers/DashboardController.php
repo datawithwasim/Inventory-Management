@@ -74,7 +74,7 @@ final class DashboardController extends Controller
         $scoped = \Core\Scope::restricted();   // warehouse staff: their warehouse's stock and transfers, no company money figures
         if ($scoped) { $sales = array_map(fn() => 0, $sales); $buys = array_map(fn() => 0, $buys); }
         $mine = \Core\Scope::sqlEither('warehouse_id', 'to_warehouse_id');
-        $this->view('app/dashboard', [
+        $data = [
             'scoped' => $scoped ? \Core\Scope::name() : null,
             'title' => 'Dashboard',
             'p' => $p, 'layout' => $this->layout(), 'setup' => $this->setupSteps(),
@@ -93,6 +93,21 @@ final class DashboardController extends Controller
             'low' => $scoped ? [] : Metrics::lowStock(), 'overdue' => $scoped ? [] : Metrics::overdueInvoices(), 'orders' => $scoped ? [] : Metrics::openOrders(),
             'userCount' => User::count(), 'roleCount' => Role::count(),
             'u' => Auth::user(),
-        ]);
+        ];
+        // the new app draws the very same widgets the classic page does (charts included), so hand over their HTML
+        if (\Core\Api::on() && !$scoped) {
+            [$html, $spans] = $this->widgets($data);
+            unset($html['setup']);
+            $data += ['html' => $html, 'spans' => $spans, 'widgetNames' => self::WIDGETS, 'ranges' => ['7' => '7 days', '30' => '30 days', '90' => '90 days', 'mtd' => 'This month', 'ytd' => 'This year']];
+        }
+        $this->view('app/dashboard', $data);
+    }
+
+    /** @return array{0: array<string,string>, 1: array<string,int>} each widget's HTML and its width in columns */
+    private function widgets(array $data): array
+    {
+        extract($data, EXTR_SKIP);
+        require ROOT . '/views/app/_dashboard_widgets.php';
+        return [$render, $spans];
     }
 }

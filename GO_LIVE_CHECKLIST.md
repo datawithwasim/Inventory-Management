@@ -62,7 +62,7 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] An operator of B cannot add stock, send stock or receive goods for warehouse A; cannot add or delete warehouses or change the default.
 - [ ] A warehouse that still has people cannot be deleted or made inactive.
 - [ ] A dispatcher without the Receive permission cannot receive; a receiver cannot dispatch or settle (Settings → Roles → Stock: View / Adjust / Transfer / **Receive**).
-- [ ] Reports → "Transfers: in transit & shortages"; Dashboard card "Transfers on the road"; overdue transfers (past expected date) show in red.
+- [ ] Reports → "Transfers: in transit & shortages"; overdue transfers (past expected date) show in red.
 - [ ] **Barcode labels** (Inventory → Barcode labels): pick items or rolls, choose a ready-made template, set copies, Print (margins "None", scale 100%). Print one test label first and **scan it** with your scanner.
 - [ ] **Label designer** (Design a label): drag, resize and rotate text, barcodes (Code 128, EAN-13, Code 39), QR codes, boxes/lines and your logo; insert fields (item name, SKU, price, roll no., supplier details, rack, dates…); shrink-to-fit text; sheet layouts (A4 3 × 8, Avery-style, roll printers, 2-across); Undo/Redo; live preview with a real item or roll; Save, Save as new, Make default. Sheets: start part-way through a used sheet.
 - [ ] GRN page → "Roll labels" prints a label per received roll; Item page → "Print label".
