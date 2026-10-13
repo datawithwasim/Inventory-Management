@@ -12,7 +12,7 @@ import StockLines, { blankSl, slPayload, type SL } from '../../components/StockL
 
 const refresh = (qc: ReturnType<typeof useQueryClient>) => ['stock-docs', 'stock-doc', 'record', 'stock', 'stock-racks', 'stock-batches', 'stock-ledger', 'warehouse', 'location', 'item'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 const stamp = (s: string) => `${fdate(String(s).slice(0, 10))} ${String(s).slice(11, 16)}`;
-const layoutLink = (form: string) => <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=${form}&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a>;
+const layoutLink = (form: string) => <Link className="page-layout-link" to={`/settings/formdesign?form=${form}&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link>;
 
 function useReasons() {
   const q = useQuery({ queryKey: ['options', 'stock_reasons'], staleTime: 60_000, queryFn: async () => (await get('/options/stock_reasons')).options as { id: string; name: string }[] });

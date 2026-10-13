@@ -12,6 +12,7 @@ $get = fn(string $k, $d = null) => $env[$k] ?? getenv($k) ?: $d;
 
 return [
     'name'  => $get('APP_NAME', 'Inventory'),
+    'legacy_ui' => (string)$get('LEGACY_UI', '0') === '1',   // keep the classic screens reachable (tests); normally off, the app is the interface
     'debug' => filter_var($get('APP_DEBUG', false), FILTER_VALIDATE_BOOLEAN),
     'db' => [
         'host' => $get('DB_HOST', '127.0.0.1'),

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Navigate, NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
 import { useSession } from '../../lib/session';
@@ -25,7 +25,7 @@ export function SettingsLayout() {
             </div>
           ))}
           {can('settings.edit') && <div><div className="settings-nav-head">Forms</div>
-            <a className="settings-nav-link" href={legacyUrl('/settings/formdesign')}><i className="bi bi-layout-text-window-reverse" />Page layout &amp; custom fields</a></div>}
+            <Link className="settings-nav-link" to="/settings/formdesign"><i className="bi bi-layout-text-window-reverse" />Page layout &amp; custom fields</Link></div>}
         </nav>
         <div className="settings-body"><Outlet /></div>
       </div>

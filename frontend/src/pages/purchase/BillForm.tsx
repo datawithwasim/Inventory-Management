@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -32,7 +32,7 @@ export default function BillForm() {
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <PageHead title="Edit bill" extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=bill&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+      <PageHead title="Edit bill" extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=bill&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(`/purchase/bills/${id}`)}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button></PageHead>
       <Messages items={msgs} />
       <div className="card" style={{ maxWidth: 760 }}><div className="card-body">

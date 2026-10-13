@@ -56,7 +56,7 @@ export function ReqForm() {
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <PageHead title="New requisition" extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=requisition&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+      <PageHead title="New requisition" extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=requisition&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav('/purchase/requisitions')}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save requisition'}</button></PageHead>
       <Messages items={msgs} />
       <div className="card mb-3" style={{ maxWidth: 720 }}><div className="card-body"><SchemaForm schema={schema.data} values={values} onChange={setValues} /></div></div>

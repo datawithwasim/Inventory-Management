@@ -29,6 +29,16 @@ final class Router
             $path = '/' . trim((string)preg_replace('~^/api(/v1)?~', '', $path), '/');
         }
 
+        // a browser opening a classic screen address goes to the same screen in the app; the root always does
+        if ($method === 'GET' && !Api::on()) {
+            $to = Spa::redirectFor($path, $_GET);
+            if ($to !== null && ($path === '/' || !config('legacy_ui'))) {
+                $qs = (string)parse_url($uri, PHP_URL_QUERY);
+                header('Location: ' . url(ltrim($to, '/')) . ($qs !== '' ? '?' . $qs : ''));
+                exit;
+            }
+        }
+
         foreach ($this->routes as [$m, $pattern, $handler, $mw]) {
             $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[^/]+)', $pattern) . '$#';
             if ($m !== $method || !preg_match($regex, $path, $match)) continue;

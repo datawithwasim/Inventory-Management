@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl } from '../../lib/api';
 import { money, qty } from '../../lib/format';
@@ -15,12 +15,14 @@ export default function ItemList() {
   const set = (patch: Record<string, string>) => { const n = new URLSearchParams(sp); Object.entries(patch).forEach(([k, v]) => (v ? n.set(k, v) : n.delete(k))); if (!('page' in patch)) n.delete('page'); setSp(n); };
   const res = useQuery({ queryKey: ['items', applied, cat, low, page], queryFn: async () => (await get(`/items?q=${encodeURIComponent(applied)}&category=${cat}&low=${low ? 1 : ''}&page=${page}`)).data });
   const d = res.data; const col = (k: string) => d?.cols?.includes(k);
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
   return (
     <>
+      {notice && <div className="alert alert-success py-2">{notice}</div>}
       <PageHead title={term('item', true)}>
         <a className="btn btn-outline-secondary" href={legacyUrl('/items/export')}><i className="bi bi-download" /> Export</a>
         {can('items.create') && <>
-          <a className="btn btn-outline-secondary" href={legacyUrl('/items/import')}><i className="bi bi-upload" /> Import</a>
+          <Link className="btn btn-outline-secondary" to="/items/import"><i className="bi bi-upload" /> Import</Link>
           {d?.limitReached ? <span className="text-warning ms-2">Item limit reached</span> : <Link className="btn btn-primary" to="/items/create"><i className="bi bi-plus-lg" /> Add {term('item').toLowerCase()}</Link>}</>}
       </PageHead>
       <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); set({ q }); }}>

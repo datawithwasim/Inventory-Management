@@ -6,38 +6,10 @@ import { fdate, money, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
-import ItemSearch from '../../components/ItemSearch';
+import RateForm from '../../components/RateForm';
 
 const poTone: Record<string, string> = { draft: 'secondary', pending_approval: 'warning', approved: 'primary', partial: 'info', received: 'success', closed: 'dark', cancelled: 'danger' };
 const payTone = (b: any) => { const due = Number(b.total) - Number(b.returned_amount) - Number(b.paid_amount); return due <= 0.004 ? ['success', 'Paid'] : Number(b.paid_amount) > 0 ? ['warning', 'Partly paid'] : ['danger', 'Unpaid']; };
-
-/** Add / revise a rate for one of this supplier's items. */
-function RateForm({ supplierId, preset, onDone }: { supplierId: number; preset?: any; onDone: () => void }) {
-  const [item, setItem] = useState<{ id: string; label: string }>({ id: preset ? String(preset.variant_id) : '', label: preset ? `${preset.item_name}${preset.vname ? ' — ' + preset.vname : ''} (${preset.sku})` : '' });
-  const [f, setF] = useState({ rate: preset ? String(preset.rate) : '', discount_pct: preset && Number(preset.discount_pct) ? String(preset.discount_pct) : '', min_qty: preset && Number(preset.min_qty) ? String(preset.min_qty) : '', lead_time_days: preset?.lead_time_days ?? '', supplier_code: preset?.scode ?? '', supplier_name: preset?.sname ?? '', valid_from: new Date().toISOString().slice(0, 10), valid_to: '' });
-  const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
-  const set = (k: string, v: string) => setF((x) => ({ ...x, [k]: v }));
-  const save = async () => {
-    if (!item.id) { setMsgs([{ type: 'danger', msg: 'Pick an item from the list.' }]); return; }
-    setBusy(true);
-    const r = await post(`/suppliers/${supplierId}/rates`, { ...f, variant_id: item.id, return: `suppliers/${supplierId}` });
-    setBusy(false);
-    if (r.ok) onDone(); else setMsgs(r.messages ?? []);
-  };
-  const inp = (k: string, label: string, type = 'text', col = 'col-6', extra: any = {}) => <div className={col}><label className="form-label small mb-1">{label}</label><input className="form-control form-control-sm" type={type} value={(f as any)[k]} onChange={(e) => set(k, e.target.value)} {...extra} /></div>;
-  return (
-    <div className="p-3 border-bottom bg-body-tertiary">
-      <Messages items={msgs} />
-      <div className="row g-2 align-items-end">
-        <div className="col-12"><label className="form-label small mb-1">Item</label><ItemSearch value={item.id} label={item.label} disabled={!!preset} onPick={(p) => setItem(p ? { id: String(p.id), label: p.label } : { id: '', label: '' })} /></div>
-        {inp('rate', 'Rate', 'number', 'col-6 col-md-3', { step: '0.01', min: '0' })}{inp('discount_pct', 'Discount %', 'number', 'col-6 col-md-3', { step: '0.01', min: '0', max: '100' })}
-        {inp('min_qty', 'Min. qty', 'number', 'col-6 col-md-3', { step: '0.001', min: '0' })}{inp('lead_time_days', 'Lead time (days)', 'number', 'col-6 col-md-3', { min: '0', max: '365' })}
-        {inp('valid_from', 'Valid from', 'date', 'col-6 col-md-3')}{inp('valid_to', 'Valid till', 'date', 'col-6 col-md-3')}{inp('supplier_code', 'Their code', 'text', 'col-6 col-md-3', { maxLength: 60 })}{inp('supplier_name', 'Their item name', 'text', 'col-6 col-md-3', { maxLength: 150 })}
-        <div className="col-12 d-flex gap-2"><button className="btn btn-sm btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save rate'}</button><button className="btn btn-sm btn-link text-muted" onClick={onDone}>Cancel</button></div>
-      </div>
-    </div>
-  );
-}
 
 export default function SupplierDetail() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();

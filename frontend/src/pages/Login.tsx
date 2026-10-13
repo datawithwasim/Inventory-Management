@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { legacyUrl, post, type Msg } from '../lib/api';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { post, type Msg } from '../lib/api';
 import { useSession } from '../lib/session';
 import { Messages } from '../components/ui';
 
@@ -9,7 +9,7 @@ const appName = (document.querySelector('meta[name="app-title"]') as HTMLMetaEle
 
 export default function Login() {
   const { session, reload } = useSession();
-  const nav = useNavigate();
+  const nav = useNavigate(); const notice = (useLocation().state as { notice?: string } | null)?.notice;
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
   if (session?.authenticated) return <Navigate to="/dashboard" replace />;
@@ -30,13 +30,14 @@ export default function Login() {
         <div className="small opacity-75">&copy; {new Date().getFullYear()} {appName}</div>
       </section>
       <section className="auth-pane"><div className="auth-card"><div className="card"><div className="card-body p-4">
+        {notice && <div className="alert alert-success py-2">{notice}</div>}
         <Messages items={msgs} />
         <h2 className="h5 mb-3">Sign in</h2>
         <form onSubmit={submit}>
           <div className="mb-3"><label className="form-label" htmlFor="email">Email</label><input id="email" type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></div>
           <div className="mb-3"><label className="form-label" htmlFor="pw">Password</label><input id="pw" type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
           <button className="btn btn-primary w-100" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          <div className="text-center mt-3"><a href={legacyUrl('/forgot-password')}>Forgot password?</a></div>
+          <div className="text-center mt-3"><Link to="/forgot-password">Forgot password?</Link></div>
         </form>
       </div></div></div></section>
     </div>

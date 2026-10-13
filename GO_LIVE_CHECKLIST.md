@@ -27,7 +27,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
    Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
-9. [ ] Open `https://your-domain/app/` once with a hard refresh (Ctrl+F5) so the browser drops the old screens.
+9. [ ] Open `https://your-domain/` (it should land on `/app/`) once with a hard refresh (Ctrl+F5), and check `.env` does **not** contain `LEGACY_UI=1`.
 
 ## C. Click-through on the live site (≈ 20 minutes)
 
@@ -105,7 +105,8 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - **Super Admin forgot the password and mail does not work:** `php database/reset-admin.php admin@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH), or in phpMyAdmin set `super_admins.password_hash` to a hash made by `php -r "echo password_hash('NewPassword123', PASSWORD_DEFAULT);"`.
 - **White page / "Unexpected answer" in the app:** check `storage/logs/` and the cPanel error log; the usual causes are PHP < 8.1, a missing extension, or `storage/` not writable.
 - **Screens look old after upload:** hard refresh; confirm `public/ui/index.html` points to the same `index-*.js` that exists in `public/ui/assets/`.
-- **A screen says "Opening…" and jumps to a classic page:** that screen has no React version (only the page-layout designer and print pages are PHP) — expected.
+- **An address shows "Page not found" inside the app:** there is no screen at that address. Old PHP screen addresses are redirected to `/app/...` automatically; printouts and downloads stay server pages by design.
+- **The old HTML screens still open (no redirect):** `.env` contains `LEGACY_UI=1`. Remove that line on the live site.
 - **Roll back:** restore the old files, then restore the `.sql` backup in phpMyAdmin into an **empty** database (migrations are not reversible).
 
 ## F. Known and intentional

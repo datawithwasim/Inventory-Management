@@ -135,7 +135,7 @@ export function DeliveryForm() {
   const whName = (d.warehouses ?? []).find((w: any) => String(w.id) === String(order?.warehouse_id))?.name ?? '';
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <PageHead title={linked ? `Deliver · ${order.order_no}` : 'Deliver goods (no order)'} extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=delivery&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+      <PageHead title={linked ? `Deliver · ${order.order_no}` : 'Deliver goods (no order)'} extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=delivery&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(linked ? `/sales/orders/${order.id}` : '/sales/deliveries')}>Cancel</button>
         <button className="btn btn-success" disabled={saving}>{saving ? 'Delivering…' : 'Deliver & take stock out'}</button>
       </PageHead>

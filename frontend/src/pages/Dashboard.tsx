@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { get, legacyUrl, post } from '../lib/api';
+import { get, post } from '../lib/api';
 import { fdate, money, qty } from '../lib/format';
 import { isReact, localPath } from '../lib/routes';
 import { useSession } from '../lib/session';
@@ -49,7 +49,7 @@ function ScopedDashboard() {
           <table className="table table-sm mb-0"><tbody>
             {(d.overdue ?? []).map((o: any) => <tr key={o.id}><td><Link to={`/sales/invoices/${o.id}`}>{o.invoice_no}</Link> <span className="text-muted small">{o.customer}</span></td><td className="text-end text-danger">{money(o.due)}</td><td className="text-end small text-muted">{o.od} days late</td></tr>)}
             {!(d.overdue ?? []).length && <tr><td className="text-muted">Nothing overdue.</td></tr>}</tbody></table></div></div>
-        <div className="col-12"><div className="card"><div className="card-header d-flex justify-content-between"><span>Low stock</span><Link className="small" to="/dashboard" onClick={(e) => { e.preventDefault(); window.location.href = legacyUrl('/stock?low=1'); }}>See all</Link></div>
+        <div className="col-12"><div className="card"><div className="card-header d-flex justify-content-between"><span>Low stock</span><Link className="small" to="/stock?low=1">See all</Link></div>
           <table className="table table-sm mb-0"><tbody>
             {(d.low ?? []).slice(0, 8).map((l: any, i: number) => <tr key={i}><td><Link to={`/items/${l.id}`}>{l.name}</Link></td><td className="text-end">{qty(l.stock)} {l.unit}</td><td className="text-end text-muted small">reorder at {qty(l.reorder_level)}</td></tr>)}
             {!(d.low ?? []).length && <tr><td className="text-muted">Everything is above its reorder level.</td></tr>}</tbody></table></div></div>

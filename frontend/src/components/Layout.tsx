@@ -2,9 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { legacyUrl, post } from '../lib/api';
 import { fdate } from '../lib/format';
-import { isReact } from '../lib/routes';
+import { isReact, isScreen, localPath } from '../lib/routes';
 import { useSession, type MenuItem } from '../lib/session';
 import { Dropdown } from './ui';
+import Palette from './Palette';
 
 /** A menu link: React route when the screen has been rebuilt, otherwise the PHP page. */
 export function AppLink({ item, className, children, onClick }: { item: { path: string; href?: string }; className?: string; children: ReactNode; onClick?: () => void }) {
@@ -38,8 +39,25 @@ export default function Layout() {
   const [mobile, setMobile] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [denied, setDenied] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearching(true); } }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
   useEffect(() => { const on = (e: Event) => setDenied((e as CustomEvent).detail); window.addEventListener('inv-denied', on); return () => window.removeEventListener('inv-denied', on); }, []);
   useEffect(() => { setDenied(null); }, [loc.pathname]);
+  // a plain link to one of the app's own screens (from server-drawn blocks, older links) opens inside the app, not as a new page load
+  useEffect(() => {
+    const click = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement).closest?.('a');
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#') || (/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith(window.location.origin))) return;
+      const path = localPath(href);
+      const [clean, search = ''] = path.split('#')[0].split('?');
+      if (isScreen(clean, '?' + search)) { e.preventDefault(); nav(path); }
+    };
+    document.addEventListener('click', click);
+    return () => document.removeEventListener('click', click);
+  }, [nav]);
   // the tab title the classic pages had: page · company
   useEffect(() => {
     if (!session?.tenant || !session.menu) return;
@@ -97,7 +115,7 @@ export default function Layout() {
             {crumbItem && path !== '/dashboard' && <><i className="bi bi-chevron-right" /><span>{crumbGroup}</span><i className="bi bi-chevron-right" /><AppLink item={crumbItem}>{crumbItem.label}</AppLink></>}
           </nav>
           <div className="topbar-actions">
-            <a className="icon-btn" href={legacyUrl('/dashboard')} aria-label="Search" title="Search (opens the classic screen)"><i className="bi bi-search" /></a>
+            <button type="button" className="icon-btn" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearching(true)}><i className="bi bi-search" /></button>
             {!!session.quick?.length && (
               <Dropdown button={() => <button className="btn btn-primary btn-sm d-flex align-items-center gap-1"><i className="bi bi-plus-lg" /><span className="d-none d-sm-inline">New</span></button>}>
                 {(close) => <ul className="list-unstyled m-0">{session.quick!.map((q) => <li key={q.path}><AppLink item={q} className="dropdown-item" onClick={close}><i className={`bi bi-${q.icon} me-2 text-muted`} />{q.label}</AppLink></li>)}</ul>}
@@ -122,6 +140,7 @@ export default function Layout() {
           </div>
         </header>
         <main className="content" id="main">{denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<Outlet /></main>
+        <Palette open={searching} onClose={() => setSearching(false)} />
       </div>
     </>
   );

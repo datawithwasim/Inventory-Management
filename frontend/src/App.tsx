@@ -1,11 +1,16 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import { useSession } from './lib/session';
 import Login from './pages/Login';
+import { ForgotPassword, ResetPassword } from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import CustomerList from './pages/customers/List';
 import CustomerDetail from './pages/customers/Detail';
 import CustomerForm from './pages/customers/Form';
+import { GroupList, GroupForm } from './pages/customers/Groups';
+import ItemImport from './pages/items/Import';
+import RateList from './pages/purchase/RateList';
+import FormDesigner from './pages/settings/FormDesigner';
 import SupplierList from './pages/suppliers/List';
 import SupplierDetail from './pages/suppliers/Detail';
 import SupplierForm from './pages/suppliers/Form';
@@ -43,19 +48,22 @@ import { AdminLogin, AdminLayout, AdminDashboard, TenantList, TenantForm, PlanLi
 import { TransferList, TransferDetail } from './pages/stock/TransferPages';
 import LabelsPage, { LabelTemplates } from './pages/labels/LabelsPage';
 import LabelDesigner from './pages/labels/Designer';
-import { legacyUrl } from './lib/api';
 
-function Protected() {
+function Protected({ bare = false }: { bare?: boolean }) {
   const { session } = useSession();
   const loc = useLocation();
   if (!session?.authenticated) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
-  return <Layout />;
+  return bare ? <Outlet /> : <Layout />;
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
+      <Route path="/admin/forgot-password" element={<ForgotPassword admin />} />
+      <Route path="/admin/reset-password/:token" element={<ResetPassword admin />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} />
@@ -68,11 +76,19 @@ export default function App() {
         <Route path="system" element={<AdminSystem />} />
         <Route path="audit" element={<AdminAudit />} />
       </Route>
+      <Route element={<Protected bare />}>
+        <Route path="/settings/formdesign" element={<FormDesigner />} />
+      </Route>
       <Route element={<Protected />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/customers" element={<CustomerList />} />
         <Route path="/customers/create" element={<CustomerForm />} />
+        <Route path="/customers/groups" element={<GroupList />} />
+        <Route path="/customers/groups/create" element={<GroupForm />} />
+        <Route path="/customers/groups/:id/edit" element={<GroupForm />} />
+        <Route path="/items/import" element={<ItemImport />} />
+        <Route path="/purchase/rates" element={<RateList />} />
         <Route path="/customers/:id" element={<CustomerDetail />} />
         <Route path="/customers/:id/edit" element={<CustomerForm />} />
         <Route path="/suppliers" element={<SupplierList />} />
@@ -146,6 +162,7 @@ export default function App() {
         <Route path="/sales/returns/:id" element={<SalesReturnDetail />} />
         <Route path="/reports" element={<ReportIndex />} />
         <Route path="/reports/:slug" element={<ReportShow />} />
+        <Route path="/settings/custom-fields/*" element={<Navigate to="/settings/formdesign" replace />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<SettingsHome />} />
           <Route path="company" element={<CompanyTab />} />
@@ -175,9 +192,7 @@ export default function App() {
   );
 }
 
-/** A path with no React screen yet: hand over to the PHP page. */
+/** An address with no screen: say so, rather than sending people to an old page. */
 function NotBuilt() {
-  const loc = useLocation();
-  window.location.replace(legacyUrl(loc.pathname + loc.search));
-  return <div className="text-muted p-4">Opening…</div>;
+  return <div className="text-center py-5"><h1 className="h4">Page not found</h1><p className="text-muted">There is no page at this address.</p><Link className="btn btn-primary" to="/dashboard">Go to the dashboard</Link></div>;
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { get, legacyUrl, post } from '../lib/api';
 import { Dropdown } from './ui';
 
@@ -17,7 +18,7 @@ export default function ColumnPicker({ list, entity, onApplied }: { list: string
         {Object.entries(q.data?.options ?? {}).map(([k, label]) => (
           <div className="form-check mb-1" key={k}><input className="form-check-input" type="checkbox" id={`col-${k}`} checked={cur.includes(k)} onChange={(e) => setSel(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /><label className="form-check-label" htmlFor={`col-${k}`}>{label}</label></div>
         ))}
-        <a className="d-block small mt-3 pt-2 border-top" href={legacyUrl(`/settings/formdesign?form=${entity}&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-plus-square me-1" />Add or remove your own columns</a>
+        <Link className="d-block small mt-3 pt-2 border-top" to={`/settings/formdesign?form=${entity}&return=${encodeURIComponent(location.pathname)}`} onClick={close}><i className="bi bi-plus-square me-1" />Add or remove your own columns</Link>
         <div className="d-flex gap-2 mt-3"><button className="btn btn-sm btn-primary flex-grow-1" onClick={() => apply(false, close)}>Apply</button><button className="btn btn-sm btn-outline-secondary" onClick={() => apply(true, close)}>Reset</button></div>
       </div>}
     </Dropdown>

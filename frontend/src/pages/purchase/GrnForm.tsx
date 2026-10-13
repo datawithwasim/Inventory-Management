@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { qty as fmtQty } from '../../lib/format';
@@ -56,7 +56,7 @@ export default function GrnForm() {
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <PageHead title={po ? `Receive goods · ${po.po_no}` : 'Receive goods (no purchase order)'}
-        extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=grn&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+        extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=grn&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(po ? `/purchase/orders/${po.id}` : '/purchase/grns')}>Cancel</button>
         <button className="btn btn-success" disabled={saving}>{saving ? 'Saving…' : 'Receive into stock'}</button>
       </PageHead>

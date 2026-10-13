@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { useSession } from '../../lib/session';
@@ -42,7 +42,7 @@ export default function CustomerForm() {
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <PageHead title={(id ? 'Edit ' : 'New ') + term('customer').toLowerCase()}
-        extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=customer&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+        extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=customer&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(id ? `/customers/${id}` : '/customers')}>Cancel</button>
         <button className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </PageHead>

@@ -40,7 +40,7 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
     if (r.ok) { setNote(''); setErr(''); qc.invalidateQueries({ queryKey: ['record', entity, String(id)] }); } else setErr(r.messages?.[0]?.msg ?? 'Could not add the note.');
   };
   const delNote = async (nid: number) => { if (!confirm('Remove this note?')) return; await post(`/records/notes/${nid}/delete`); qc.invalidateQueries({ queryKey: ['record', entity, String(id)] }); };
-  const layoutUrl = legacyUrl(`/settings/formdesign?form=${entity}&return=${encodeURIComponent(location.pathname)}`);
+  const layoutUrl = `/settings/formdesign?form=${entity}&return=${encodeURIComponent(location.pathname)}`;
   const scrollTo = (rid: string) => { setTab('overview'); setTimeout(() => document.getElementById(rid)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); };
   const sideItems = [{ id: 'recOverview', label: 'Overview' }, ...related, { id: 'notes', label: `Notes (${notes.length})` }];
 
@@ -54,7 +54,7 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
           {actions}
           {(menu || can('settings.edit')) && (
             <Dropdown button={() => <button className="btn btn-sm btn-outline-secondary" aria-label="More"><i className="bi bi-three-dots" /></button>}>
-              {(close) => <ul className="list-unstyled m-0">{menu?.(close)}{can('settings.edit') && <li><a className="dropdown-item" href={layoutUrl}><i className="bi bi-layout-text-window me-2 text-muted" />Edit page layout</a></li>}</ul>}
+              {(close) => <ul className="list-unstyled m-0">{menu?.(close)}{can('settings.edit') && <li><Link className="dropdown-item" to={layoutUrl} onClick={close}><i className="bi bi-layout-text-window me-2 text-muted" />Edit page layout</Link></li>}</ul>}
             </Dropdown>
           )}
         </div>

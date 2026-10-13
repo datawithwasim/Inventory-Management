@@ -880,6 +880,75 @@ $a->call('POST', '/logout', []);
 check('signing out ends the session', $a->call('GET', '/customers')['status'] === 401);
 check('a plain page request still works and is still HTML (nothing changed for the old UI)', (new Client($base))->get('/login')['status'] === 200 && str_contains((new Client($base))->get('/login')['body'], '<form'));
 
+echo "Screens that used to be classic-only\n";
+$c = new J($base); $c->session(); $c->call('POST', '/login', ['email' => $emA, 'password' => 'Password123']); $c->session();
+// company password reset
+@unlink(ROOT . '/storage/logs/mail.log');
+$fx = new J($base); $fx->session();
+$fx->call('POST', '/forgot-password', ['email' => $emA]);
+$mailLog = (string)@file_get_contents(ROOT . '/storage/logs/mail.log');
+check('company "forgot password" mails a link; the reset page answers JSON for a good token and 4xx/redirect for a bad one', preg_match('~/reset-password/([a-f0-9]{64})~', $mailLog, $mt) === 1
+    && ($fx->call('GET', "/reset-password/{$mt[1]}")['json']['view'] ?? '') === 'auth/reset' && !($fx->call('GET', '/reset-password/' . str_repeat('0', 64))['json']['ok'] ?? true));
+$r = $fx->call('POST', "/reset-password/{$mt[1]}", ['password' => 'Password123', 'password_confirm' => 'Different1']);
+check('a mismatch is refused', $r['status'] === 422);
+$r = $fx->call('POST', "/reset-password/{$mt[1]}", ['password' => 'Password123', 'password_confirm' => 'Password123']);
+check('the reset goes through and the link then stops working', $r['status'] === 200 && $fx->call('POST', "/reset-password/{$mt[1]}", ['password' => 'Password123', 'password_confirm' => 'Password123'])['status'] === 422);
+
+// customer groups
+$r = $c->call('POST', '/customers/groups', ['name' => 'Dealer', 'discount_pct' => '7.5']);
+$gid = (int)DB::val('SELECT id FROM customer_groups WHERE tenant_id = ? AND name = ?', [$tA, 'Dealer']);
+check('a customer group is created (and a duplicate name refused)', $r['status'] === 200 && $gid > 0 && $c->call('POST', '/customers/groups', ['name' => 'Dealer', 'discount_pct' => '1'])['status'] === 422);
+$g = $c->call('GET', "/customers/groups/$gid/edit");
+check('the group page gives the row and its prices; the list counts it', ($g['json']['data']['row']['name'] ?? '') === 'Dealer' && is_array($g['json']['data']['prices'] ?? null)
+    && in_array('Dealer', array_column($c->call('GET', '/customers/groups')['json']['data']['rows'] ?? [], 'name'), true));
+$vid = (int)DB::val('SELECT v.id FROM item_variants v WHERE v.tenant_id = ? LIMIT 1', [$tA]);
+if ($vid) {
+    $c->call('POST', "/customers/groups/$gid/prices", ['variant_id' => $vid, 'price' => '99']);
+    check('a special price is saved and removable', (float)DB::val('SELECT price FROM group_prices WHERE group_id = ? AND variant_id = ?', [$gid, $vid]) === 99.0);
+    $pid = (int)DB::val('SELECT id FROM group_prices WHERE group_id = ?', [$gid]);
+    $c->call('POST', "/customers/groups/$gid/prices/$pid/delete", []);
+    check('...removed', (int)DB::val('SELECT COUNT(*) FROM group_prices WHERE group_id = ?', [$gid]) === 0);
+}
+check('another company cannot open or delete the group', ($b2 = new J($base)) && $b2->session() !== null && $b2->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']) !== null && $b2->session() !== null
+    && $b2->call('GET', "/customers/groups/$gid/edit")['status'] === 404 && $b2->call('POST', "/customers/groups/$gid/delete", [])['status'] === 404);
+$c->call('POST', "/customers/groups/$gid/delete", []);
+check('the group is deleted', !DB::val('SELECT 1 FROM customer_groups WHERE id = ?', [$gid]));
+
+// rate lists page data, items import page data, search
+$r = $c->call('GET', '/purchase/rates');
+check('the rate list page gives rows, stats and suppliers as data', $r['status'] === 200 && isset($r['json']['data']['rows'], $r['json']['data']['stats']['current'], $r['json']['data']['suppliers']));
+$r = $c->call('GET', '/items/import');
+check('the items import page lists the file columns', in_array('item_name', $r['json']['data']['columns'] ?? [], true));
+$r = $c->call('GET', '/search?q=Apia');
+check('search answers JSON groups', $r['status'] === 200 && is_array($r['json']['groups'] ?? null));
+$r = $c->call('GET', '/search?q=a');
+check('search needs two letters', $r['status'] === 200 && ($r['json']['groups'] ?? 1) === []);
+
+// page layout designer: data and save over JSON
+$r = $c->call('GET', '/settings/formdesign');
+$m = $r['json']['data']['model'] ?? [];
+check('the layout designer gives every form, the field types and the widths', $r['status'] === 200 && count($m) >= 10 && isset($r['json']['data']['types']['text'], $r['json']['data']['widths']['50']));
+$cust = null; foreach ($m as $f) if ($f['key'] === 'customer') $cust = $f;
+$payload = [$cust['key'] => ['style' => $cust['style'], 'lines' => $cust['lines'] ?? [], 'deleted' => [],
+    'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => array_merge($sec['fields'], ['cf:new1'])], array_slice($cust['sections'], 0, 1)),
+    'fields' => ['cf:new1' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Colour code', 'type' => 'text', 'options' => '', 'inList' => false, 'unique' => false, 'isNew' => true]]]];
+$r = $c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'customer', 'close' => '', 'return' => '']);
+check('a new field added in the designer is saved (JSON answer, no redirect crash)', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]) === 1);
+check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
+DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
+
+echo "The app is the front door\n";
+$sp = ['/' => '/app/', '/dashboard' => '/app/dashboard', '/customers/12/edit' => '/app/customers/12/edit', '/settings/formdesign' => '/app/settings/formdesign', '/forgot-password' => '/app/forgot-password',
+    '/admin' => '/app/admin', '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];
+$bad = []; foreach ($sp as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
+check('classic screen addresses map to their twin in the app', !$bad);
+$keep = ['/items/export', '/items/import/template', '/purchase/orders/5/print', '/sales/invoices/5/print', '/labels/print', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/admin/system/backup', '/sales/deliveries/3/voucher', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
+$bad = []; foreach ($keep as $path) if (Core\Spa::redirectFor($path) !== null) $bad[] = $path;
+check('files, printouts and lookups are never sent to the app', !$bad);
+check('a report opened for printing stays a server page', Core\Spa::redirectFor('/reports/stock-summary', ['print' => '1']) === null && Core\Spa::redirectFor('/reports/stock-summary') === '/app/reports/stock-summary');
+$rootNoFollow = (function () use ($base) { $ch = curl_init($base . '/'); curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true]); $h = (string)curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$st, $h]; })();
+check('the site address itself opens the app', $rootNoFollow[0] === 302 && (bool)preg_match('~Location: .*/app/\r?\n~i', $rootNoFollow[1]));
+
 echo "The React shell\n";
 $spa = (new Client($base))->get('/app/customers/12');
 check('/app/... serves the built React page (any deep link), without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));

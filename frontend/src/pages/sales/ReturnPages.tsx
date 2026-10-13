@@ -74,7 +74,7 @@ function ReturnForm({ invoice }: { invoice: string }) {
   const setRow = (id: string, p: Partial<RR>) => setRows((rs) => ({ ...rs, [id]: { ...rs[id], ...p } }));
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <PageHead title={`Return · ${inv.invoice_no}`} extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=sales_return&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+      <PageHead title={`Return · ${inv.invoice_no}`} extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=sales_return&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav('/sales/returns/create')}>Back</button><button className="btn btn-danger" disabled={saving}>{saving ? 'Saving…' : 'Record return'}</button></PageHead>
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body"><div className="text-muted small">{term('customer')}</div><div className="mb-3">{inv.customer}<br /><small className="text-muted">Invoice {inv.invoice_no} · stock goes back to {inv.warehouse}</small></div>

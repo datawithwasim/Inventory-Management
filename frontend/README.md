@@ -44,7 +44,7 @@ Upload `public/ui/` to the server after a build.
 | Sign-in, shell (menu, profile, theme), dashboard | done (dashboard is a simplified first version: no charts yet) |
 | Customers (list with column picker, record page, form from the layout designer) | done |
 | Suppliers (list, record page with contacts, items supplied, rate list add / revise / remove, orders, bills; form with contact people) | done |
-| Supplier items (list with filters + column picker, record page with rates, form with the our-item search) | done (CSV import stays on the PHP page for now) |
+| Supplier items (list with filters + column picker, record page with rates, form with the our-item search, CSV import) | done |
 | Barcode labels (print page, templates, visual designer) | done |
 | Items (list, record page with SKU / rolls / tagged supplier items, form with one SKU and bundle components) | done |
 | Purchase: orders (list, approval switch, workflow buttons, form with the items table), goods receipts (against an order or direct, per-roll lines with racks and supplier lots), bills (payments), requisitions (incl. from low stock, turn into PO), returns (pick receipt, choose qty and rack) | done |
@@ -53,9 +53,12 @@ Upload `public/ui/` to the server after a build.
 | Stock documents: adjustments, transfers (between warehouses: dispatch → **in transit** → receive on racks, partial receipts, shortage settlement, cancel, challan; inside one warehouse: instant) (line editor: item search, roll, rack with in-stock hint, new roll with supplier lot; stock-out voucher link), stock-takes (start, enter counts, save, post, delete draft) | done |
 | Sales: orders (list, form with customer prices / discount / tax and live totals, confirm & reserve, advance, close, cancel), deliveries (against an order with the roll and rack suggested per line and shade warning, split lines, or direct; creates the invoice), invoices (payments, edit details), sales returns (pick invoice, put back on a rack or not) | done (delivery note / invoice / receipt printing stays on the PHP print pages) |
 | Reports: picker, and one viewer for all 18 reports (filter bar from each report's definition, table, totals, Excel / CSV download, print page; low stock turns ticked rows into draft POs) | done |
-| Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile | done (the page-layout designer / custom fields and the print pages stay PHP) |
+| Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile; the page layout designer (full screen, `/app/settings/formdesign`) | done |
+| Forgot / reset password (company and Super Admin), customer groups with special prices, rate lists, items CSV import, global search (Ctrl K) | done |
 | Super Admin (sign-in, dashboard, companies with open-as-owner support mode, plans, system updates and backup, audit log) at `/app/admin` | done |
-| Everything else | the PHP page layout designer and print pages only |
-| Layout designer, print pages (invoice, voucher, delivery note) | stay PHP for now |
+| Print pages (invoice, delivery note, voucher, PO, labels, report print), CSV/Excel downloads, backup download, installer | stay server-made on purpose (they are documents and files, not screens) |
+
+## The site opens the app
+`core/Spa.php` lists the address starts the app shows. `Router::dispatch` sends a browser `GET` for any of them (and for `/`) to `/app/...`; files and printouts are left alone. `LEGACY_UI=1` in `.env` switches that off for the screens (not for `/`), which only the automated tests need. Keep `Spa::PREFIXES` and `src/lib/routes.ts` in step.
 
 Remaining: the page layout designer and the print pages (invoice, delivery note, voucher), which stay PHP.

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post } from '../../lib/api';
+import { get, post } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { PageHead, Spinner } from '../../components/ui';
@@ -18,7 +18,7 @@ export default function CustomerList() {
   return (
     <>
       <PageHead title={term('customer', true)}>
-        <a className="btn btn-outline-secondary" href={legacyUrl('/customers/groups')}>{term('customer')} groups</a>
+        <Link className="btn btn-outline-secondary" to="/customers/groups">{term('customer')} groups</Link>
         {can('customers.create') && <Link className="btn btn-primary" to="/customers/create"><i className="bi bi-plus-lg" /> Add {term('customer').toLowerCase()}</Link>}
       </PageHead>
       <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); setApplied({ q, group }); }}>

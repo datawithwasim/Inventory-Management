@@ -74,7 +74,7 @@ function ReturnForm({ grn }: { grn: string }) {
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <PageHead title={`Return goods · ${g.grn_no}`} extra={schema.data.canDesign ? <a className="page-layout-link" href={legacyUrl(`/settings/formdesign?form=purchase_return&return=${encodeURIComponent(location.pathname)}`)}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</a> : null}>
+      <PageHead title={`Return goods · ${g.grn_no}`} extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=purchase_return&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav('/purchase/returns/create')}>Back</button><button className="btn btn-danger" disabled={saving}>{saving ? 'Saving…' : `Return to ${term('supplier').toLowerCase()}`}</button></PageHead>
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body"><div className="text-muted small">{term('supplier')}</div><div className="mb-3">{g.supplier}<br /><small className="text-muted">Receipt {g.grn_no} · {g.warehouse}</small></div>

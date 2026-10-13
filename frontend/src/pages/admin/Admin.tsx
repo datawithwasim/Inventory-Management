@@ -19,7 +19,7 @@ function setMode(m: string) {
 
 /** The platform owner's sign-in. */
 export function AdminLogin() {
-  const nav = useNavigate(); const qc = useQueryClient(); const a = useAdmin();
+  const nav = useNavigate(); const notice = (useLocation().state as { notice?: string } | null)?.notice; const qc = useQueryClient(); const a = useAdmin();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
   if (a.isLoading) return <Spinner />;
   if (a.data?.authenticated) return <Navigate to="/admin" replace />;
@@ -34,13 +34,14 @@ export function AdminLogin() {
       <section className="auth-hero"><div className="auth-logo"><span className="sb-mark"><i className="bi bi-shield-check" /></span>Super Admin</div>
         <div><h2>Companies, plans and the health of the platform.</h2></div><div className="small opacity-75">&copy; {new Date().getFullYear()} Inventory</div></section>
       <section className="auth-pane"><div className="auth-card"><div className="card"><div className="card-body p-4">
+        {notice && <div className="alert alert-success py-2">{notice}</div>}
         <Messages items={msgs} />
         <h2 className="h5 mb-3">Super Admin sign in</h2>
         <form onSubmit={submit}>
           <div className="mb-3"><label className="form-label">Email</label><input type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></div>
           <div className="mb-3"><label className="form-label">Password</label><input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
           <button className="btn btn-dark w-100" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          <div className="text-center mt-3"><a href={legacyUrl('/admin/forgot-password')}>Forgot password?</a></div>
+          <div className="text-center mt-3"><Link to="/admin/forgot-password">Forgot password?</Link></div>
         </form>
       </div></div></div></section>
     </div>
