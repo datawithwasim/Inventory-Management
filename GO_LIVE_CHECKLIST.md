@@ -25,7 +25,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`. Afterwards the page must say "The database is up to date."
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/app/` once with a hard refresh (Ctrl+F5) so the browser drops the old screens.
 
@@ -48,7 +48,7 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 
 **Stock set-up**
 - [ ] Warehouse added; racks added as a range (A-01 … A-10).
-- [ ] Item with variants, "Track by roll" on; Item without roll tracking; a Set (bundle) of two items.
+- [ ] **One item = one SKU** (no variants): every colour / design / size is its own item (e.g. "Royal Velvet Wine 54in", "Royal Velvet Teal 54in"). Item form: name, type, category, unit, tax, SKU, barcode, sale price, roll tracking. A second SKU on one item is refused. Then tag it with a **Supplier item**, which carries the supplier's name/code, design no., composition, width, GSM, pattern, finish, rate, minimum order and lead time (the item page shows them). Also: an item without roll tracking; a Set (bundle) of two items. Import/Export CSV is one row per item.
 - [ ] Stock adjustment (opening stock): fabric creates a roll with supplier lot and rack; non-roll item adds quantity.
 - [ ] Transfer between two racks of ONE warehouse: instant ("Moved").
 - [ ] Transfer between TWO warehouses (transport, vehicle, LR no., expected date): status **In transit**; the sender's stock drops, the receiver's does not rise yet; Stock page shows the quantity under "In transit"; the roll shows "In transit" (not "Finished").
@@ -68,7 +68,7 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 
 **Purchase**
 - [ ] Supplier with rate list and "Supplier items" (their name/code linked to our item).
-- [ ] Item ↔ supplier items: an item a supplier is linked to cannot be deleted (it says why); removing a variant that has supplier items / documents only hides it. Low stock → "Create draft purchase orders" picks the **preferred** supplier, its current rate and never less than its minimum order; "Turn into PO" on a requisition prices from the chosen supplier's rate list.
+- [ ] Item ↔ supplier items: an item a supplier is linked to cannot be deleted (it says why); Low stock → "Create draft purchase orders" picks the **preferred** supplier, its current rate and never less than its minimum order; "Turn into PO" on a requisition prices from the chosen supplier's rate list.
 - [ ] PO (with approval on/off as per your rule) → receive goods (one roll per line, rack, supplier lot) → bill → payment → status "Paid".
 - [ ] Purchase return reduces stock and credits the bill; requisition → "Turn into PO".
 

@@ -31,7 +31,7 @@ export default function SupplierItemList() {
       {d?.unlinked > 0 && link !== 'unlinked' && <div className="alert alert-warning py-2 small"><i className="bi bi-link-45deg" /> {d.unlinked} supplier item(s) are not linked to one of your items yet, so they cannot be used on a purchase order. <a href="#" onClick={(e) => { e.preventDefault(); set('link', 'unlinked'); }}>Show them</a></div>}
       {res.isLoading ? <Spinner /> : (
         <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">
-          <thead><tr><th>Supplier item</th><th>{term('supplier')}</th>{col('code') && <th>Code</th>}{col('our_item') && <th>Our item</th>}{col('rate') && <th className="text-end">Current rate</th>}{col('moq') && <th className="text-end">Min order</th>}{col('lead') && <th className="text-end">Lead time</th>}
+          <thead><tr><th>Supplier item</th><th>{term('supplier')}</th>{col('code') && <th>Code</th>}{col('details') && <th>Design &amp; details</th>}{col('our_item') && <th>Our item</th>}{col('rate') && <th className="text-end">Current rate</th>}{col('moq') && <th className="text-end">Min order</th>}{col('lead') && <th className="text-end">Lead time</th>}
             {(d.cfList ?? []).map((f: any) => <th key={f.id}>{f.label}</th>)}{col('preferred') && <th>Preferred</th>}
             <th className="text-end col-th"><ColumnPicker list="supplier_items" entity="supplier_item" onApplied={() => qc.invalidateQueries({ queryKey: ['supplier-items'] })} /></th></tr></thead>
           <tbody>
@@ -40,6 +40,7 @@ export default function SupplierItemList() {
                 <td><Link className="fw-medium" to={`/purchase/supplier-items/${r.id}`}>{r.supplier_name || r.supplier_code || 'Same as ours'}</Link>{r.is_active ? null : <> <Badge tone="dark">Inactive</Badge></>}</td>
                 <td><Link to={`/suppliers/${r.supplier_id}`}>{r.supplier}</Link></td>
                 {col('code') && <td>{r.supplier_code ?? ''}</td>}
+                {col('details') && <td className="small text-muted">{[r.design_no && `Design ${r.design_no}`, r.composition, r.width && `Width ${r.width}`, r.gsm && `${r.gsm} GSM`, r.pattern, r.finish].filter(Boolean).join(' · ')}</td>}
                 {col('our_item') && <td>{r.variant_id ? <><a href={legacyUrl(`/items/${r.item_id}`)}>{r.item_name}{r.vname ? ` — ${r.vname}` : ''}</a> <span className="text-muted small">{r.sku}</span></> : <Badge tone="warning">Not linked</Badge>}</td>}
                 {col('rate') && <td className="text-end">{r.net != null ? money(r.net) : <span className="text-muted">—</span>}</td>}
                 {col('moq') && <td className="text-end">{Number(r.min_order_qty) > 0 ? qty(r.min_order_qty) : <span className="text-muted">—</span>}</td>}

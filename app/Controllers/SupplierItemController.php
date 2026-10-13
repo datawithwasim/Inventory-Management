@@ -110,6 +110,10 @@ final class SupplierItemController extends PurchaseBase
         if ($lead !== '' && (!ctype_digit($lead) || (int)$lead > 365)) $this->bounce('Lead time must be 0 to 365 days.', $back);
         $row = ['supplier_id' => $sid, 'supplier_name' => $name, 'supplier_code' => $code, 'variant_id' => $vid ?: null, 'min_order_qty' => $moq === '' ? 0 : (float)$moq,
             'lead_time_days' => $lead === '' ? null : (int)$lead, 'note' => $this->text($d['note'] ?? '', 150, 'Notes', $back)];
+        // what the item is like: design, material, width, weight, pattern, finish
+        foreach (['design_no' => ['Design / quality no.', 60], 'composition' => ['Composition', 120], 'width' => ['Width', 40], 'gsm' => ['GSM / weight', 40], 'pattern' => ['Pattern', 80], 'finish' => ['Finish', 80]] as $k => [$label, $max]) {
+            $row[$k] = $this->text($d[$k] ?? '', $max, $label, $back);
+        }
         [$row, $errs] = FormFields::apply('supplier_item', $row);
         if ($errs) $this->bounce(implode(' ', $errs), $back);
         return $row;
@@ -175,7 +179,8 @@ final class SupplierItemController extends PurchaseBase
 
     // ------------------------------------------------------------------ CSV
 
-    private const CSV_HEAD = ['supplier', 'supplier_item_name', 'supplier_item_code', 'sku', 'min_order_qty', 'lead_time_days', 'preferred', 'rate', 'discount_pct', 'valid_from'];
+    private const CSV_HEAD = ['supplier', 'supplier_item_name', 'supplier_item_code', 'sku', 'min_order_qty', 'lead_time_days', 'preferred', 'rate', 'discount_pct', 'valid_from', 'design_no', 'composition', 'width', 'gsm', 'pattern', 'finish'];
+    private const ATTR_MAX = ['design_no' => 60, 'composition' => 120, 'width' => 40, 'gsm' => 40, 'pattern' => 80, 'finish' => 80];
 
     public function export(): void
     {
@@ -188,7 +193,8 @@ final class SupplierItemController extends PurchaseBase
             $cur = $r['variant_id'] ? Purchase::currentRate((int)$r['supplier_id'], (int)$r['variant_id']) : null;
             $safe = fn($v) => preg_match('/^[=+\-@\t\r]/', (string)$v) ? "'" . $v : (string)$v;   // spreadsheet formula guard
             fputcsv($o, [$safe($r['supplier']), $safe($r['supplier_name'] ?? ''), $safe($r['supplier_code'] ?? ''), $r['sku'] ?? '', $r['min_order_qty'] + 0, $r['lead_time_days'] ?? '', $r['is_preferred'] ? 'yes' : '',
-                $cur['rate'] ?? '', $cur['discount_pct'] ?? '', $cur['valid_from'] ?? '', $safe(self::ourName($r)), $r['is_active'] ? 'yes' : 'no'], ',', '"', '\\');
+                $cur['rate'] ?? '', $cur['discount_pct'] ?? '', $cur['valid_from'] ?? '',
+                ...array_map(fn($k) => $safe($r[$k] ?? ''), array_keys(self::ATTR_MAX)), $safe(self::ourName($r)), $r['is_active'] ? 'yes' : 'no'], ',', '"', '\\');
         }
         fclose($o);
         exit;
@@ -198,7 +204,7 @@ final class SupplierItemController extends PurchaseBase
     {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="supplier-items-template.csv"');
-        echo implode(',', self::CSV_HEAD) . "\nSurat Mills,Royal Velvet 54,MR-54,RVW,100,7,yes,285.00,5," . date('Y-m-d') . "\n";
+        echo implode(',', self::CSV_HEAD) . "\nSurat Mills,Royal Velvet 54,MR-54,RVW,100,7,yes,285.00,5," . date('Y-m-d') . ",D-4471,Polyester velvet,54 in,320,Plain,Soft finish\n";
         exit;
     }
 
@@ -235,14 +241,21 @@ final class SupplierItemController extends PurchaseBase
                 $moq = ($d['min_order_qty'] ?? '') === '' ? 0 : (float)$d['min_order_qty'];
                 $lead = ($d['lead_time_days'] ?? '') === '' ? null : (int)$d['lead_time_days'];
                 if ($moq < 0 || ($lead !== null && ($lead < 0 || $lead > 365))) { $bad[] = "Row $line: minimum qty or lead time is out of range."; continue; }
+                $attr = [];
+                foreach (self::ATTR_MAX as $ak => $max) {
+                    $av = $d[$ak] ?? '';
+                    if (mb_strlen($av) > $max) { $bad[] = "Row $line: $ak is too long."; continue 2; }
+                    if ($av !== '') $attr[$ak] = $av;
+                }
                 $have = $vid ? DB::one('SELECT id FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$t, $sid, $vid])
                     : ($code ? DB::one('SELECT id FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND supplier_code = ?', [$t, $sid, $code]) : null);
                 if ($have) {
                     DB::run('UPDATE supplier_items SET supplier_name = COALESCE(?, supplier_name), supplier_code = COALESCE(?, supplier_code), variant_id = COALESCE(?, variant_id), min_order_qty = ?, lead_time_days = ? WHERE tenant_id = ? AND id = ?',
                         [$name, $code, $vid, $moq, $lead, $t, $have['id']]);
+                    if ($attr) DB::run('UPDATE supplier_items SET ' . implode(', ', array_map(fn($k) => "`$k` = ?", array_keys($attr))) . ' WHERE tenant_id = ? AND id = ?', [...array_values($attr), $t, $have['id']]);
                     $id = (int)$have['id'];
                 } else {
-                    $id = DB::insert('supplier_items', ['tenant_id' => $t, 'supplier_id' => $sid, 'variant_id' => $vid, 'supplier_name' => $name, 'supplier_code' => $code, 'min_order_qty' => $moq, 'lead_time_days' => $lead, 'is_active' => 1]);
+                    $id = DB::insert('supplier_items', ['tenant_id' => $t, 'supplier_id' => $sid, 'variant_id' => $vid, 'supplier_name' => $name, 'supplier_code' => $code, 'min_order_qty' => $moq, 'lead_time_days' => $lead, 'is_active' => 1] + $attr);
                 }
                 if ($vid && in_array(strtolower($d['preferred'] ?? ''), ['yes', 'y', '1', 'true'], true)) Purchase::setPreferred($id, $vid, true);
                 if ($vid && ($d['rate'] ?? '') !== '') {

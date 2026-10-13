@@ -13,7 +13,7 @@
 <?php if ($unlinked && $link !== 'unlinked'): ?><div class="alert alert-warning py-2 small"><i class="bi bi-link-45deg"></i> <?= (int)$unlinked ?> supplier item(s) are not linked to one of your items yet, so they cannot be used on a purchase order. <a href="<?= url('purchase/supplier-items?link=unlinked') ?>">Show them</a></div><?php endif; ?>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
   <thead><tr><th>Supplier item</th><th><?= e(term('supplier')) ?></th>
-    <?php if ($col('code')): ?><th>Code</th><?php endif; ?><?php if ($col('our_item')): ?><th>Our item</th><?php endif; ?><?php if ($col('rate')): ?><th class="text-end">Current rate</th><?php endif; ?>
+    <?php if ($col('code')): ?><th>Code</th><?php endif; ?><?php if ($col('details')): ?><th>Design &amp; details</th><?php endif; ?><?php if ($col('our_item')): ?><th>Our item</th><?php endif; ?><?php if ($col('rate')): ?><th class="text-end">Current rate</th><?php endif; ?>
     <?php if ($col('moq')): ?><th class="text-end">Min order</th><?php endif; ?><?php if ($col('lead')): ?><th class="text-end">Lead time</th><?php endif; ?>
     <?php foreach ($cfList as $f): ?><th><?= e($f['label']) ?></th><?php endforeach; ?><?php if ($col('preferred')): ?><th>Preferred</th><?php endif; ?><th></th></tr></thead>
   <tbody>
@@ -22,6 +22,7 @@
       <td><a class="fw-medium" href="<?= url("purchase/supplier-items/{$r['id']}") ?>"><?= e($r['supplier_name'] ?: $r['supplier_code']) ?></a><?= $r['is_active'] ? '' : ' <span class="badge text-bg-dark">Inactive</span>' ?></td>
       <td><a href="<?= url("suppliers/{$r['supplier_id']}") ?>"><?= e($r['supplier']) ?></a></td>
       <?php if ($col('code')): ?><td><?= e($r['supplier_code'] ?? '') ?></td><?php endif; ?>
+      <?php if ($col('details')): ?><td class="small text-muted"><?= e(implode(' · ', array_filter([$r['design_no'] ? 'Design ' . $r['design_no'] : '', $r['composition'], $r['width'] ? 'Width ' . $r['width'] : '', $r['gsm'] ? $r['gsm'] . ' GSM' : '', $r['pattern'], $r['finish']]))) ?></td><?php endif; ?>
       <?php if ($col('our_item')): ?><td><?php if ($r['variant_id']): ?><a href="<?= url("items/{$r['item_id']}") ?>"><?= e(App\Controllers\SupplierItemController::ourName($r)) ?></a> <span class="text-muted small"><?= e($r['sku']) ?></span><?php else: ?><span class="badge text-bg-warning">Not linked</span><?php endif; ?></td><?php endif; ?>
       <?php if ($col('rate')): ?><td class="text-end"><?= ($r['net'] ?? null) !== null ? e(money($r['net'])) : '<span class="text-muted">—</span>' ?></td><?php endif; ?>
       <?php if ($col('moq')): ?><td class="text-end"><?= (float)$r['min_order_qty'] > 0 ? e(qty($r['min_order_qty'])) : '<span class="text-muted">—</span>' ?></td><?php endif; ?>

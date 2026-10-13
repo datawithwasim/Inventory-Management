@@ -23,13 +23,6 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
         <?php foreach ($taxes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $sel('tax_id', $c['id']) ?>><?= e($c['name']) ?> (<?= e($c['rate']) ?>%)</option><?php endforeach; ?></select></div>
     </div><?php endif; ?>
     <?php if (ff('item.hsn_code')): ?><div class="row"><div class="col-md-4 mb-3"<?= ffa('item.hsn_code') ?>><label class="form-label"><?= fl('item.hsn_code', 'HSN code') ?><?= ffstar('item.hsn_code') ?></label><input name="hsn_code" class="form-control" maxlength="20" value="<?= $v('hsn_code') ?>"<?= ffreq('item.hsn_code') ?>></div></div><?php endif; ?>
-    <div class="row" id="attrRow">
-      <?php foreach (['design_no' => ['Design / quality no.', 60], 'composition' => ['Composition / material', 120], 'width' => ['Width', 40], 'gsm' => ['GSM / weight', 40], 'pattern' => ['Pattern', 80], 'finish' => ['Finish', 80]] as $k => [$lab, $max]):
-        if (!ff("item.$k")) continue; $types = array_keys(array_filter(App\Models\ItemTypes::ATTRS, fn($a) => in_array($k, $a, true))); ?>
-        <div class="col-md-4 mb-3" data-attr="<?= e($k) ?>" data-types="<?= e(implode(' ', $types)) ?>"<?= ffa("item.$k") ?>><label class="form-label" data-label="<?= e($lab) ?>"><?= fl("item.$k", $lab) ?><?= ffstar("item.$k") ?></label>
-          <input name="<?= e($k) ?>" class="form-control" maxlength="<?= (int)$max ?>" value="<?= $v($k) ?>"<?= ffreq("item.$k") ?>></div>
-      <?php endforeach; ?>
-    </div>
     <?php if (ff('item.description')): ?><div class="mb-0"<?= ffa('item.description') ?>><label class="form-label"><?= fl('item.description', 'Description') ?><?= ffstar('item.description') ?></label><textarea name="description" class="form-control" rows="2"<?= ffreq('item.description') ?>><?= $v('description') ?></textarea></div><?php endif; ?>
     <?= ffextras('item', $cfFields, $cfValues) ?>
     </div>
@@ -55,25 +48,13 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
   <button class="btn btn-primary">Save <?= e(term('item', true)) ?></button> <a class="btn btn-link" href="<?= $item ? url("items/{$item['id']}") : url('items') ?>">Cancel</a></div>
 </div>
 <div class="mt-3">
-  <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center">
-    <span id="variantsTitle"><?= $isBundle ? 'Bundle SKU & price' : 'Variants' ?></span>
-    <button type="button" class="btn btn-sm btn-outline-primary" id="addVariant" <?= $isBundle ? 'hidden' : '' ?>><i class="bi bi-plus-lg"></i> Add variant</button></div>
-    <div class="table-responsive"><table class="table mb-0 align-middle" id="variantTable">
-      <thead><tr><th>Variant name</th><th>Colour</th><th>Size</th><th>SKU</th><th>Barcode</th><th>Cost</th><th>Sale price</th><th></th></tr></thead>
-      <tbody>
-      <?php foreach ($variants as $i => $r): ?>
-        <tr>
-          <td><input type="hidden" name="variants[<?= $i ?>][id]" value="<?= e($r['id'] ?? '') ?>"><input name="variants[<?= $i ?>][name]" class="form-control form-control-sm" value="<?= e($r['name'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][colour]" class="form-control form-control-sm" maxlength="60" value="<?= e($r['colour'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][size]" class="form-control form-control-sm" maxlength="60" placeholder="e.g. 54 in / King" value="<?= e($r['size'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][sku]" class="form-control form-control-sm" placeholder="auto" value="<?= e($r['sku'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][barcode]" class="form-control form-control-sm" value="<?= e($r['barcode'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][cost_price]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="<?= e($r['cost_price'] ?? '') ?>"></td>
-          <td><input name="variants[<?= $i ?>][sale_price]" type="number" step="0.01" min="0" class="form-control form-control-sm" value="<?= e($r['sale_price'] ?? '') ?>"></td>
-          <td><button type="button" class="btn btn-sm btn-outline-danger rm" title="Remove">&times;</button></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody></table></div></div>
+  <div class="card mb-3"><div class="card-header">SKU &amp; price <small class="text-muted ms-1">every colour, design or size is its own <?= e(term('item')) ?>; the supplier item carries the details</small></div>
+    <div class="card-body"><div class="row g-3">
+      <div class="col-md-3"><label class="form-label">SKU</label><input name="sku" class="form-control" maxlength="60" placeholder="auto" value="<?= e(old('sku', $variants[0]['sku'] ?? '')) ?>"></div>
+      <div class="col-md-3"><label class="form-label">Barcode</label><input name="barcode" class="form-control" maxlength="60" value="<?= e(old('barcode', $variants[0]['barcode'] ?? '')) ?>"></div>
+      <div class="col-md-3"><label class="form-label">Sale price</label><input name="sale_price" type="number" step="0.01" min="0" class="form-control" value="<?= e(old('sale_price', $variants[0]['sale_price'] ?? '')) ?>"></div>
+      <div class="col-md-3"><label class="form-label" title="For stock value and as a last-resort price. Purchase orders use the supplier's rate first.">Default cost</label><input name="cost_price" type="number" step="0.01" min="0" class="form-control" value="<?= e(old('cost_price', $variants[0]['cost_price'] ?? '')) ?>"></div>
+    </div></div></div>
 
   <div class="card mb-3" id="componentsCard" <?= $isBundle ? '' : 'hidden' ?>><div class="card-header d-flex justify-content-between align-items-center">
     <span>Bundle contents</span><button type="button" class="btn btn-sm btn-outline-primary" id="addComp"><i class="bi bi-plus-lg"></i> Add component</button></div>
@@ -91,21 +72,10 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
 </form>
 <script>
 (function () {
-  var vt = document.querySelector('#variantTable tbody'), ct = document.querySelector('#compTable tbody');
-  var vn = vt.rows.length, cn = ct.rows.length;
+  var ct = document.querySelector('#compTable tbody');
+  var cn = ct.rows.length;
   var pick = <?= json_encode(array_map(fn($p) => ['id' => (int)$p['id'], 't' => $p['item_name'] . ($p['name'] ? ' — ' . $p['name'] : '') . ' (' . $p['sku'] . ')'], $pickable)) ?>;
   function el(html) { var t = document.createElement('tbody'); t.innerHTML = html; return t.firstElementChild; }
-  function addVariant() {
-    var i = vn++;
-    vt.appendChild(el('<tr><td><input type="hidden" name="variants[' + i + '][id]"><input name="variants[' + i + '][name]" class="form-control form-control-sm"></td>' +
-      '<td><input name="variants[' + i + '][colour]" class="form-control form-control-sm" maxlength="60"></td>' +
-      '<td><input name="variants[' + i + '][size]" class="form-control form-control-sm" maxlength="60"></td>' +
-      '<td><input name="variants[' + i + '][sku]" class="form-control form-control-sm" placeholder="auto"></td>' +
-      '<td><input name="variants[' + i + '][barcode]" class="form-control form-control-sm"></td>' +
-      '<td><input name="variants[' + i + '][cost_price]" type="number" step="0.01" min="0" class="form-control form-control-sm"></td>' +
-      '<td><input name="variants[' + i + '][sale_price]" type="number" step="0.01" min="0" class="form-control form-control-sm"></td>' +
-      '<td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td></tr>'));
-  }
   function addComp() {
     var i = cn++, tr = el('<tr><td><select class="form-select form-select-sm"></select></td>' +
       '<td><input type="number" step="0.001" min="0" class="form-control form-control-sm" value="1"></td>' +
@@ -115,36 +85,23 @@ $sel = fn($k, $id) => (int)old($k, $item[$k] ?? 0) === (int)$id ? 'selected' : '
     tr.querySelector('input').name = 'components[' + i + '][qty]';
     ct.appendChild(tr);
   }
-  document.getElementById('addVariant').onclick = addVariant;
   document.getElementById('addComp').onclick = addComp;
   document.addEventListener('click', function (e) {
     if (!e.target.classList.contains('rm')) return;
     var tb = e.target.closest('tbody');
-    if (tb === vt && vt.rows.length === 1) return;
     e.target.closest('tr').remove();
   });
-  if (!vt.rows.length) addVariant();
   var bundle = document.getElementById('isBundle');
   function sync() {
     var on = bundle.type === 'checkbox' ? bundle.checked : bundle.value === '1';
     document.getElementById('componentsCard').hidden = !on;
     document.getElementById('batchBox').hidden = on;
-    document.getElementById('addVariant').hidden = on;
-    document.getElementById('variantsTitle').textContent = on ? 'Bundle SKU & price' : 'Variants';
     if (on && !ct.rows.length) addComp();
   }
   bundle.addEventListener('change', sync); sync();
   var typ = document.getElementById('itemType'), trk = document.getElementById('trk'), rollTypes = <?= json_encode(App\Models\ItemTypes::ROLL_TYPES) ?>;
-  var wording = <?= json_encode(App\Models\ItemTypes::WORDING) ?>;
-  document.querySelectorAll('[data-attr] label').forEach(function (l) { var t = l.firstChild; l._ok = !!t && t.nodeType === 3 && t.nodeValue === l.dataset.label; });
   function syncType(user) {
-    if (!typ) return;
-    document.querySelectorAll('[data-attr]').forEach(function (w) {
-      w.hidden = w.dataset.types.split(' ').indexOf(typ.value) < 0;
-      var l = w.querySelector('label');
-      if (l && l._ok) l.firstChild.nodeValue = (wording[typ.value] || {})[w.dataset.attr] || l.dataset.label;
-    });
-    if (user && trk && !trk.disabled && !bundle.checked && rollTypes.indexOf(typ.value) > -1) trk.checked = true;
+    if (user && typ && trk && !trk.disabled && !bundle.checked && rollTypes.indexOf(typ.value) > -1) trk.checked = true;
   }
   if (typ) { typ.addEventListener('change', function () { syncType(true); }); syncType(false); }
 })();

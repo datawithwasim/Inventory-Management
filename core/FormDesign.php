@@ -10,8 +10,7 @@ final class FormDesign
 {
     /** entity => [column => default label]. Order here is the default order. */
     public const FIELDS = [
-        'item' => ['name' => 'Item name', 'item_type' => 'Product type', 'category_id' => 'Category', 'brand_id' => 'Brand', 'unit_id' => 'Unit', 'tax_id' => 'Tax', 'hsn_code' => 'HSN code',
-            'design_no' => 'Design / quality no.', 'composition' => 'Composition', 'width' => 'Width', 'gsm' => 'GSM / weight', 'pattern' => 'Pattern', 'finish' => 'Finish', 'description' => 'Description'],
+        'item' => ['name' => 'Item name', 'item_type' => 'Product type', 'category_id' => 'Category', 'brand_id' => 'Brand', 'unit_id' => 'Unit', 'tax_id' => 'Tax', 'hsn_code' => 'HSN code', 'description' => 'Description'],
         'customer' => ['name' => 'Customer name', 'group_id' => 'Group', 'contact_person' => 'Contact person', 'phone' => 'Phone', 'email' => 'Email', 'address' => 'Billing address',
             'ship_address' => 'Delivery address', 'tax_no' => 'Tax number', 'credit_days' => 'Credit days', 'notes' => 'Notes'],
         'supplier' => ['name' => 'Supplier name', 'supplier_type' => 'Supplier type', 'contact_person' => 'Contact person', 'phone' => 'Phone', 'email' => 'Email', 'tax_no' => 'Tax number',
@@ -31,12 +30,12 @@ final class FormDesign
         'transfer' => ['warehouse_id' => 'From warehouse', 'to_warehouse_id' => 'To warehouse', 'expected_date' => 'Expected arrival', 'transport' => 'Transporter', 'vehicle_no' => 'Vehicle no.', 'lr_no' => 'LR / challan no.', 'note' => 'Note'],
         'invoice' => ['invoice_date' => 'Invoice date', 'due_date' => 'Due date', 'delivery_charge' => 'Delivery charge', 'installation_charge' => 'Installation charge', 'notes' => 'Notes (printed on the invoice)'],
         'requisition' => ['note' => 'Note'], 'location' => ['code' => 'Rack code', 'description' => 'Description'], 'stocktake' => ['warehouse_id' => 'Warehouse', 'note' => 'Note'],
-        'supplier_item' => ['supplier_id' => 'Supplier', 'supplier_name' => 'Supplier item name', 'supplier_code' => 'Supplier item code', 'variant_id' => 'Our item', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
+        'supplier_item' => ['supplier_id' => 'Supplier', 'supplier_name' => 'Supplier item name', 'supplier_code' => 'Supplier item code', 'variant_id' => 'Our item',
+            'design_no' => 'Design / quality no.', 'composition' => 'Composition', 'width' => 'Width', 'gsm' => 'GSM / weight', 'pattern' => 'Pattern', 'finish' => 'Finish', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
     ];
     /** Default width (of 12 columns) each field has on the real form. */
     public const SPANS = [
-        'item' => ['name' => 12, 'item_type' => 4, 'category_id' => 4, 'brand_id' => 4, 'unit_id' => 4, 'tax_id' => 4, 'hsn_code' => 4, 'design_no' => 4, 'composition' => 4, 'width' => 4,
-            'gsm' => 4, 'pattern' => 4, 'finish' => 4, 'description' => 12],
+        'item' => ['name' => 12, 'item_type' => 4, 'category_id' => 4, 'brand_id' => 4, 'unit_id' => 4, 'tax_id' => 4, 'hsn_code' => 4, 'description' => 12],
         'customer' => ['name' => 8, 'group_id' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'address' => 12, 'ship_address' => 12, 'tax_no' => 4, 'credit_days' => 3, 'notes' => 5],
         'supplier' => ['name' => 8, 'supplier_type' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'tax_no' => 6, 'pan' => 6, 'address' => 12, 'city' => 4, 'state' => 4, 'pincode' => 4,
             'ship_address' => 12, 'payment_terms_days' => 3, 'credit_limit' => 3, 'lead_time_days' => 3, 'transport' => 3, 'bank_name' => 4, 'bank_account' => 4, 'bank_ifsc' => 4, 'notes' => 12],
@@ -52,7 +51,7 @@ final class FormDesign
         'transfer' => ['warehouse_id' => 3, 'to_warehouse_id' => 3, 'expected_date' => 2, 'transport' => 2, 'vehicle_no' => 2, 'lr_no' => 3, 'note' => 12],
         'invoice' => ['invoice_date' => 6, 'due_date' => 6, 'delivery_charge' => 6, 'installation_charge' => 6, 'notes' => 12],
         'requisition' => ['note' => 12], 'location' => ['code' => 6, 'description' => 12], 'stocktake' => ['warehouse_id' => 6, 'note' => 12],
-        'supplier_item' => ['supplier_id' => 6, 'supplier_name' => 6, 'supplier_code' => 4, 'variant_id' => 8, 'min_order_qty' => 4, 'lead_time_days' => 4, 'note' => 12],
+        'supplier_item' => ['supplier_id' => 6, 'supplier_name' => 6, 'supplier_code' => 4, 'variant_id' => 8, 'design_no' => 4, 'composition' => 4, 'width' => 4, 'gsm' => 4, 'pattern' => 4, 'finish' => 4, 'min_order_qty' => 4, 'lead_time_days' => 4, 'note' => 12],
     ];
     /** Forms that have a record detail page (Overview / Timeline) laid out from the same design. */
     public const DETAIL = ['item', 'customer', 'supplier', 'warehouse', 'purchase_order', 'grn', 'bill', 'purchase_return', 'sales_order', 'delivery', 'sales_return', 'adjustment', 'transfer', 'invoice', 'requisition', 'location', 'stocktake', 'supplier_item'];
@@ -88,7 +87,7 @@ final class FormDesign
     ];
     /** Cards below the sections on each record page ("related lists"): id => [label, may be hidden]. Their order and visibility are part of the layout. */
     public const RELATED = [
-        'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Suppliers & rates', true], 'variants' => ['Variants & stock', true], 'history' => ['Stock movements', true]],
+        'item' => ['contents' => ['Bundle contents', true], 'rates' => ['Suppliers & rates', true], 'variants' => ['Stock & SKU', true], 'history' => ['Stock movements', true]],
         'customer' => ['balance' => ['Balance', true], 'orders' => ['Orders', true], 'invoices' => ['Invoices', true]],
         'supplier' => ['balance' => ['What we owe', true], 'products' => ['Items supplied', true], 'rates' => ['Rate list', true], 'orders' => ['Purchase orders', true], 'bills' => ['Bills', true]],
         'warehouse' => ['stats' => ['Overview figures', true], 'racks' => ['Racks', true], 'stock' => ['Stock here', true]],

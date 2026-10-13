@@ -181,7 +181,7 @@ final class Purchase
     {
         $t = self::tid();
         $rows = DB::all(
-            'SELECT p.id AS si_id, p.supplier_id, p.variant_id, p.supplier_name AS sname, p.supplier_code AS scode, p.is_preferred, p.lead_time_days AS si_lead, p.min_order_qty AS si_moq,
+            'SELECT p.id AS si_id, p.supplier_id, p.variant_id, p.supplier_name AS sname, p.supplier_code AS scode, p.is_preferred, p.lead_time_days AS si_lead, p.min_order_qty AS si_moq, p.design_no, p.composition, p.width, p.gsm, p.pattern, p.finish,
                     s.name AS supplier_name, v.sku, v.name AS vname
              FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id JOIN item_variants v ON v.id = p.variant_id
              WHERE p.tenant_id = ? AND v.item_id = ? AND p.is_active = 1 AND s.is_active = 1 ORDER BY p.variant_id, s.name', [$t, $itemId]);

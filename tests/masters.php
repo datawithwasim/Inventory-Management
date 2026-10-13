@@ -49,26 +49,31 @@ $a->post('/suppliers', ['name' => 'Delhi Traders', 'supplier_type' => 'trader'],
 $s2 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Delhi Traders'", [$tA]);
 
 echo "Item master\n";
-$a->post('/items', ['name' => 'Royal Velvet', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'design_no' => 'RV-12', 'composition' => '100% polyester', 'width' => '54 in', 'gsm' => '280', 'pattern' => 'Plain', 'finish' => 'Soft',
-    'track_batch' => 1, 'variants' => [['name' => 'Wine', 'colour' => 'Wine', 'sku' => 'RVW', 'cost_price' => 300], ['name' => 'Teal', 'colour' => 'Teal', 'size' => '54 in', 'sku' => 'RVT', 'cost_price' => 310]]], '/items/create');
-$i1 = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Royal Velvet'", [$tA]);
+$a->post('/items', ['name' => 'Royal Velvet Wine', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'track_batch' => 1, 'sku' => 'RVW', 'cost_price' => 300], '/items/create');
+$a->post('/items', ['name' => 'Royal Velvet Teal', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'track_batch' => 1, 'sku' => 'RVT', 'cost_price' => 310], '/items/create');
+$i1 = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Royal Velvet Wine'", [$tA]);
 $it = DB::one('SELECT * FROM items WHERE id = ?', [$i1]);
-check('item type and fabric attributes saved', $i1 && $it['item_type'] === 'fabric' && $it['hsn_code'] === '5407' && $it['design_no'] === 'RV-12' && $it['composition'] === '100% polyester' && $it['width'] === '54 in' && $it['gsm'] === '280');
-check('variant colour and size saved', $val("SELECT colour FROM item_variants WHERE tenant_id = ? AND sku = 'RVT'", [$tA]) === 'Teal' && $val("SELECT size FROM item_variants WHERE tenant_id = ? AND sku = 'RVT'", [$tA]) === '54 in');
+check('item type, HSN and roll tracking saved; each colour is its own item with its own SKU', $i1 && $it['item_type'] === 'fabric' && $it['hsn_code'] === '5407' && (int)$it['track_batch'] === 1 && $val("SELECT sku FROM item_variants WHERE item_id = ?", [$i1]) === 'RVW'
+    && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name LIKE 'Royal Velvet%'", [$tA]) === 2);
+check('the item no longer has design / composition / width fields (they belong to the supplier item)', !array_key_exists('design_no', $it) && !array_key_exists('gsm', $it) && !str_contains($a->get('/items/create')['body'], 'name="gsm"') && !str_contains($a->get('/items/create')['body'], 'name="variants[0][colour]"'));
+$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV Wine 54', 'supplier_code' => 'RV-12-W', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RVW'", [$tA]),
+    'design_no' => 'RV-12', 'composition' => '100% polyester', 'width' => '54 in', 'gsm' => '280', 'pattern' => 'Plain', 'finish' => 'Soft'], '/purchase/supplier-items/create');
+$sir = DB::one("SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_code = 'RV-12-W'", [$tA]);
+check('the supplier item carries the design, composition, width, GSM, pattern and finish', $sir && $sir['design_no'] === 'RV-12' && $sir['composition'] === '100% polyester' && $sir['width'] === '54 in' && $sir['gsm'] === '280' && $sir['pattern'] === 'Plain' && $sir['finish'] === 'Soft');
 $ish = $a->get("/items/$i1")['body'];
-check('item page shows type, design no., composition and colours', str_contains($ish, 'Fabric') && str_contains($ish, 'RV-12') && str_contains($ish, '100% polyester') && str_contains($ish, 'Wine'));
+check('the item page shows those details through its supplier item', str_contains($ish, 'Fabric') && str_contains($ish, 'RV-12') && str_contains($ish, '100% polyester') && str_contains($ish, '54 in'));
 $f = $a->get('/items/create')['body'];
-check('form has the product-type picker with all five kinds and the attribute fields', substr_count($f, '<option value="wallpaper"') === 1 && str_contains($f, 'value="carpet"') && str_contains($f, 'value="linen"') && str_contains($f, 'name="gsm"') && str_contains($f, 'name="variants[0][colour]"'));
-check('items can be found by design number or colour', str_contains($a->get('/items?q=RV-12')['body'], 'Royal Velvet') && str_contains($a->get('/items?q=Teal')['body'], 'Royal Velvet'));
+check('the form has the product-type picker with all five kinds and the single SKU & price card', substr_count($f, '<option value="wallpaper"') === 1 && str_contains($f, 'value="carpet"') && str_contains($f, 'value="linen"') && str_contains($f, 'name="sku"') && str_contains($f, 'name="sale_price"'));
+check('items can be found by SKU, or through their supplier item (design number, supplier code)', str_contains($a->get('/items?q=RVW')['body'], 'Royal Velvet Wine') && str_contains($a->get('/items?q=RV-12')['body'], 'Royal Velvet Wine') && str_contains($a->get('/items?q=RV-12-W')['body'], 'Royal Velvet Wine'));
 $a->post('/items', ['name' => 'Bad Type Item', 'item_type' => 'unicorn', 'unit_id' => $unit, 'variants' => [['sku' => 'BT1']]], '/items/create');
 check('an unknown product type is refused', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Bad Type Item'", [$tA]));
-$a->post('/items', ['name' => 'Floral Wallpaper', 'item_type' => 'wallpaper', 'unit_id' => $unit, 'width' => '53 cm', 'variants' => [['sku' => 'WP1', 'cost_price' => 900]]], '/items/create');
+$a->post('/items', ['name' => 'Floral Wallpaper', 'item_type' => 'wallpaper', 'unit_id' => $unit, 'sku' => 'WP1', 'cost_price' => 900], '/items/create');
 check('a wallpaper saves too', $val("SELECT item_type FROM items WHERE tenant_id = ? AND name = 'Floral Wallpaper'", [$tA]) === 'wallpaper');
-check('item form can hide an attribute through the designer settings', (function () use ($a, $tA) {
-    $a->post('/settings/formdesign', ['payload' => json_encode(['item' => ['fields' => ['pattern' => ['show' => false, 'w' => '', 'help' => '']], 'sections' => [['title' => '', 'cols' => 0, 'fields' => ['name']]]]])], '/settings/modules');
-    $ok = !str_contains($a->get('/items/create')['body'], 'name="pattern"');
+check('item form can hide a field through the designer settings', (function () use ($a, $tA) {
+    $a->post('/settings/formdesign', ['payload' => json_encode(['item' => ['fields' => ['hsn_code' => ['show' => false, 'w' => '', 'help' => '']], 'sections' => [['title' => '', 'cols' => 0, 'fields' => ['name']]]]])], '/settings/modules');
+    $ok = !str_contains($a->get('/items/create')['body'], 'name="hsn_code"');
     $a->post('/settings/formdesign', ['payload' => json_encode(['item' => ['reset' => true]])], '/settings/modules');
-    return $ok && str_contains($a->get('/items/create')['body'], 'name="pattern"');
+    return $ok && str_contains($a->get('/items/create')['body'], 'name="hsn_code"');
 })());
 
 echo "Supplier rate list\n";
@@ -184,27 +189,26 @@ foreach (['supplier-dues', 'rate-comparison', 'rate-history', 'price-paid'] as $
 
 echo "Items CSV\n";
 $tpl = $a->get('/items/import/template')['body'];
-check('item template has the new columns and a wallpaper / linen / carpet example', str_contains($tpl, 'item_type') && str_contains($tpl, 'design_no') && str_contains($tpl, 'colour') && str_contains($tpl, 'wallpaper') && str_contains($tpl, 'carpet') && str_contains($tpl, 'linen'));
-$hd = "item_name,item_type,category,brand,unit,tax,hsn_code,design_no,composition,width,gsm,pattern,finish,track_batch,reorder_level,variant_name,colour,size,sku,barcode,cost_price,sale_price\n";
+check('item template has one row per item and a wallpaper / linen / carpet example', str_contains($tpl, 'item_type') && !str_contains($tpl, 'design_no') && !str_contains($tpl, 'colour') && str_contains($tpl, 'wallpaper') && str_contains($tpl, 'carpet') && str_contains($tpl, 'linen'));
+$hd = "item_name,item_type,category,brand,unit,tax,hsn_code,track_batch,reorder_level,sku,barcode,cost_price,sale_price\n";
 $up = function (string $body) use ($a) { $f = tempnam(sys_get_temp_dir(), 'it') . '.csv'; file_put_contents($f, $body); return $a->post('/items/import', ['file' => new CURLFile($f, 'text/csv', 'i.csv')], '/items/import'); };
 $un = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
-$up($hd . "Silk Curtain,fabric,Fabric,,Meter,,5407,SC-1,Silk blend,48 in,150,Plain,Satin,,5,Gold,Gold,,SILK-G,,500,800\nSilk Curtain,,,,,,,,,,,,,,,Ivory,Ivory,,SILK-I,,500,800\nSea Wallpaper,wallpaper,,,Meter,,4814,WP-9,Vinyl,53 cm,,Waves,Textured,no,,,Blue,10 m roll,,,900,1500\nQueen Sheet,linen,,,Meter,,6302,BS-1,Cotton,,200 TC,Printed,,,,Queen,Pink,Queen,,,700,1200\n");
-$si = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Silk Curtain'", [$tA]);
-check('import keeps type and attributes; blank track_batch on a fabric means roll-tracked', $si && $si['item_type'] === 'fabric' && $si['hsn_code'] === '5407' && $si['design_no'] === 'SC-1' && $si['composition'] === 'Silk blend' && $si['width'] === '48 in' && (int)$si['track_batch'] === 1);
-check('both variants imported with their colours', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ? AND colour IN (?, ?)', [$si['id'], 'Gold', 'Ivory']) === 2);
-$wp = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Sea Wallpaper'", [$tA]);
-check('an explicit "no" stays untracked; wallpaper size on variant', (int)$wp['track_batch'] === 0 && $wp['item_type'] === 'wallpaper' && $val('SELECT size FROM item_variants WHERE item_id = ?', [$wp['id']]) === '10 m roll');
-check('linen is not roll-tracked by default', (int)$val("SELECT track_batch FROM items WHERE tenant_id = ? AND name = 'Queen Sheet'", [$tA]) === 0);
+$up($hd . "Silk Curtain Gold,fabric,Fabric,,Meter,,5407,,5,SILK-G,,500,800\nSilk Curtain Ivory,fabric,Fabric,,Meter,,5407,,5,SILK-I,,500,800\nSea Wallpaper Blue,wallpaper,,,Meter,,4814,no,,,,900,1500\nQueen Sheet Pink,linen,,,Meter,,6302,,,,,700,1200\n");
+$si = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Silk Curtain Gold'", [$tA]);
+check('import keeps the type; blank track_batch on a fabric means roll-tracked; one item per row', $si && $si['item_type'] === 'fabric' && $si['hsn_code'] === '5407' && (int)$si['track_batch'] === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name LIKE 'Silk Curtain%'", [$tA]) === 2 && $val('SELECT sku FROM item_variants WHERE item_id = ?', [$si['id']]) === 'SILK-G');
+$wp = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Sea Wallpaper Blue'", [$tA]);
+check('an explicit "no" stays untracked', (int)$wp['track_batch'] === 0 && $wp['item_type'] === 'wallpaper');
+check('linen is not roll-tracked by default', (int)$val("SELECT track_batch FROM items WHERE tenant_id = ? AND name = 'Queen Sheet Pink'", [$tA]) === 0);
 $n = (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]);
-$up($hd . "Nice One,fabric,,,Meter,,,,,,,,,,,,,,,,1,2\nBad Type,unicorn,,,Meter,,,,,,,,,,,,,,,,1,2\n");
+$up($hd . "Nice One,fabric,,,Meter,,,,,,,1,2\nBad Type,unicorn,,,Meter,,,,,,,1,2\n");
 check('an unknown item_type rejects the whole file', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $n);
-$up($hd . "Long Attr,fabric,,,Meter,,,,," . str_repeat('9', 50) . ",,,,,,,,,,,1,2\n");
-check('over-long width rejects the file', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Long Attr'", [$tA]));
+$up($hd . "Long Attr,fabric,,,Meter,," . str_repeat('9', 30) . ",,,,,1,2\n");
+check('an over-long HSN code rejects the file', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Long Attr'", [$tA]));
 $exp = $a->get('/items/export')['body'];
-check('export includes the new columns and values', str_contains($exp, 'item_type') && str_contains($exp, 'SC-1') && str_contains($exp, 'Gold') && str_contains($exp, '10 m roll'));
+check('export has one row per item with its SKU and prices', str_contains($exp, 'item_type') && str_contains($exp, 'Silk Curtain Gold') && str_contains($exp, 'SILK-G') && !str_contains($exp, 'design_no'));
 $re = tempnam(sys_get_temp_dir(), 'rx') . '.csv'; file_put_contents($re, $exp);
 $b->post('/items/import', ['file' => new CURLFile($re, 'text/csv', 'e.csv')], '/items/import');
-check("another company can import A's exported file as its own (round trip)", (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name = 'Silk Curtain'", [$tB]) === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND item_type = 'fabric' AND design_no = 'SC-1'", [$tB]) === 1);
+check("another company can import A's exported file as its own (round trip)", (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name = 'Silk Curtain Gold'", [$tB]) === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND item_type = 'fabric' AND hsn_code = '5407'", [$tB]) >= 1);
 
 echo "Rate lists page (menu)\n";
 $mh = $a->get('/dashboard')['body'];

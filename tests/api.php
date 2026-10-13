@@ -121,19 +121,19 @@ check('column choices come for a list', $r['status'] === 200 && isset($r['json']
 echo "Items through the API\n";
 $unit = (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
 $r = $a->call('POST', '/items', ['name' => 'Api Silk', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'reorder_level' => '20',
-    'variants' => [['name' => 'Red', 'sku' => 'ASK-R', 'cost_price' => '300', 'sale_price' => '450'], ['name' => 'Blue', 'sku' => 'ASK-B', 'sale_price' => '460']], 'cf' => (object)[]]);
+    'sku' => 'ASK-R', 'cost_price' => '300', 'sale_price' => '450', 'cf' => (object)[]]);
 $iid = (int)DB::val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Api Silk'", [$tA]);
-check('an item with two variants saves from JSON (roll tracking on)', $r['status'] === 200 && $iid > 0 && (int)DB::val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$iid]) === 2 && (int)DB::val('SELECT track_batch FROM items WHERE id = ?', [$iid]) === 1);
-$r = $a->call('POST', '/items', ['name' => 'Api Silk 2', 'unit_id' => $unit, 'variants' => [['sku' => 'ASK-R']]]);
+check('an item saves from JSON with its one SKU and price (roll tracking on)', $r['status'] === 200 && $iid > 0 && (int)DB::val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$iid]) === 1 && (float)DB::val('SELECT sale_price FROM item_variants WHERE item_id = ?', [$iid]) === 450.0 && (int)DB::val('SELECT track_batch FROM items WHERE id = ?', [$iid]) === 1);
+$r = $a->call('POST', '/items', ['name' => 'Api Silk 2', 'unit_id' => $unit, 'sku' => 'ASK-R']);
 check('a duplicate SKU is refused with the reason', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'ASK-R') && !DB::val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Api Silk 2'", [$tA]));
 $r = $a->call('GET', "/items/$iid");
-check('the item page data has variants with stock, supplier rates and history', $r['status'] === 200 && count($r['json']['data']['variants']) === 2 && array_key_exists('rates', $r['json']['data']) && array_key_exists('history', $r['json']['data']) && isset($r['json']['data']['variants'][0]['batches']));
+check('the item page data has its SKU row with stock, supplier rates and history', $r['status'] === 200 && count($r['json']['data']['variants']) === 1 && array_key_exists('rates', $r['json']['data']) && array_key_exists('history', $r['json']['data']) && isset($r['json']['data']['variants'][0]['batches']));
 $vA = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'ASK-R'", [$tA]);
 $r = $a->call('POST', '/items', ['name' => 'Api Set', 'unit_id' => $unit, 'is_bundle' => 1, 'variants' => [['sku' => 'ASET', 'sale_price' => '900']], 'components' => [['variant_id' => $vA, 'qty' => '2']]]);
 $bid = (int)DB::val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Api Set'", [$tA]);
 check('a bundle with a component saves', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM bundle_components WHERE bundle_item_id = ?', [$bid]) === 1);
 $r = $a->call('GET', "/items/$iid/edit");
-check('the edit form data carries what the form needs (item, variants, lock flag, pickable items)', ($r['json']['data']['item']['name'] ?? '') === 'Api Silk' && count($r['json']['data']['variants']) === 2 && array_key_exists('locked', $r['json']['data']) && is_array($r['json']['data']['pickable']));
+check('the edit form data carries what the form needs (item, variants, lock flag, pickable items)', ($r['json']['data']['item']['name'] ?? '') === 'Api Silk' && count($r['json']['data']['variants']) === 1 && array_key_exists('locked', $r['json']['data']) && is_array($r['json']['data']['pickable']));
 $r = $a->call('GET', '/items?q=Silk&low=');
 check('the item list filters by search and pages', in_array('Api Silk', array_column($r['json']['data']['rows'], 'name'), true) && isset($r['json']['data']['pages']));
 check('the session names the stock movement types for the history table', ($a->session()['json']['stockTypes']['purchase'] ?? '') !== '');
@@ -194,11 +194,18 @@ $itemOf = fn(string $name) => (int)DB::val('SELECT id FROM items WHERE tenant_id
 $vOf = fn(string $sku) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $sku]);
 $r = $a->call('POST', '/items/' . $itemOf('Api Velvet') . '/delete');
 check('an item that suppliers are linked to cannot be deleted (it would silently drop the supplier items and rates)', $r['status'] === 422 && DB::val('SELECT 1 FROM items WHERE tenant_id = ? AND name = ?', [$tA, 'Api Velvet']) && (int)DB::val('SELECT COUNT(*) FROM supplier_items WHERE variant_id = ?', [$vid]) === 1 && str_contains(json_encode($r['json']['messages']), 'supplier'));
-$a->call('POST', '/items', ['name' => 'Api Linked', 'unit_id' => $unit, 'variants' => [['sku' => 'LK-A', 'cost_price' => '10'], ['sku' => 'LK-B', 'cost_price' => '12']], 'cf' => (object)[]]);
+$r = $a->call('POST', '/items', ['name' => 'Two SKUs', 'unit_id' => $unit, 'variants' => [['sku' => 'TS-1'], ['sku' => 'TS-2']], 'cf' => (object)[]]);
+check('two SKUs on one item are refused: every colour, design or size is its own item', $r['status'] === 422 && !DB::val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Two SKUs'", [$tA]) && str_contains(json_encode($r['json']['messages']), 'separate item'));
+$r = $a->call('POST', '/items', ['name' => 'Api Linked', 'unit_id' => $unit, 'sku' => 'LK-A', 'sale_price' => '10', 'cf' => (object)[]]);
 $lk = $itemOf('Api Linked');
-$a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Their B', 'supplier_code' => 'LKB', 'variant_id' => $vOf('LK-B')]);
-$a->call('POST', "/items/$lk", ['name' => 'Api Linked', 'unit_id' => $unit, 'variants' => [['id' => $vOf('LK-A'), 'sku' => 'LK-A', 'cost_price' => '10']], 'cf' => (object)[]]);
-check('taking a variant off an item keeps it (hidden) while a supplier item points at it, so the supplier item and its rates stay', (int)DB::val('SELECT is_active FROM item_variants WHERE id = ?', [$vOf('LK-B')]) === 0 && (int)DB::val("SELECT COUNT(*) FROM supplier_items WHERE supplier_code = 'LKB'") === 1);
+$a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Their A', 'supplier_code' => 'LKA', 'variant_id' => $vOf('LK-A'), 'design_no' => 'D-9', 'composition' => 'Cotton', 'width' => '48 in', 'gsm' => '120', 'pattern' => 'Check', 'finish' => 'Matt']);
+$sir = DB::one("SELECT * FROM supplier_items WHERE supplier_code = 'LKA'");
+check('the details live on the supplier item (design, composition, width, GSM, pattern, finish)', $sir && $sir['design_no'] === 'D-9' && $sir['composition'] === 'Cotton' && $sir['width'] === '48 in' && $sir['gsm'] === '120' && $sir['pattern'] === 'Check' && $sir['finish'] === 'Matt');
+$rr = $a->call('GET', "/items/$lk")['json']['data'];
+check('the item page shows them through the tagged supplier item', ($rr['rates'][0]['design_no'] ?? '') === 'D-9' && ($rr['rates'][0]['composition'] ?? '') === 'Cotton');
+check('the item list finds an item by its supplier item\'s code or design number', in_array('Api Linked', array_column($a->call('GET', '/items?q=LKA')['json']['data']['rows'], 'name'), true) && in_array('Api Linked', array_column($a->call('GET', '/items?q=D-9')['json']['data']['rows'], 'name'), true));
+$r = $a->call('GET', '/schema/supplier_item');
+check('the supplier item form offers those fields (and the item form no longer does)', isset($r['json']['schema']['fields']['design_no']) && isset($r['json']['schema']['fields']['finish']) && !isset($a->call('GET', '/schema/item')['json']['schema']['fields']['design_no']));
 
 // reordering uses the supplier link: preferred supplier, its rate and its minimum order quantity
 $a->call('POST', '/items', ['name' => 'Api Reorder', 'unit_id' => $unit, 'reorder_level' => '10', 'reorder_qty' => '12', 'variants' => [['sku' => 'APR', 'cost_price' => '100']], 'cf' => (object)[]]);

@@ -32,8 +32,9 @@ $a->post('/suppliers', ['name' => 'Rec Mills', 'supplier_type' => 'manufacturer'
 $s1 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Rec Mills'", [$tA]);
 $a->post('/customers', ['name' => 'Rec Client', 'phone' => '9822200000', 'email' => 'rc@x.com', 'address' => '12 Main Rd', 'credit_days' => '15'], '/customers/create');
 $c1 = (int)$val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Rec Client'", [$tA]);
-$a->post('/items', ['name' => 'Rec Velvet', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'design_no' => 'RV-1', 'composition' => 'Polyester', 'width' => '54 in', 'variants' => [['sku' => 'RECV', 'colour' => 'Wine', 'cost_price' => 300]]], '/items/create');
+$a->post('/items', ['name' => 'Rec Velvet', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'sku' => 'RECV', 'cost_price' => 300], '/items/create');
 $i1 = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Rec Velvet'", [$tA]);
+$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV 54', 'supplier_code' => 'RV-1C', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RECV'", [$tA]), 'design_no' => 'RV-1', 'composition' => 'Polyester', 'width' => '54 in'], '/purchase/supplier-items/create');
 check('records created', $s1 && $c1 && $i1);
 
 echo "Detail page\n";
@@ -46,8 +47,8 @@ check('the default summary strip shows supplier type, phone, city and terms', st
 $h = $a->get("/customers/$c1")['body']; $t = $txt($h);
 check('customer page: sections show phone, email, address, credit days', str_contains($h, 'class="rec-top"') && str_contains($t, '9822200000') && str_contains($t, 'rc@x.com') && str_contains($t, '12 Main Rd') && str_contains($t, '15 days'));
 $h = $a->get("/items/$i1")['body']; $t = $txt($h);
-check('item page: type label, HSN, design no, composition, unit name, and the variants & stock block', str_contains($t, 'Fabric') && str_contains($t, '5407') && str_contains($t, 'RV-1') && str_contains($t, 'Polyester') && str_contains($t, 'Meter (') && str_contains($h, 'id="variants"'));
-check('the old per-variant content is still on the item page (Wine / RECV)', str_contains($t, 'RECV'));
+check('item page: type label, HSN, unit name, the details from its supplier item, and the stock block', str_contains($t, 'Fabric') && str_contains($t, '5407') && str_contains($t, 'RV-1') && str_contains($t, 'Polyester') && str_contains($t, 'Meter (') && str_contains($h, 'id="variants"'));
+check('the SKU is on the item page (RECV)', str_contains($t, 'RECV'));
 
 echo "Edit page layout link\n";
 $f = $a->get("/suppliers/$s1/edit")['body'];

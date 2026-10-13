@@ -67,12 +67,14 @@ check('plan warehouse limit enforced', (int)$val('SELECT COUNT(*) FROM warehouse
 
 echo "Items\n";
 $a->post('/items', ['name' => 'Velvet', 'category_id' => $catId, 'unit_id' => $unit($tA, 'Meter'), 'tax_id' => $taxId, 'track_batch' => 1,
-    'variants' => [['name' => 'Grey', 'cost_price' => 400, 'sale_price' => 700], ['name' => 'Blue', 'cost_price' => 400, 'sale_price' => 700]]], '/items/create');
+    'sku' => '', 'cost_price' => 400, 'sale_price' => 700], '/items/create');
 $velvet = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Velvet'", [$tA]);
-check('fabric item with 2 variants', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$velvet]) === 2);
-check('SKUs auto-generated and unique', (int)$val('SELECT COUNT(DISTINCT sku) FROM item_variants WHERE item_id = ?', [$velvet]) === 2);
+check('an item has exactly one SKU', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$velvet]) === 1);
+check('the SKU is auto-generated when left blank', (string)$val('SELECT sku FROM item_variants WHERE item_id = ?', [$velvet]) !== '');
+$a->post('/items', ['name' => 'Two SKUs', 'unit_id' => $unit($tA, 'Meter'), 'variants' => [['sku' => 'TS-1'], ['sku' => 'TS-2']]], '/items/create');
+check('two SKUs on one item are refused (make one item per colour / design)', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Two SKUs'", [$tA]));
 check('batch tracking on for fabric', (int)$val('SELECT track_batch FROM items WHERE id = ?', [$velvet]) === 1);
-$grey = (int)$val("SELECT id FROM item_variants WHERE item_id = ? AND name = 'Grey'", [$velvet]);
+$grey = (int)$val('SELECT id FROM item_variants WHERE item_id = ?', [$velvet]);
 $greySku = (string)$val('SELECT sku FROM item_variants WHERE id = ?', [$grey]);
 
 $a->post('/items', ['name' => 'Side Table', 'brand_id' => $brandId, 'unit_id' => $unit($tA, 'Piece'), 'reorder_level' => 5,
@@ -211,21 +213,21 @@ $exp = $a->get('/items/export');
 check('export is a CSV with the items', $exp['status'] === 200 && str_contains($exp['headers'], 'text/csv') && str_contains($exp['body'], 'Velvet') && str_contains($exp['body'], 'TABLE-01'));
 check('template downloads', str_contains($a->get('/items/import/template')['body'], 'item_name'));
 $csv = function (string $content): CURLFile { $f = tempnam(sys_get_temp_dir(), 'csv'); file_put_contents($f, $content); return new CURLFile($f, 'text/csv', 'items.csv'); };
-$hdr = "item_name,category,brand,unit,tax,track_batch,location,reorder_level,variant_name,sku,barcode,cost_price,sale_price\n";
+$hdr = "item_name,category,brand,unit,tax,track_batch,location,reorder_level,sku,barcode,cost_price,sale_price\n";
 $items0 = (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]);
-$a->post('/items/import', ['file' => $csv($hdr . "Cotton,Decor,,Meter,,yes,,10,White,,,100,200\n,,,,,,,,Cream,,,100,200\nLamp,Decor,,Piece,GST 12,no,,0,,LAMP-1,,500,900\n")], '/items/import');
-check('valid file imports 2 items', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $items0 + 2);
-$cotton = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Cotton'", [$tA]);
-check('blank item name adds a variant to the previous item', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$cotton]) === 2 && (int)$val('SELECT track_batch FROM items WHERE id = ?', [$cotton]) === 1);
+$a->post('/items/import', ['file' => $csv($hdr . "Cotton White,Decor,,Meter,,yes,,10,,,100,200\nCotton Cream,Decor,,Meter,,yes,,10,,,100,200\nLamp,Decor,,Piece,GST 12,no,,0,LAMP-1,,500,900\n")], '/items/import');
+check('valid file imports 3 items, one row each', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $items0 + 3);
+$cotton = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Cotton White'", [$tA]);
+check('every imported item has its single SKU and roll tracking', (int)$val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$cotton]) === 1 && (int)$val('SELECT track_batch FROM items WHERE id = ?', [$cotton]) === 1);
 check('categories are created on the fly, tax matched by name', (bool)$val("SELECT 1 FROM categories WHERE tenant_id = ? AND name = 'Decor'", [$tA]) && (int)$val("SELECT tax_id FROM items WHERE tenant_id = ? AND name = 'Lamp'", [$tA]) === $taxId);
 $n = (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]);
-$a->post('/items/import', ['file' => $csv($hdr . "Good One,,,Piece,,no,,0,,,,1,2\nBad One,,,Furlong,,no,,0,,,,1,2\n")], '/items/import');
+$a->post('/items/import', ['file' => $csv($hdr . "Good One,,,Piece,,no,,0,,,1,2\nBad One,,,Furlong,,no,,0,,,1,2\n")], '/items/import');
 check('one bad row imports nothing', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $n);
-$a->post('/items/import', ['file' => $csv($hdr . "Lamp,,,Piece,,no,,0,,,,1,2\n")], '/items/import');
+$a->post('/items/import', ['file' => $csv($hdr . "Lamp,,,Piece,,no,,0,,,1,2\n")], '/items/import');
 check('existing item name is refused', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $n);
-$a->post('/items/import', ['file' => $csv($hdr . "Evil,,,Piece,,no,,0,,LAMP-1,,1,2\n")], '/items/import');
+$a->post('/items/import', ['file' => $csv($hdr . "Evil,,,Piece,,no,,0,LAMP-1,,1,2\n")], '/items/import');
 check('duplicate SKU in file is refused', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Evil'", [$tA]));
-$a->post('/items/import', ['file' => $csv($hdr . "=cmd|' /C calc'!A0,,,Piece,,no,,0,,,,1,2\n")], '/items/import');
+$a->post('/items/import', ['file' => $csv($hdr . "=cmd|' /C calc'!A0,,,Piece,,no,,0,,,1,2\n")], '/items/import');
 check('formula-looking names are exported safely', str_contains($a->get('/items/export')['body'], "'=cmd") || !str_contains($a->get('/items/export')['body'], ",=cmd") );
 
 echo "Permissions\n";

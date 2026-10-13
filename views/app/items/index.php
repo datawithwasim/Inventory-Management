@@ -15,7 +15,7 @@
   </div>
 </form>
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-  <thead><tr><th><?= e(term('item')) ?></th><?php if ($col('category')): ?><th>Category</th><?php endif; ?><?php if ($col('brand')): ?><th>Brand</th><?php endif; ?><?php foreach ($cfList as $f): ?><th><?= e($f['label']) ?></th><?php endforeach; ?><?php if ($col('variants')): ?><th>Variants</th><?php endif; ?><?php if ($col('price')): ?><th class="text-end">Sale price</th><?php endif; ?><?php if ($col('stock')): ?><th class="text-end">Stock</th><?php endif; ?><th></th></tr></thead>
+  <thead><tr><th><?= e(term('item')) ?></th><?php if ($col('category')): ?><th>Category</th><?php endif; ?><?php if ($col('brand')): ?><th>Brand</th><?php endif; ?><?php foreach ($cfList as $f): ?><th><?= e($f['label']) ?></th><?php endforeach; ?><?php if ($col('sku')): ?><th>SKU</th><?php endif; ?><?php if ($col('suppliers')): ?><th>Supplier items</th><?php endif; ?><?php if ($col('price')): ?><th class="text-end">Sale price</th><?php endif; ?><?php if ($col('stock')): ?><th class="text-end">Stock</th><?php endif; ?><th></th></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $isLow = !$r['is_bundle'] && $r['reorder_level'] > 0 && $r['stock'] <= $r['reorder_level']; ?>
     <tr class="<?= $r['is_active'] ? '' : 'text-muted' ?>">
@@ -24,8 +24,9 @@
         <?= $r['track_batch'] ? '<span class="badge text-bg-secondary">Batch</span>' : '' ?>
         <?= $r['is_active'] ? '' : '<span class="badge text-bg-dark">Inactive</span>' ?></td>
       <?php if ($col('category')): ?><td><?= e($r['category'] ?? '') ?></td><?php endif; ?><?php if ($col('brand')): ?><td><?= e($r['brand'] ?? '') ?></td><?php endif; ?><?php foreach ($cfList as $f): ?><td><?= e(App\Models\CustomFields::display($f, $r['cf'][$f['id']] ?? null)) ?></td><?php endforeach; ?>
-      <?php if ($col('variants')): ?><td><?= (int)$r['variant_count'] ?></td><?php endif; ?>
-      <?php if ($col('price')): ?><td class="text-end"><?= e(money($r['min_price'])) ?><?= $r['variant_count'] > 1 ? '+' : '' ?></td><?php endif; ?>
+      <?php if ($col('sku')): ?><td class="small"><?= e($r['sku'] ?? '') ?></td><?php endif; ?>
+      <?php if ($col('suppliers')): ?><td><?= (int)$r['supplier_count'] ?></td><?php endif; ?>
+      <?php if ($col('price')): ?><td class="text-end"><?= e(money($r['sale_price'])) ?></td><?php endif; ?>
       <?php if ($col('stock')): ?><td class="text-end"><?= e(qty($r['stock'])) ?> <?= $r['is_bundle'] ? 'sets' : e($r['unit']) ?> <?= $isLow ? '<span class="badge text-bg-danger">Low</span>' : '' ?></td><?php endif; ?>
       <td class="text-end"><?php if (can('items.edit')): ?><a class="btn btn-sm btn-outline-primary" href="<?= url("items/{$r['id']}/edit") ?>">Edit</a><?php endif; ?></td>
     </tr>

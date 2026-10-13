@@ -31,7 +31,7 @@ export default function ItemList() {
       </form>
       {res.isLoading ? <Spinner /> : (<>
         <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">
-          <thead><tr><th>{term('item')}</th>{col('category') && <th>Category</th>}{col('brand') && <th>Brand</th>}{(d.cfList ?? []).map((f: any) => <th key={f.id}>{f.label}</th>)}{col('variants') && <th>Variants</th>}{col('price') && <th className="text-end">Sale price</th>}{col('stock') && <th className="text-end">Stock</th>}
+          <thead><tr><th>{term('item')}</th>{col('category') && <th>Category</th>}{col('brand') && <th>Brand</th>}{(d.cfList ?? []).map((f: any) => <th key={f.id}>{f.label}</th>)}{col('sku') && <th>SKU</th>}{col('suppliers') && <th>Supplier items</th>}{col('price') && <th className="text-end">Sale price</th>}{col('stock') && <th className="text-end">Stock</th>}
             <th className="text-end col-th"><ColumnPicker list="items" entity="item" onApplied={() => qc.invalidateQueries({ queryKey: ['items'] })} /></th></tr></thead>
           <tbody>
             {d.rows.map((r: any) => {
@@ -41,8 +41,8 @@ export default function ItemList() {
                   <td><Link to={`/items/${r.id}`}>{r.name}</Link>{r.is_bundle ? <> <Badge tone="info">Bundle</Badge></> : null}{r.track_batch ? <> <Badge>{term('batch')}</Badge></> : null}{r.is_active ? null : <> <Badge tone="dark">Inactive</Badge></>}</td>
                   {col('category') && <td>{r.category ?? ''}</td>}{col('brand') && <td>{r.brand ?? ''}</td>}
                   {(d.cfList ?? []).map((f: any) => <td key={f.id}>{String(r.cf?.[f.id] ?? '')}</td>)}
-                  {col('variants') && <td>{r.variant_count}</td>}
-                  {col('price') && <td className="text-end">{money(r.min_price)}{r.variant_count > 1 ? '+' : ''}</td>}
+                  {col('sku') && <td className="small">{r.sku}</td>}{col('suppliers') && <td>{r.supplier_count}</td>}
+                  {col('price') && <td className="text-end">{money(r.sale_price)}</td>}
                   {col('stock') && <td className="text-end">{qty(r.stock)} {r.is_bundle ? 'sets' : r.unit} {isLow ? <Badge tone="danger">Low</Badge> : null}</td>}
                   <td className="text-end">{can('items.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/items/${r.id}/edit`}>Edit</Link>}</td>
                 </tr>

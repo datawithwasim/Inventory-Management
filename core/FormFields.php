@@ -8,8 +8,7 @@ final class FormFields
 {
     /** entity => [column => label]. Only fields that are safe to hide are listed. */
     public const REGISTRY = [
-        'item' => ['item_type' => 'Product type', 'brand_id' => 'Brand', 'tax_id' => 'Tax rate', 'hsn_code' => 'HSN code', 'design_no' => 'Design / quality no.', 'composition' => 'Composition',
-            'width' => 'Width', 'gsm' => 'GSM / weight', 'pattern' => 'Pattern', 'finish' => 'Finish', 'description' => 'Description'],
+        'item' => ['item_type' => 'Product type', 'brand_id' => 'Brand', 'tax_id' => 'Tax rate', 'hsn_code' => 'HSN code', 'description' => 'Description'],
         'customer' => ['contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Billing address', 'ship_address' => 'Delivery address',
             'tax_no' => 'Tax number', 'credit_days' => 'Credit days', 'notes' => 'Notes', 'group_id' => 'Group'],
         'supplier' => ['supplier_type' => 'Supplier type', 'contact_person' => 'Contact person', 'email' => 'Email', 'address' => 'Address', 'tax_no' => 'Tax number',
@@ -28,7 +27,7 @@ final class FormFields
         'purchase_return' => ['reason' => 'Reason'],
         'adjustment' => ['note' => 'Note'],
         'transfer' => ['note' => 'Note'], 'invoice' => [], 'stocktake' => [],
-        'supplier_item' => ['supplier_code' => 'Supplier item code', 'variant_id' => 'Our item (link)', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
+        'supplier_item' => ['supplier_code' => 'Supplier item code', 'variant_id' => 'Our item (link)', 'design_no' => 'Design / quality no.', 'composition' => 'Composition', 'width' => 'Width', 'gsm' => 'GSM / weight', 'pattern' => 'Pattern', 'finish' => 'Finish', 'min_order_qty' => 'Minimum order qty', 'lead_time_days' => 'Lead time (days)', 'note' => 'Notes'],
     ];
     public const ENTITY_LABELS = ['item' => 'Item form', 'customer' => 'Customer form', 'supplier' => 'Supplier form', 'warehouse' => 'Warehouse form', 'location' => 'Rack / location form',
         'sales_order' => 'Sales order', 'delivery' => 'Delivery (goods out)', 'sales_return' => 'Sales return', 'requisition' => 'Purchase requisition',

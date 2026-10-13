@@ -86,8 +86,9 @@ final class ItemController extends Controller
         $params = [$t];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (i.name LIKE ? OR i.design_no LIKE ? OR EXISTS (SELECT 1 FROM item_variants v WHERE v.item_id = i.id AND (v.sku LIKE ? OR v.name LIKE ? OR v.colour LIKE ? OR v.barcode = ?)))';
-            array_push($params, $like, $like, $like, $like, $like, $q);
+            $where .= ' AND (i.name LIKE ? OR EXISTS (SELECT 1 FROM item_variants v WHERE v.item_id = i.id AND (v.sku LIKE ? OR v.barcode = ?))
+                          OR EXISTS (SELECT 1 FROM supplier_items sp JOIN item_variants v2 ON v2.id = sp.variant_id WHERE v2.item_id = i.id AND (sp.supplier_code LIKE ? OR sp.supplier_name LIKE ? OR sp.design_no LIKE ?)))';
+            array_push($params, $like, $like, $q, $like, $like, $like);
         }
         if ($cat) {
             $where .= ' AND i.category_id = ?';
@@ -99,8 +100,9 @@ final class ItemController extends Controller
         $total = (int)DB::val("SELECT COUNT(*) FROM items i WHERE $where", $params);
         $rows = DB::all(
             "SELECT i.*, c.name AS category, b.name AS brand, u.short_name AS unit,
-                    (SELECT COUNT(*) FROM item_variants v WHERE v.item_id = i.id) AS variant_count,
-                    (SELECT MIN(v.sale_price) FROM item_variants v WHERE v.item_id = i.id) AS min_price,
+                    (SELECT v.sku FROM item_variants v WHERE v.item_id = i.id ORDER BY v.is_active DESC, v.id LIMIT 1) AS sku,
+                    (SELECT v.sale_price FROM item_variants v WHERE v.item_id = i.id ORDER BY v.is_active DESC, v.id LIMIT 1) AS sale_price,
+                    (SELECT COUNT(*) FROM supplier_items sp JOIN item_variants v ON v.id = sp.variant_id WHERE v.item_id = i.id AND sp.is_active = 1) AS supplier_count,
                     $stockSql AS stock
              FROM items i LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands b ON b.id = i.brand_id
              JOIN units u ON u.id = i.unit_id WHERE $where ORDER BY i.name LIMIT " . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), $params);
@@ -230,7 +232,7 @@ final class ItemController extends Controller
         $type = trim((string)($d['item_type'] ?? 'other'));
         if (!isset(\App\Models\ItemTypes::LABELS[$type])) $bounce('Choose a valid product type.');
         $attr = [];
-        foreach (['hsn_code' => 20, 'design_no' => 60, 'composition' => 120, 'width' => 40, 'gsm' => 40, 'pattern' => 80, 'finish' => 80] as $k => $max) {
+        foreach (['hsn_code' => 20] as $k => $max) {
             $val = trim((string)($d[$k] ?? ''));
             if (mb_strlen($val) > $max) $bounce('A product detail is too long (' . $k . ', max ' . $max . ' characters).');
             $attr[$k] = $val !== '' ? $val : null;
@@ -249,36 +251,22 @@ final class ItemController extends Controller
         [$fields, $ffErr] = \Core\FormFields::apply('item', $fields);
         if ($ffErr) $bounce(implode(' ', $ffErr));
 
-        // Variants
-        $rows = array_values(array_filter((array)($d['variants'] ?? []), fn($v) => is_array($v) && implode('', array_map('trim', array_map('strval', $v))) !== ''));
-        if (!$rows) $rows = [['id' => '', 'name' => '', 'sku' => '', 'barcode' => '', 'cost_price' => '', 'sale_price' => '']];
-        if ($isBundle) $rows = [$rows[0]];
-        $seenSku = $seenBar = [];
-        $variants = [];
-        foreach ($rows as $i => $v) {
-            $n = $i + 1;
-            $vid = (int)($v['id'] ?? 0);
-            if ($vid && !DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND id = ? AND item_id = ?', [$t, $vid, $item['id'] ?? 0])) $bounce('Invalid variant.');
-            $sku = trim((string)($v['sku'] ?? ''));
-            $bar = trim((string)($v['barcode'] ?? ''));
-            foreach (['cost_price', 'sale_price'] as $f) {
-                if (($v[$f] ?? '') !== '' && (!is_numeric($v[$f]) || (float)$v[$f] < 0)) $bounce("Variant $n: prices must be zero or more.");
-            }
-            if (mb_strlen($sku) > 60 || mb_strlen($bar) > 60 || mb_strlen((string)($v['name'] ?? '')) > 150 || mb_strlen((string)($v['colour'] ?? '')) > 60 || mb_strlen((string)($v['size'] ?? '')) > 60) $bounce("Variant $n: a value is too long.");
-            if ($sku !== '') {
-                if (isset($seenSku[strtolower($sku)])) $bounce("SKU $sku is used twice in this form.");
-                $seenSku[strtolower($sku)] = 1;
-                if (DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND sku = ? AND id <> ?', [$t, $sku, $vid])) $bounce("SKU $sku already exists.");
-            }
-            if ($bar !== '') {
-                if (isset($seenBar[$bar])) $bounce("Barcode $bar is used twice in this form.");
-                $seenBar[$bar] = 1;
-                if (DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND barcode = ? AND id <> ?', [$t, $bar, $vid])) $bounce("Barcode $bar already exists.");
-            }
-            $variants[] = ['id' => $vid, 'name' => trim((string)($v['name'] ?? '')) ?: null, 'sku' => $sku, 'barcode' => $bar ?: null,
-                'colour' => trim((string)($v['colour'] ?? '')) ?: null, 'size' => trim((string)($v['size'] ?? '')) ?: null,
-                'cost_price' => (float)($v['cost_price'] ?? 0), 'sale_price' => (float)($v['sale_price'] ?? 0)];
+        // One item = one SKU (the form posts sku / barcode / prices; the older shape is one row in "variants")
+        $one = array_filter(['sku' => $d['sku'] ?? null, 'barcode' => $d['barcode'] ?? null, 'cost_price' => $d['cost_price'] ?? null, 'sale_price' => $d['sale_price'] ?? null], fn($x) => $x !== null);
+        $rows = array_values(array_filter((array)($d['variants'] ?? []), fn($v) => is_array($v) && implode('', array_map('trim', array_map('strval', array_diff_key($v, ['id' => 1])))) !== ''));
+        if (count($rows) > 1) $bounce('An item has one SKU. Make a separate item for each colour, design or size.');
+        $v = $one + ($rows[0] ?? []);
+        $vid = $item ? (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ? ORDER BY is_active DESC, id LIMIT 1', [$t, $item['id']]) : 0;
+        $sku = trim((string)($v['sku'] ?? ''));
+        $bar = trim((string)($v['barcode'] ?? ''));
+        foreach (['cost_price', 'sale_price'] as $f) {
+            if (($v[$f] ?? '') !== '' && (!is_numeric($v[$f]) || (float)$v[$f] < 0)) $bounce('Prices must be zero or more.');
         }
+        if (mb_strlen($sku) > 60 || mb_strlen($bar) > 60) $bounce('SKU and barcode are at most 60 characters.');
+        if ($sku !== '' && DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND sku = ? AND id <> ?', [$t, $sku, $vid])) $bounce("SKU $sku already exists.");
+        if ($bar !== '' && DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND barcode = ? AND id <> ?', [$t, $bar, $vid])) $bounce("Barcode $bar already exists.");
+        $variants = [['id' => $vid, 'name' => null, 'sku' => $sku, 'barcode' => $bar ?: null, 'colour' => null, 'size' => null,
+            'cost_price' => (float)($v['cost_price'] ?? 0), 'sale_price' => (float)($v['sale_price'] ?? 0)]];
 
         // Bundle components
         $components = [];

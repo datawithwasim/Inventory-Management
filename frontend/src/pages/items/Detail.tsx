@@ -20,7 +20,7 @@ export default function ItemDetail() {
   const best: Record<string, number> = {};
   rates.forEach((r) => { if (r.net !== null && best[r.variant_id] === undefined) best[r.variant_id] = r.net; });
   const types = session?.stockTypes ?? {};
-  const related = [bundle ? { id: 'contents', label: 'Bundle contents' } : null, !bundle ? { id: 'rates', label: 'Suppliers & rates' } : null, { id: 'variants', label: 'Variants & stock' }, !bundle ? { id: 'history', label: 'Stock movements' } : null].filter(Boolean) as { id: string; label: string }[];
+  const related = [bundle ? { id: 'contents', label: 'Bundle contents' } : null, !bundle ? { id: 'rates', label: 'Suppliers & rates' } : null, { id: 'variants', label: 'Stock & SKU' }, !bundle ? { id: 'history', label: 'Stock movements' } : null].filter(Boolean) as { id: string; label: string }[];
   return (
     <RecordPage entity="item" id={it.id} name={it.name} back="/items"
       badges={<>{bundle ? <><Badge tone="info">Bundle</Badge> </> : null}{tracked ? <><Badge>Tracked by roll</Badge> </> : null}{Number(it.is_active) ? null : <Badge tone="dark">Inactive</Badge>}</>}
@@ -36,14 +36,14 @@ export default function ItemDetail() {
         <div className="card mb-3" id="rates"><div className="card-header d-flex justify-content-between align-items-center gap-2"><span><i className="bi bi-truck me-1" />Suppliers &amp; rates <span className="act-n">{rates.length}</span></span>
           <span className="d-flex gap-2">{can('reports.view') && <Link className="btn btn-sm btn-outline-secondary" to={`/reports/rate-history?q=${encodeURIComponent(it.name)}`}><i className="bi bi-clock-history" /> Rate history</Link>}
             {can('suppliers.create') && d.variants.length > 0 && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/supplier-items/create?variant=${d.variants[0].id}`}><i className="bi bi-plus-lg" /> Link a supplier</Link>}</span></div>
-          {rates.length ? <div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>{term('supplier')}</th><th>Their item</th><th>Variant</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net</th><th className="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
+          {rates.length ? <div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>{term('supplier')}</th><th>Their item</th><th>Details</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net</th><th className="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
             {rates.map((r) => {
               const many = rates.filter((x) => x.variant_id === r.variant_id && x.net !== null).length > 1;
               return (
                 <tr key={r.si_id}>
                   <td><Link to={`/suppliers/${r.supplier_id}`}>{r.supplier_name}</Link>{r.is_preferred ? <> <Badge tone="primary">Preferred</Badge></> : null}{r.net !== null && many && Math.abs(r.net - best[r.variant_id]) < 0.005 ? <> <Badge tone="success">Lowest</Badge></> : null}</td>
                   <td className="small"><Link to={`/purchase/supplier-items/${r.si_id}`}>{r.sname || r.scode || 'Same as ours'}</Link>{r.sname && r.scode ? <div className="text-muted">{r.scode}</div> : null}</td>
-                  <td className="small">{r.vname || r.sku}</td>
+                  <td className="small text-muted">{[r.design_no && `Design ${r.design_no}`, r.composition, r.width && `Width ${r.width}`, r.gsm && `${r.gsm} GSM`, r.pattern, r.finish].filter(Boolean).join(' · ') || '—'}</td>
                   {r.net === null ? <td colSpan={3} className="text-end text-muted small">No rate yet</td> : <><td className="text-end">{money(r.rate)}</td><td className="text-end">{Number(r.discount_pct) > 0 ? `${Number(r.discount_pct)}%` : '—'}</td><td className="text-end fw-semibold">{money(r.net)}</td></>}
                   <td className="text-end">{Number(r.min_qty) > 0 ? qty(r.min_qty) : '—'}</td><td>{r.lead_time_days != null ? `${r.lead_time_days} days` : '—'}</td>
                 </tr>
@@ -52,9 +52,9 @@ export default function ItemDetail() {
             : <div className="card-body text-muted small">No supplier is linked to this {term('item').toLowerCase()} yet. You can buy it from any {term('supplier').toLowerCase()} — linking one here just keeps their name, code and rate for quick purchase orders. Several suppliers can be linked.</div>}
         </div>
       )}
-      <section className="card mb-3" id="variants"><div className="card-header d-flex justify-content-between align-items-center"><span>Variants &amp; stock <span className="act-n">{d.variants.length}</span></span>
-        {can('items.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/items/${it.id}/edit`}><i className="bi bi-pencil" /> Edit variants</Link>}</div>
-        <div className="table-responsive"><table className="table var-table align-middle mb-0"><thead><tr><th>Variant</th><th>SKU</th><th className="text-end" title="Default cost: for stock value and as a last-resort price">Default cost</th><th className="text-end">Sale</th>{!bundle && <><th className="text-end">In stock</th><th>Where</th></>}</tr></thead><tbody>
+      <section className="card mb-3" id="variants"><div className="card-header d-flex justify-content-between align-items-center"><span>Stock &amp; SKU <span className="act-n">{d.variants.length}</span></span>
+        {can('items.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/items/${it.id}/edit`}><i className="bi bi-pencil" /> Edit</Link>}</div>
+        <div className="table-responsive"><table className="table var-table align-middle mb-0"><thead><tr><th>{term('item')}</th><th>SKU</th><th className="text-end" title="Default cost: for stock value and as a last-resort price">Default cost</th><th className="text-end">Sale</th>{!bundle && <><th className="text-end">In stock</th><th>Where</th></>}</tr></thead><tbody>
           {d.variants.map((v: any) => (
             <FragmentRows key={v.id} v={v} it={it} bundle={bundle} tracked={tracked} term={term} />
           ))}</tbody></table></div></section>
@@ -74,7 +74,7 @@ function FragmentRows({ v, it, bundle, tracked, term }: { v: any; it: any; bundl
   return (
     <>
       <tr className={Number(v.is_active) ? '' : 'text-muted'}>
-        <td><strong>{v.name || 'Default'}</strong>{v.colour || v.size ? <> <span className="badge text-bg-light border fw-normal">{[v.colour, v.size].filter(Boolean).join(' · ')}</span></> : null}{Number(v.is_active) ? null : <> <Badge tone="dark">Hidden</Badge></>}</td>
+        <td><strong>{it.name}</strong>{Number(v.is_active) ? null : <> <Badge tone="dark">Hidden</Badge></>}</td>
         <td className="small">{v.sku}{v.barcode ? <div className="text-muted">{v.barcode}</div> : null}</td>
         <td className="text-end">{money(v.cost_price)}</td><td className="text-end">{money(v.sale_price)}</td>
         {!bundle && <>

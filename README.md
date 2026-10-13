@@ -5,7 +5,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 
 ## Status
 - **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
-- **Phase 2 – Items, stock & batches: done** (masters, warehouses, items with variants and bundles, stock ledger,
+- **Phase 2 – Items, stock & batches: done** (masters, warehouses, items (one item = one SKU; every colour / design / size is its own item) and bundles, stock ledger,
   batches where 1 batch = 1 roll, adjustments / opening stock, transfers, stock-takes, CSV import/export)
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
 - **Phase 3 – Purchase: done** (suppliers, requisitions, purchase orders with optional approval, goods receipts with one batch per roll and rack,
@@ -25,7 +25,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   purchase orders), Names, Print templates. Each user can customise their Dashboard widgets and list columns.
 
 - **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),
-  Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type-aware attributes, HSN, colour & size per variant), and a **supplier-wise rate list**
+  Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type, HSN; design no., composition, width, GSM, pattern and finish live on the **supplier item** the item is tagged to; migration 018), and a **supplier-wise rate list**
   (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
 
 - **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles, Super Admin) is a React app at `/app`

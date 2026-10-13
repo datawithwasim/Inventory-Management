@@ -20,7 +20,7 @@ final class RateListController extends PurchaseBase
         if ($supplier) { $where .= ' AND r.supplier_id = ?'; $p[] = $supplier; }
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR r.supplier_code LIKE ? OR sp.supplier_code LIKE ? OR sp.supplier_name LIKE ? OR i.design_no LIKE ?)';
+            $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR r.supplier_code LIKE ? OR sp.supplier_code LIKE ? OR sp.supplier_name LIKE ? OR sp.design_no LIKE ?)';
             array_push($p, $like, $like, $like, $like, $like, $like, $like);
         }
         $rows = Purchase::markCurrent(DB::all(

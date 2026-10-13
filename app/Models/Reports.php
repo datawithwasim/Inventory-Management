@@ -381,7 +381,7 @@ final class Reports
                 $p = [$t, $today, $today];
                 $w = '';
                 if ($f['category']) { $w .= ' AND i.category_id = ?'; $p[] = $f['category']; }
-                if ($f['q'] !== '') { $w .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR i.design_no LIKE ?)'; array_push($p, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
+                if ($f['q'] !== '') { $w .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR r.supplier_code LIKE ? OR EXISTS (SELECT 1 FROM supplier_items sp WHERE sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id AND (sp.design_no LIKE ? OR sp.supplier_code LIKE ? OR sp.supplier_name LIKE ?)))'; array_push($p, ...array_fill(0, 6, '%' . $f['q'] . '%')); }
                 $all = DB::all(
                     "SELECT r.*, s.name AS supplier, s.lead_time_days AS s_lead, i.name AS item, v.name AS variant, v.sku FROM supplier_rates r
                      JOIN suppliers s ON s.id = r.supplier_id AND s.is_active = 1 JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id

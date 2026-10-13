@@ -9,9 +9,9 @@ use App\Models\CustomFields;
 final class Columns
 {
     public const LISTS = [
-        'items' => ['entity' => 'item', 'route' => 'items', 'cols' => ['category' => 'Category', 'brand' => 'Brand', 'variants' => 'Variants', 'price' => 'Sale price', 'stock' => 'Stock']],
+        'items' => ['entity' => 'item', 'route' => 'items', 'cols' => ['category' => 'Category', 'brand' => 'Brand', 'sku' => 'SKU', 'suppliers' => 'Supplier items', 'price' => 'Sale price', 'stock' => 'Stock']],
         'customers' => ['entity' => 'customer', 'route' => 'customers', 'cols' => ['group' => 'Group', 'phone' => 'Phone', 'credit' => 'Credit', 'owes' => 'Owes us']],
-        'supplier_items' => ['entity' => 'supplier_item', 'route' => 'purchase/supplier-items', 'cols' => ['code' => 'Supplier item code', 'our_item' => 'Our item', 'rate' => 'Current rate', 'moq' => 'Min order qty', 'lead' => 'Lead time', 'preferred' => 'Preferred']],
+        'supplier_items' => ['entity' => 'supplier_item', 'route' => 'purchase/supplier-items', 'cols' => ['code' => 'Supplier item code', 'details' => 'Design & details', 'our_item' => 'Our item', 'rate' => 'Current rate', 'moq' => 'Min order qty', 'lead' => 'Lead time', 'preferred' => 'Preferred']],
         'suppliers' => ['entity' => 'supplier', 'route' => 'suppliers', 'cols' => ['contact' => 'Contact', 'phone' => 'Phone', 'terms' => 'Terms', 'owes' => 'We owe']],
     ];
 
