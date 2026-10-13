@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { fdate, money, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, Spinner } from '../../components/ui';
@@ -25,7 +25,7 @@ export default function PoDetail() {
   };
   const btn = (cls: string, label: string, onClick: () => void) => <button className={`btn btn-sm ${cls}`} onClick={onClick}>{label}</button>;
   const actions = <>
-    <a className="btn btn-sm btn-outline-secondary" target="_blank" href={legacyUrl(`/purchase/orders/${id}/print`)}><i className="bi bi-printer" /> Print</a>
+    <a className="btn btn-sm btn-outline-secondary" target="_blank" href={appUrl(`/purchase/orders/${id}/print`)}><i className="bi bi-printer" /> Print</a>
     {st === 'draft' && can('purchase.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/orders/${id}/edit`}>Edit</Link>}
     {st === 'draft' && can('purchase.create') && btn('btn-primary', d.approval ? 'Submit for approval' : 'Confirm order', () => act('submit'))}
     {st === 'pending_approval' && can('purchase.approve') && <>{btn('btn-success', 'Approve', () => act('approve'))}{btn('btn-outline-secondary', 'Send back to draft', () => act('reject'))}</>}

@@ -193,7 +193,11 @@ final class PurchaseOrderController extends PurchaseBase
         $po = $this->load($id);
         $s = DB::one('SELECT address, phone, tax_no FROM suppliers WHERE tenant_id = ? AND id = ?', [$this->tid(), $po['supplier_id']]);
         $po += ['sup_address' => $s['address'] ?? null, 'sup_phone' => $s['phone'] ?? null, 'sup_tax' => $s['tax_no'] ?? null];
-        $this->view('app/purchase/po_print', ['title' => $po['po_no'], 'po' => $po, 'items' => $this->items((int)$po['id']), 'tpl' => PrintTemplate::get('purchase_order')], 'layouts/print');
+        $items = array_map(function ($l) {
+            [$net, , $tot] = \App\Models\Purchase::line((float)$l['qty_ordered'], (float)$l['unit_price'], (float)$l['tax_rate']);
+            return $l + ['net' => $net, 'tot' => $tot, 'their' => implode(' · ', array_filter([trim((string)($l['sup_code'] ?? '')), trim((string)($l['sup_name'] ?? ''))], fn($x) => $x !== ''))];
+        }, $this->items((int)$po['id']));
+        $this->view('app/purchase/po_print', ['title' => $po['po_no'], 'po' => $po, 'items' => $items, 'tpl' => PrintTemplate::get('purchase_order'), 'head' => PrintTemplate::head(), 'terms' => ['supplier' => term('supplier')]], 'layouts/print');
     }
 
     private function transition(string $id, array $from, string $to, ?string $msg, ?callable $extra = null): array

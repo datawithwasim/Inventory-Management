@@ -11,6 +11,8 @@ export const getCsrf = () => csrf;
 /** Address of a legacy (PHP-rendered) page: used for screens not rebuilt in React yet. */
 export const legacyUrl = (path: string) => base + (path.startsWith('/') ? path : '/' + path);
 export const appBase = base + '/app';
+/** Address of a screen of the app, for links that open in a new tab (printouts). */
+export const appUrl = (path: string) => appBase + (path.startsWith('/') ? path : '/' + path);
 /** Address of an API call, for things fetched as plain files (a barcode picture). */
 export const apiUrl = (path: string) => `${base}/api/v1${path}`;
 
@@ -26,6 +28,7 @@ export async function api<T = any>(method: 'GET' | 'POST', path: string, body?: 
   try { json = await res.json(); } catch { /* not JSON */ }
   if (!json) throw new ApiError(res.status, [], 'The server sent an unexpected answer. Please try again.');
   // a refused form (422) is an answer the page shows, not a crash
+  if (res.status === 401 && !/^\/(session|login|admin\/login|admin\/session|logout|admin\/logout)/.test(path)) window.dispatchEvent(new CustomEvent('inv-expired'));
   if (!res.ok && res.status !== 422) throw new ApiError(res.status, json.messages ?? [], json.error ?? 'Something went wrong.');
   return json;
 }

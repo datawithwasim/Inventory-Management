@@ -4,6 +4,7 @@ import { legacyUrl, post } from '../lib/api';
 import { fdate } from '../lib/format';
 import { isReact, isScreen, localPath } from '../lib/routes';
 import { useSession, type MenuItem } from '../lib/session';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dropdown } from './ui';
 import Palette from './Palette';
 
@@ -32,7 +33,7 @@ function bestMatch(path: string, session: NonNullable<ReturnType<typeof useSessi
 }
 
 export default function Layout() {
-  const { session, reload } = useSession();
+  const { session, reload } = useSession(); const qc = useQueryClient();
   const loc = useLocation(); const nav = useNavigate();
   const [mode, setModeState] = useState(currentMode());
   const [collapsed, setCollapsed] = useState(document.documentElement.classList.contains('sb-collapsed'));
@@ -71,7 +72,11 @@ export default function Layout() {
   const [crumbGroup, crumbItem] = bestMatch(path, session);
   const initial = user.name.slice(0, 1).toUpperCase();
   const toggleCollapse = () => { const v = !collapsed; setCollapsed(v); document.documentElement.classList.toggle('sb-collapsed', v); try { localStorage.setItem('inv-sb', v ? '1' : '0'); } catch { /* ignore */ } };
-  const logout = async () => { await post('/logout'); await reload(); nav('/login'); };
+  const logout = async () => {
+    try { await post('/logout'); } catch { /* the session may already be gone: signing out is still the right end state */ }
+    qc.clear();   // nothing of this company stays in memory for the next person on this browser
+    await reload(); nav('/login', { replace: true });
+  };
   const chooseMode = (m: string) => { setMode(m); setModeState(m); };
   const stopSupport = async () => { await post('/impersonate/stop'); nav('/admin/tenants'); await reload(); };
 

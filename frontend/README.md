@@ -56,9 +56,10 @@ Upload `public/ui/` to the server after a build.
 | Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile; the page layout designer (full screen, `/app/settings/formdesign`) | done |
 | Forgot / reset password (company and Super Admin), customer groups with special prices, rate lists, items CSV import, global search (Ctrl K) | done |
 | Super Admin (sign-in, dashboard, companies with open-as-owner support mode, plans, system updates and backup, audit log) at `/app/admin` | done |
-| Print pages (invoice, delivery note, voucher, PO, labels, report print), CSV/Excel downloads, backup download, installer | stay server-made on purpose (they are documents and files, not screens) |
+| Printouts: purchase order, invoice, delivery note, stock-out vouchers (delivery / adjustment / transfer), transfer challan, report print, barcode labels (`src/pages/print/Print.tsx`, open without the menu, Print button, light colours) | done |
+| CSV / Excel downloads, backup download, installer | stay server-made on purpose (they are files, not screens) |
 
 ## The site opens the app
-`core/Spa.php` lists the address starts the app shows. `Router::dispatch` sends a browser `GET` for any of them (and for `/`) to `/app/...`; files and printouts are left alone. `LEGACY_UI=1` in `.env` switches that off for the screens (not for `/`), which only the automated tests need. Keep `Spa::PREFIXES` and `src/lib/routes.ts` in step.
+`core/Spa.php` lists the address starts the app shows. `Router::dispatch` sends a browser `GET` for any of them (and for `/`) to `/app/...`; downloads (export, template, backup, logo, barcode, lookup) are left alone. `LEGACY_UI=1` in `.env` switches that off for the screens (not for `/`), which only the automated tests need. Keep `Spa::PREFIXES` and `src/lib/routes.ts` in step.
 
-Remaining: the page layout designer and the print pages (invoice, delivery note, voucher), which stay PHP.
+Remaining server-made: file downloads and the installer.

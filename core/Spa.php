@@ -5,7 +5,7 @@ namespace Core;
 
 /**
  * The screens now live in the app (/app/...). A browser that opens a classic screen address is sent to its twin there.
- * Downloads, exports and print pages stay what they are: files and documents the server makes.
+ * Downloads and exports stay what they are: files the server makes. Printouts (invoice, PO, labels …) are pages of the app.
  * LEGACY_UI=1 in .env keeps the classic screens reachable (the automated tests read them as HTML).
  */
 final class Spa
@@ -15,8 +15,8 @@ final class Spa
         '/purchase/requisitions', '/purchase/returns', '/warehouses', '/locations', '/stock', '/sales/orders', '/sales/deliveries', '/sales/invoices', '/sales/returns', '/reports',
         '/labels', '/settings', '/users', '/roles', '/masters', '/profile', '/login', '/forgot-password', '/reset-password', '/admin'];
 
-    /** Files and printouts under those prefixes (and the little lookups the screens call). */
-    private const KEEP = '~(/(print|voucher|challan|export|template|barcode|data|backup|logo|lookup|placement|batch-options)(/|$))|^/lookup/~';
+    /** Downloads and little lookups under those prefixes: files, not screens. (Printouts are screens of the app too.) */
+    private const KEEP = '~(/(export|template|barcode|data|backup|logo|lookup|placement|batch-options)(/|$))|^/lookup/~';
 
     public static function redirectFor(string $path, array $query = []): ?string
     {
@@ -24,7 +24,6 @@ final class Spa
         foreach (self::PREFIXES as $p) {
             if ($path !== $p && !str_starts_with($path, $p . '/')) continue;
             if (preg_match(self::KEEP, $path)) return null;
-            if (str_starts_with($path, '/reports') && isset($query['print'])) return null;
             if (str_starts_with($path, '/admin/system/backup')) return null;
             return '/app' . $path;
         }

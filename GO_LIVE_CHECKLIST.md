@@ -105,13 +105,13 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - **Super Admin forgot the password and mail does not work:** `php database/reset-admin.php admin@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH), or in phpMyAdmin set `super_admins.password_hash` to a hash made by `php -r "echo password_hash('NewPassword123', PASSWORD_DEFAULT);"`.
 - **White page / "Unexpected answer" in the app:** check `storage/logs/` and the cPanel error log; the usual causes are PHP < 8.1, a missing extension, or `storage/` not writable.
 - **Screens look old after upload:** hard refresh; confirm `public/ui/index.html` points to the same `index-*.js` that exists in `public/ui/assets/`.
-- **An address shows "Page not found" inside the app:** there is no screen at that address. Old PHP screen addresses are redirected to `/app/...` automatically; printouts and downloads stay server pages by design.
+- **An address shows "Page not found" inside the app:** there is no screen at that address. Old PHP screen addresses are redirected to `/app/...` automatically; downloads (CSV / Excel, backup) stay server files by design.
 - **The old HTML screens still open (no redirect):** `.env` contains `LEGACY_UI=1`. Remove that line on the live site.
 - **Roll back:** restore the old files, then restore the `.sql` backup in phpMyAdmin into an **empty** database (migrations are not reversible).
 
 ## F. Known and intentional
 
-- Page layout designer / custom fields (Settings → "Page layout & custom fields") and all print pages are still PHP pages.
+- Every screen and every printout (PO, invoice, delivery note, vouchers, transfer challan, report print, barcode labels) is a page of the app. Only downloads (CSV / Excel, backup) and the installer are made by the server.
 - "Walk-in customer" is kept for deliveries made without a registered customer.
 - A user belongs to one warehouse (or none = head office). Company-wide screens (sales / purchase registers, invoices money figures, low-stock list) are hidden from warehouse-tied users; the Owner is never limited.
 - Invoices, payments and customer/supplier statements remain (basic receivable/payable tracking). Remove them only by a separate decision.

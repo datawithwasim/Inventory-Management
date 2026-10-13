@@ -66,8 +66,11 @@ final class InvoiceController extends SalesBase
     {
         $i = $this->load($id);
         $this->view('app/sales/invoice_print', [
-            'title' => $i['invoice_no'], 'i' => $i, 'items' => $this->lines($i), 'due' => Purchase::outstanding($i),
-            'tpl' => PrintTemplate::get('invoice'),
+            'title' => $i['invoice_no'], 'i' => $i, 'items' => array_map(function ($l) {
+                [, $dsc, $net, $tx, $tot] = \App\Models\Sales::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']);
+                return $l + ['dsc' => $dsc, 'net' => $net, 'tx' => $tx, 'tot' => $tot];
+            }, $this->lines($i)), 'due' => Purchase::outstanding($i),
+            'tpl' => PrintTemplate::get('invoice'), 'head' => PrintTemplate::head(),
         ], 'layouts/print');
     }
 

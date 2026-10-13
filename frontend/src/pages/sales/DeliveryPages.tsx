@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { fdate, qty as fq } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
@@ -178,8 +178,8 @@ export function DeliveryDetail() {
   return (
     <RecordPage entity="delivery" id={x.id} name={x.delivery_no} back="/sales/deliveries"
       actions={<>
-        <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/deliveries/${x.id}/print`)}><i className="bi bi-printer" /> Delivery note</a>
-        <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/deliveries/${x.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>
+        <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={appUrl(`/sales/deliveries/${x.id}/print`)}><i className="bi bi-printer" /> Delivery note</a>
+        <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={appUrl(`/sales/deliveries/${x.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>
         {x.invoice_id ? <Link className="btn btn-sm btn-outline-primary" to={`/sales/invoices/${x.invoice_id}`}>Invoice {x.invoice_no}</Link> : can('sales.create') && <button className="btn btn-sm btn-primary" onClick={makeInvoice}>Create invoice</button>}
       </>}
       notice={msgs.length ? <div className="mb-3"><Messages items={msgs} onClose={() => setMsgs([])} /></div> : null}

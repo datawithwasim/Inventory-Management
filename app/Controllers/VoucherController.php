@@ -34,7 +34,7 @@ final class VoucherController extends Controller
         usort($lines, fn($a, $b) => [$a['rack'] === '' ? 1 : 0, $a['rack'], $a['item'], $a['batch']] <=> [$b['rack'] === '' ? 1 : 0, $b['rack'], $b['item'], $b['batch']]);
         $tpl = PrintTemplate::get('delivery_note');
         $tpl['title'] = ''; $tpl['signature'] = 0; $tpl['terms'] = '';   // the voucher has its own signature boxes
-        $this->view('app/print/stock_voucher', ['title' => $v['no'] . ' voucher', 'v' => $v, 'lines' => $lines, 'tpl' => $tpl], 'layouts/print');
+        $this->view('app/print/stock_voucher', ['title' => $v['no'] . ' voucher', 'v' => $v, 'lines' => $lines, 'tpl' => $tpl, 'head' => PrintTemplate::head()], 'layouts/print');
     }
 
     public function delivery(string $id): void

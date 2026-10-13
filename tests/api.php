@@ -942,10 +942,31 @@ $sp = ['/' => '/app/', '/dashboard' => '/app/dashboard', '/customers/12/edit' =>
     '/admin' => '/app/admin', '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];
 $bad = []; foreach ($sp as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
 check('classic screen addresses map to their twin in the app', !$bad);
-$keep = ['/items/export', '/items/import/template', '/purchase/orders/5/print', '/sales/invoices/5/print', '/labels/print', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/admin/system/backup', '/sales/deliveries/3/voucher', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
+$keep = ['/items/export', '/items/import/template', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/admin/system/backup', '/labels/barcode', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
 $bad = []; foreach ($keep as $path) if (Core\Spa::redirectFor($path) !== null) $bad[] = $path;
-check('files, printouts and lookups are never sent to the app', !$bad);
-check('a report opened for printing stays a server page', Core\Spa::redirectFor('/reports/stock-summary', ['print' => '1']) === null && Core\Spa::redirectFor('/reports/stock-summary') === '/app/reports/stock-summary');
+check('files and lookups are never sent to the app', !$bad);
+$pr = ['/purchase/orders/5/print' => '/app/purchase/orders/5/print', '/sales/invoices/5/print' => '/app/sales/invoices/5/print', '/sales/deliveries/3/print' => '/app/sales/deliveries/3/print', '/sales/deliveries/3/voucher' => '/app/sales/deliveries/3/voucher',
+    '/stock/adjustments/3/voucher' => '/app/stock/adjustments/3/voucher', '/stock/transfers/3/voucher' => '/app/stock/transfers/3/voucher', '/stock/transfers/3/challan' => '/app/stock/transfers/3/challan', '/labels/print' => '/app/labels/print'];
+$bad = []; foreach ($pr as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
+check('printouts are pages of the app too', !$bad && Core\Spa::redirectFor('/reports/stock-summary', ['print' => '1']) === '/app/reports/stock-summary');
+
+// print data over JSON: letterhead and ready-made line amounts
+$po = (int)DB::val('SELECT id FROM purchase_orders WHERE tenant_id = ? LIMIT 1', [$tA]);
+if ($po) {
+    $r = $c->call('GET', "/purchase/orders/$po/print");
+    check('the purchase-order printout data has the letterhead, the layout and amounts per line', ($r['json']['data']['head']['name'] ?? '') !== '' && isset($r['json']['data']['tpl']['accent']) && (!$r['json']['data']['items'] || isset($r['json']['data']['items'][0]['tot'], $r['json']['data']['items'][0]['net'])));
+}
+$inv = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? LIMIT 1', [$tA]);
+if ($inv) {
+    $r = $c->call('GET', "/sales/invoices/$inv/print");
+    check('the invoice printout data has the letterhead and discount / tax / total per line', isset($r['json']['data']['head']['name']) && (!$r['json']['data']['items'] || isset($r['json']['data']['items'][0]['dsc'], $r['json']['data']['items'][0]['tx'], $r['json']['data']['items'][0]['tot'])));
+}
+$r = $c->call('GET', '/reports/stock-summary?print=1');
+check('a report for printing answers with its rows, company and print date', $r['status'] === 200 && isset($r['json']['data']['rows'], $r['json']['data']['company'], $r['json']['data']['printed']));
+$r = $c->call('GET', '/labels/print?type=items&template=b:item-50x25&n[' . (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? LIMIT 1', [$tA]) . ']=2');
+check('labels for printing answer with the template, the page layout and the filled values', $r['status'] === 200 && isset($r['json']['data']['tpl']['elements'], $r['json']['data']['page']['mode']) && count($r['json']['data']['labels'] ?? []) === 2);
+$r = $c->call('POST', '/logout', []);
+check('signing out over JSON answers success (not an error) and ends the session', $r['status'] === 200 && ($r['json']['ok'] ?? false) === true && $c->call('GET', '/customers')['status'] === 401);
 $rootNoFollow = (function () use ($base) { $ch = curl_init($base . '/'); curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true]); $h = (string)curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$st, $h]; })();
 check('the site address itself opens the app', $rootNoFollow[0] === 302 && (bool)preg_match('~Location: .*/app/\r?\n~i', $rootNoFollow[1]));
 

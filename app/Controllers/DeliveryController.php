@@ -181,7 +181,11 @@ final class DeliveryController extends SalesBase
         $c = DB::one('SELECT phone, address FROM customers WHERE tenant_id = ? AND id = ?', [$this->tid(), $d['customer_id']]);
         $d['cust_phone'] = $c['phone'] ?? null;
         $d['cust_address'] = $c['address'] ?? null;
-        $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => self::rows((int)$d['id'], $this->tid()), 'tpl' => PrintTemplate::get('delivery_note')], 'layouts/print');
+        $items = array_map(function ($l) {
+            [, , , , $tot] = Sales::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']);
+            return $l + ['tot' => $tot];
+        }, self::rows((int)$d['id'], $this->tid()));
+        $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => $items, 'tpl' => PrintTemplate::get('delivery_note'), 'head' => PrintTemplate::head()], 'layouts/print');
     }
 
     public function invoice(string $id): void

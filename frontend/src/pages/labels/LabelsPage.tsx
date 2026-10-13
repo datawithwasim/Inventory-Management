@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { money, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
@@ -53,7 +53,7 @@ export default function LabelsPage() {
     if (outline !== null) p.set('outline', outline ? '1' : '0');
     picked.forEach((r) => p.set(`n[${r.id}]`, String(copies[r.id])));
     localStorage.setItem('label.tpl.' + type, String(tpl.id));
-    window.open(legacyUrl('/labels/print?' + p.toString()), '_blank');
+    window.open(appUrl('/labels/print?' + p.toString()), '_blank');
   };
 
   return (

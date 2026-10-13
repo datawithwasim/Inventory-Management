@@ -26,6 +26,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => { reload().catch(() => setSession({ authenticated: false, csrf: '', base: '' })); }, [reload]);
   useEffect(() => {
+    const expired = () => { reload().catch(() => setSession({ authenticated: false, csrf: '', base: '' })); };
+    window.addEventListener('inv-expired', expired); return () => window.removeEventListener('inv-expired', expired);
+  }, [reload]);
+  useEffect(() => {
     if (!session) return;
     const el = document.getElementById('brand-vars'); if (el && session.themeCss !== undefined) el.textContent = session.themeCss;   // guests keep the defaults the server put in the page
     const b = document.body, t = session.theme;

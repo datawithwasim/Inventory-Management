@@ -39,6 +39,14 @@ final class PrintTemplate
         'purchase_order' => ['title' => 'Purchase order', 'signature_label' => 'Authorised signatory'],
     ];
 
+    /** Company letterhead for every printed document (the app draws it; the layout options come from get()). */
+    public static function head(): array
+    {
+        $S = fn(string $k) => (string)Settings::get('company.' . $k);
+        return ['name' => $S('legal_name') !== '' ? $S('legal_name') : (string)\Core\Auth::user()['tenant_name'], 'address' => $S('address'), 'phone' => $S('phone'), 'email' => $S('email'),
+            'website' => $S('website'), 'tax_no' => $S('tax_no'), 'bank' => $S('bank'), 'logo' => company_logo_url()];
+    }
+
     /** Editable options for one document type, in display order. */
     public static function fields(string $doc): array
     {

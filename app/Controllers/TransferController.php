@@ -384,7 +384,7 @@ final class TransferController extends StockDocController
         $this->view('app/print/transfer_challan', [
             'title' => $doc['doc_no'] . ' challan', 'doc' => $doc, 'lines' => $this->tracked((int)$doc['id']),
             'from' => $w((int)$doc['warehouse_id']), 'to' => $w((int)$doc['to_warehouse_id']),
-            'tpl' => \App\Models\PrintTemplate::get('delivery_note'),
+            'tpl' => \App\Models\PrintTemplate::get('delivery_note'), 'head' => \App\Models\PrintTemplate::head(),
         ], 'layouts/print');
     }
 }

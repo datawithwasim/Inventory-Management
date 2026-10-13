@@ -58,7 +58,11 @@ export function AdminLayout() {
   const path = loc.pathname.replace(/\/+$/, '') || '/';
   const active = (p: string) => (p === '/admin' ? path === '/admin' : path.startsWith(p));
   const title = NAV.find(([p]) => p === path)?.[2] ?? '';   // forms bring their own heading
-  const logout = async () => { await post('/admin/logout'); await qc.invalidateQueries({ queryKey: ['admin-session'] }); nav('/admin/login'); };
+  const logout = async () => {
+    try { await post('/admin/logout'); } catch { /* already signed out */ }
+    qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'admin-session' });
+    await qc.invalidateQueries({ queryKey: ['admin-session'] }); nav('/admin/login', { replace: true });
+  };
   const toggleCollapse = () => { const v = !collapsed; setCollapsed(v); document.documentElement.classList.toggle('sb-collapsed', v); };
   return (
     <>

@@ -36,7 +36,7 @@ final class ReportController extends PurchaseBase
         $data = ['title' => $def['title'], 'def' => $def, 'f' => $f, 'rows' => $rows, 'truncated' => $trunc, 'totals' => Reports::totals($def, $rows),
             'lists' => Reports::lists(), 'screenLimit' => self::SCREEN, 'query' => $_GET];
         if (!empty($_GET['print'])) {
-            $this->view('app/reports/print', $data + ['company' => \Core\Settings::get('company.name', '')], 'layouts/print');
+            $this->view('app/reports/print', $data + ['company' => \Core\Settings::get('company.name', ''), 'printed' => date('Y-m-d')], 'layouts/print');
             return;
         }
         $this->view('app/reports/show', $data);

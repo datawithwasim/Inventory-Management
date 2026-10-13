@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { fdate, money, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
@@ -72,7 +72,7 @@ export function ReportShow() {
         <div className="btn-group btn-group-sm">
           {can('reports.export') && <><a className="btn btn-outline-secondary" href={link(`/export/xlsx${qs ? `?${qs}` : ''}`)}><i className="bi bi-file-earmark-excel me-1" />Excel</a>
             <a className="btn btn-outline-secondary" href={link(`/export/csv${qs ? `?${qs}` : ''}`)}><i className="bi bi-filetype-csv me-1" />CSV</a></>}
-          <a className="btn btn-outline-secondary" target="_blank" rel="noreferrer" href={link(`?${qs ? qs + '&' : ''}print=1`)}><i className="bi bi-printer me-1" />Print / PDF</a>
+          <a className="btn btn-outline-secondary" target="_blank" rel="noreferrer" href={appUrl(`/reports/${slug}?${qs ? qs + '&' : ''}print=1`)}><i className="bi bi-printer me-1" />Print / PDF</a>
         </div>
       </PageHead>
       <div className="mb-3"><Link to="/reports" className="small text-decoration-none">« All reports</Link><p className="text-muted mb-0">{def.desc}</p></div>

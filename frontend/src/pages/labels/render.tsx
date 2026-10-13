@@ -24,6 +24,9 @@ export const fill = (text: string, values: Values) => text.replace(/\{(\w+)\}/g,
 
 /** Barcode pictures, fetched once per (symbology, value). */
 const svgCache = new Map<string, string>();
+/** Barcode pictures still on their way: a printout waits for this to reach zero. */
+export const barcodesPending = () => pending;
+let pending = 0;
 function useBarcode(sym: string, value: string, ecc: string): string {
   const key = `${sym}|${ecc}|${value}`;
   const [svg, setSvg] = useState(svgCache.get(key) ?? '');
@@ -31,9 +34,9 @@ function useBarcode(sym: string, value: string, ecc: string): string {
     if (!value.trim()) { setSvg(''); return; }
     const hit = svgCache.get(key);
     if (hit !== undefined) { setSvg(hit); return; }
-    let live = true;
+    let live = true; pending++;
     fetch(apiUrl(`/labels/barcode?sym=${encodeURIComponent(sym)}&ecc=${ecc}&value=${encodeURIComponent(value)}`), { credentials: 'same-origin' })
-      .then((r) => r.text()).then((t) => { svgCache.set(key, t); if (live) setSvg(t); }).catch(() => undefined);
+      .then((r) => r.text()).then((t) => { svgCache.set(key, t); if (live) setSvg(t); }).catch(() => undefined).finally(() => { pending--; });
     return () => { live = false; };
   }, [key, sym, value, ecc]);
   return svg;

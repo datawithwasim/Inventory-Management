@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { fdate, money } from '../../lib/format';
 import { owed, payState } from '../../lib/docs';
 import { useSession } from '../../lib/session';
@@ -49,7 +49,7 @@ export function InvoiceDetail() {
   return (
     <RecordPage entity="invoice" id={i.id} name={i.invoice_no} back="/sales/invoices" badges={<PayBadge state={d.status} />}
       actions={<>
-        <a className="btn btn-sm btn-primary" target="_blank" rel="noreferrer" href={legacyUrl(`/sales/invoices/${i.id}/print`)}><i className="bi bi-printer" /> Print invoice</a>
+        <a className="btn btn-sm btn-primary" target="_blank" rel="noreferrer" href={appUrl(`/sales/invoices/${i.id}/print`)}><i className="bi bi-printer" /> Print invoice</a>
         {can('sales.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/sales/invoices/${i.id}/edit`}>Edit details</Link>}
         {can('sales.create') && i.delivery_id && <Link className="btn btn-sm btn-outline-danger" to={`/sales/returns/create?invoice=${i.id}`}>{term('customer')} return</Link>}
       </>}

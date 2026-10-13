@@ -11,6 +11,8 @@ import { GroupList, GroupForm } from './pages/customers/Groups';
 import ItemImport from './pages/items/Import';
 import RateList from './pages/purchase/RateList';
 import FormDesigner from './pages/settings/FormDesigner';
+import { PoPrint, InvoicePrint, DeliveryPrint, VoucherPrint, ChallanPrint, ReportPrint, LabelPrint } from './pages/print/Print';
+import { useSearchParams } from 'react-router-dom';
 import SupplierList from './pages/suppliers/List';
 import SupplierDetail from './pages/suppliers/Detail';
 import SupplierForm from './pages/suppliers/Form';
@@ -53,7 +55,9 @@ function Protected({ bare = false }: { bare?: boolean }) {
   const { session } = useSession();
   const loc = useLocation();
   if (!session?.authenticated) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
-  return bare ? <Outlet /> : <Layout />;
+  // a report opened for printing has no menu around it
+  const printing = loc.pathname.startsWith('/reports/') && /[?&]print=/.test(loc.search);
+  return bare || printing ? <Outlet /> : <Layout />;
 }
 
 export default function App() {
@@ -78,6 +82,14 @@ export default function App() {
       </Route>
       <Route element={<Protected bare />}>
         <Route path="/settings/formdesign" element={<FormDesigner />} />
+        <Route path="/purchase/orders/:id/print" element={<PoPrint />} />
+        <Route path="/sales/invoices/:id/print" element={<InvoicePrint />} />
+        <Route path="/sales/deliveries/:id/print" element={<DeliveryPrint />} />
+        <Route path="/sales/deliveries/:id/voucher" element={<VoucherPrint kind="delivery" />} />
+        <Route path="/stock/adjustments/:id/voucher" element={<VoucherPrint kind="adjustment" />} />
+        <Route path="/stock/transfers/:id/voucher" element={<VoucherPrint kind="transfer" />} />
+        <Route path="/stock/transfers/:id/challan" element={<ChallanPrint />} />
+        <Route path="/labels/print" element={<LabelPrint />} />
       </Route>
       <Route element={<Protected />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
@@ -161,7 +173,7 @@ export default function App() {
         <Route path="/sales/returns/create" element={<SalesReturnCreate />} />
         <Route path="/sales/returns/:id" element={<SalesReturnDetail />} />
         <Route path="/reports" element={<ReportIndex />} />
-        <Route path="/reports/:slug" element={<ReportShow />} />
+        <Route path="/reports/:slug" element={<ReportSwitch />} />
         <Route path="/settings/custom-fields/*" element={<Navigate to="/settings/formdesign" replace />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<SettingsHome />} />
@@ -190,6 +202,12 @@ export default function App() {
       </Route>
     </Routes>
   );
+}
+
+/** A report opens on screen, or as a printout when the address has print=1. */
+function ReportSwitch() {
+  const [sp] = useSearchParams();
+  return sp.get('print') ? <ReportPrint /> : <ReportShow />;
 }
 
 /** An address with no screen: say so, rather than sending people to an old page. */

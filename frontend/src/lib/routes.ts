@@ -13,6 +13,6 @@ export const localPath = (url: string) => {
 export const routerPath = (url: string) => localPath(url).replace(/^\/app(?=\/|$)/, '') || '/';
 
 /** Files, printouts and little lookups under those addresses stay server-made: they are not screens. */
-const FILES = /\/(print|voucher|challan|export|template|barcode|data|backup|logo|lookup)(\/|$)/;
+const FILES = /\/(export|template|barcode|data|backup|logo|lookup)(\/|$)/;
 /** Is this address one of the app's screens (so a plain link to it should open inside the app)? */
-export const isScreen = (path: string, search = '') => isReact(path) && !FILES.test(path) && !(path.startsWith('/reports') && /[?&]print=/.test(search));
+export const isScreen = (path: string, _search = '') => isReact(path) && !FILES.test(path);

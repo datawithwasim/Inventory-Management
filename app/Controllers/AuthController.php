@@ -35,6 +35,7 @@ final class AuthController extends Controller
     public function logout(): void
     {
         Auth::logout();
+        flash('success', 'You have been signed out.');
         redirect('login');
     }
 

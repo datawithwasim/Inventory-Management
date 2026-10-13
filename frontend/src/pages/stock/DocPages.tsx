@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, type Msg } from '../../lib/api';
+import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
 import { fdate, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
@@ -116,7 +116,7 @@ function StockDocDetail({ kind }: { kind: 'adjustment' | 'transfer' }) {
   const doc = d.doc; const signed = kind === 'adjustment'; const moves = !!doc.to_warehouse;
   return (
     <RecordPage entity={kind} id={doc.id} name={doc.doc_no} back={base} badges={<Badge tone="light">{d.heading}</Badge>}
-      actions={<a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={legacyUrl(`${base}/${doc.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>}
+      actions={<a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={appUrl(`${base}/${doc.id}/voucher`)}><i className="bi bi-scissors" /> Stock-out voucher</a>}
       related={[{ id: 'lines', label: 'Items' }]}>
       <div className="card mb-3" id="lines"><div className="table-responsive"><table className="table mb-0">
         <thead><tr><th>{term('item')}</th><th>SKU</th><th>{term('batch')}</th><th>{moves ? `From ${term('rack').toLowerCase()} → To ${term('rack').toLowerCase()}` : term('rack')}</th><th className="text-end">Qty</th></tr></thead><tbody>
