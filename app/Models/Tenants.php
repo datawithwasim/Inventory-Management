@@ -26,8 +26,8 @@ final class Tenants
     /** Warehouse Incharge / Operator: the people who work inside one warehouse. */
     private static function warehousePermissions(bool $incharge): array
     {
-        $op = ['items.view', 'warehouses.view', 'stock.view', 'stock.transfer', 'stock.receive'];
-        return $incharge ? array_merge($op, ['masters.view', 'warehouses.create', 'warehouses.edit', 'stock.adjust', 'purchase.view', 'purchase.create', 'sales.view', 'reports.view']) : $op;
+        $op = ['items.view', 'warehouses.view', 'stock.view', 'stock.transfer', 'stock.receive', 'labels.view'];
+        return $incharge ? array_merge($op, ['masters.view', 'warehouses.create', 'warehouses.edit', 'stock.adjust', 'purchase.view', 'purchase.create', 'sales.view', 'reports.view', 'labels.create', 'labels.edit']) : $op;
     }
 
     public static function uniqueSlug(string $name): string

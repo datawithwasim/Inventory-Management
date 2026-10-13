@@ -25,7 +25,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`. Afterwards the page must say "The database is up to date."
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/app/` once with a hard refresh (Ctrl+F5) so the browser drops the old screens.
 
@@ -63,6 +63,10 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] A warehouse that still has people cannot be deleted or made inactive.
 - [ ] A dispatcher without the Receive permission cannot receive; a receiver cannot dispatch or settle (Settings → Roles → Stock: View / Adjust / Transfer / **Receive**).
 - [ ] Reports → "Transfers: in transit & shortages"; Dashboard card "Transfers on the road"; overdue transfers (past expected date) show in red.
+- [ ] **Barcode labels** (Inventory → Barcode labels): pick items or rolls, choose a ready-made template, set copies, Print (margins "None", scale 100%). Print one test label first and **scan it** with your scanner.
+- [ ] **Label designer** (Design a label): drag, resize and rotate text, barcodes (Code 128, EAN-13, Code 39), QR codes, boxes/lines and your logo; insert fields (item name, SKU, price, roll no., supplier details, rack, dates…); shrink-to-fit text; sheet layouts (A4 3 × 8, Avery-style, roll printers, 2-across); Undo/Redo; live preview with a real item or roll; Save, Save as new, Make default. Sheets: start part-way through a used sheet.
+- [ ] GRN page → "Roll labels" prints a label per received roll; Item page → "Print label".
+- [ ] A user who can only print labels cannot design / edit / delete templates (Roles → "Barcode labels": View / Create / Edit / Delete).
 - [ ] Stock-take: count, save, post — differences appear in the ledger.
 - [ ] Stock overview, Stock by rack, Rolls list + roll page history, Ledger filters.
 

@@ -11,6 +11,8 @@ export const getCsrf = () => csrf;
 /** Address of a legacy (PHP-rendered) page: used for screens not rebuilt in React yet. */
 export const legacyUrl = (path: string) => base + (path.startsWith('/') ? path : '/' + path);
 export const appBase = base + '/app';
+/** Address of an API call, for things fetched as plain files (a barcode picture). */
+export const apiUrl = (path: string) => `${base}/api/v1${path}`;
 
 export type Reply<T = any> = { ok: boolean; data?: T; view?: string; redirect?: string; messages?: Msg[]; error?: string; [k: string]: any };
 

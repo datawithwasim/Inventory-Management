@@ -41,6 +41,8 @@ import { MasterList, MasterForm } from './pages/settings/Masters';
 import Profile from './pages/settings/Profile';
 import { AdminLogin, AdminLayout, AdminDashboard, TenantList, TenantForm, PlanList, PlanForm, AdminSystem, AdminAudit } from './pages/admin/Admin';
 import { TransferList, TransferDetail } from './pages/stock/TransferPages';
+import LabelsPage, { LabelTemplates } from './pages/labels/LabelsPage';
+import LabelDesigner from './pages/labels/Designer';
 import { legacyUrl } from './lib/api';
 
 function Protected() {
@@ -118,6 +120,10 @@ export default function App() {
         <Route path="/stock/adjustments" element={<AdjustmentList />} />
         <Route path="/stock/adjustments/create" element={<AdjustmentForm />} />
         <Route path="/stock/adjustments/:id" element={<AdjustmentDetail />} />
+        <Route path="/labels" element={<LabelsPage />} />
+        <Route path="/labels/templates" element={<LabelTemplates />} />
+        <Route path="/labels/templates/create" element={<LabelDesigner />} />
+        <Route path="/labels/templates/:id/edit" element={<LabelDesigner />} />
         <Route path="/stock/transfers" element={<TransferList />} />
         <Route path="/stock/transfers/create" element={<TransferForm />} />
         <Route path="/stock/transfers/:id" element={<TransferDetail />} />

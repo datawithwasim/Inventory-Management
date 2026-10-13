@@ -45,6 +45,7 @@ Upload `public/ui/` to the server after a build.
 | Customers (list with column picker, record page, form from the layout designer) | done |
 | Suppliers (list, record page with contacts, items supplied, rate list add / revise / remove, orders, bills; form with contact people) | done |
 | Supplier items (list with filters + column picker, record page with rates, form with the our-item search) | done (CSV import stays on the PHP page for now) |
+| Barcode labels (print page, templates, visual designer) | done |
 | Items (list, record page with SKU / rolls / tagged supplier items, form with one SKU and bundle components) | done |
 | Purchase: orders (list, approval switch, workflow buttons, form with the items table), goods receipts (against an order or direct, per-roll lines with racks and supplier lots), bills (payments), requisitions (incl. from low stock, turn into PO), returns (pick receipt, choose qty and rack) | done |
 | Warehouses (list with make-default / delete, record page with racks and what is stored, form), racks / locations (list, record page, add one or a range, edit) | done |

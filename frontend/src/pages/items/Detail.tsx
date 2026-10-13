@@ -24,7 +24,7 @@ export default function ItemDetail() {
   return (
     <RecordPage entity="item" id={it.id} name={it.name} back="/items"
       badges={<>{bundle ? <><Badge tone="info">Bundle</Badge> </> : null}{tracked ? <><Badge>Tracked by roll</Badge> </> : null}{Number(it.is_active) ? null : <Badge tone="dark">Inactive</Badge>}</>}
-      actions={can('items.edit') ? <Link className="btn btn-sm btn-primary" to={`/items/${it.id}/edit`}>Edit</Link> : null}
+      actions={<>{can('labels.view') && !bundle && d.variants[0] && <Link className="btn btn-sm btn-outline-secondary" to={`/labels?q=${encodeURIComponent(d.variants[0].sku)}`}><i className="bi bi-upc" /> Print label</Link>}{can('items.edit') && <Link className="btn btn-sm btn-primary" to={`/items/${it.id}/edit`}>Edit</Link>}</>}
       menu={(close) => can('items.delete') ? <li><button className="dropdown-item text-danger" onClick={() => { close(); void remove(); }}><i className="bi bi-trash me-2" />Delete</button></li> : null}
       related={related}>
       {bundle && (

@@ -295,8 +295,17 @@ $router->get('/reports/{slug}/export/{format}', $A . 'ReportController@export', 
 $router->get('/reports/{slug}', $A . 'ReportController@show', ['auth', 'perm:reports.view']);
 
 // ---- Barcode labels ----
-$router->get('/labels', $A . 'LabelController@index', ['auth', 'perm:stock.view']);
-$router->get('/labels/print', $A . 'LabelController@print', ['auth', 'perm:stock.view']);
+$router->get('/labels', $A . 'LabelController@index', ['auth', 'perm:labels.view']);
+$router->get('/labels/print', $A . 'LabelController@print', ['auth', 'perm:labels.view']);
+$router->get('/labels/data', $A . 'LabelController@data', ['auth', 'perm:labels.view']);
+$router->get('/labels/barcode', $A . 'LabelController@barcode', ['auth', 'perm:labels.view']);
+$router->get('/labels/templates', $A . 'LabelController@templates', ['auth', 'perm:labels.view']);
+$router->get('/labels/templates/create', $A . 'LabelController@create', ['auth', 'perm:labels.create']);
+$router->post('/labels/templates', $A . 'LabelController@store', ['auth', 'perm:labels.create']);
+$router->get('/labels/templates/{id}/edit', $A . 'LabelController@edit', ['auth', 'perm:labels.view']);
+$router->post('/labels/templates/{id}', $A . 'LabelController@update', ['auth', 'perm:labels.edit']);
+$router->post('/labels/templates/{id}/default', $A . 'LabelController@makeDefault', ['auth', 'perm:labels.edit']);
+$router->post('/labels/templates/{id}/delete', $A . 'LabelController@destroy', ['auth', 'perm:labels.delete']);
 
 $router->post('/prefs/columns', $A . 'PrefsController@columns', ['auth']);
 

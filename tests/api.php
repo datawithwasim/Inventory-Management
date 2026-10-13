@@ -594,6 +594,8 @@ check('the roll list only has rolls that were in their warehouse or are on the w
 check('a roll that never touched their warehouse is a 404, and the history of a shared roll shows their side only',
     $wOp3->call('GET', "/stock/batches/$rw")['status'] === 404 && $wOp2->call('GET', "/stock/batches/$rw")['status'] === 200
     && $whOf($wOp2->call('GET', "/stock/batches/$rw")['json']['data']['history'], 'warehouse') === [$w2name]);
+check('roll labels follow the same rule: a warehouse user prints only rolls that were in their warehouse', empty($wOp3->call('GET', "/labels/data?type=rolls&ids=$rw")['json']['values']) && isset($wOp2->call('GET', "/labels/data?type=rolls&ids=$rw")['json']['values'][(string)$rw])
+    && !in_array($rw, array_map('intval', array_column($wOp3->call('GET', '/labels?type=rolls')['json']['data']['rows'], 'id')), true) && in_array($rw2, array_map('intval', array_column($wOp2->call('GET', '/labels?type=rolls')['json']['data']['rows'], 'id')), true));
 check('racks can be listed and shown for their warehouse only', $wOp2->call('GET', '/locations')['status'] === 200 && $whOf($wOp2->call('GET', "/locations?warehouse=$wh")['json']['data']['rows'], 'warehouse') === [$w2name] && $wOp2->call('GET', "/locations/$rack1")['status'] === 404);
 check('the warehouse list shows only theirs; head-office jobs are refused', count($wOp2->call('GET', '/warehouses')['json']['data']['rows']) === 1 && $wOp2->call('GET', "/warehouses/$wh")['status'] === 404
     && $wIn->call('POST', '/warehouses', ['name' => 'Sneaky', 'code' => 'SN'])['status'] === 422 && $wIn->call('POST', "/warehouses/$wh/default")['status'] === 422);
@@ -618,6 +620,56 @@ check('and sees only the people of that warehouse', $ul && count(array_unique(ar
 check('a warehouse with people cannot be deleted or made inactive', $a->call('POST', "/warehouses/$wh3/delete")['status'] === 422 && $a->call('POST', "/warehouses/$wh3", ['name' => 'Api Third', 'code' => 'AP3'])['status'] === 422 && DB::val('SELECT is_active FROM warehouses WHERE id = ?', [$wh3]) == 1);
 check('the user list and form show where people work', in_array('Api Third', array_column($a->call('GET', '/users')['json']['data']['users'], 'warehouse'), true) && count($a->call('GET', '/users/create')['json']['data']['warehouses']) >= 3);
 check('the owner (not tied to any warehouse) still works across all of them', $a->call('GET', '/stock/batches?status=all')['status'] === 200 && count($a->call('GET', '/warehouses')['json']['data']['rows']) >= 3);
+
+echo "Barcode label designer\n";
+$lb = $a->call('GET', '/labels')['json']['data'];
+check('the label page data has rows, ready-made templates and what the user may do with them', isset($lb['rows']) && count($lb['templates']) >= 6 && ($lb['can']['create'] ?? false) === true && isset($lb['categories']));
+$r = $a->call('GET', '/labels/data?type=items&ids=' . $vOf('APR'));
+check('a label\'s values come back resolved (SKU, price, preferred supplier, its details)', ($r['json']['values'][(string)$vOf('APR')]['sku'] ?? '') === 'APR' && ($r['json']['values'][(string)$vOf('APR')]['supplier'] ?? '') === 'Api Mills' && ($r['json']['values'][(string)$vOf('APR')]['code'] ?? '') === 'APR' && isset($r['json']['sample']['design_no']));
+$r = $a->call('GET', '/labels/data?type=items&ids=' . $vOf('LK-A'));
+check('and the supplier item\'s design, composition and width are available as label fields', ($r['json']['values'][(string)$vOf('LK-A')]['design_no'] ?? '') === 'D-9' && ($r['json']['values'][(string)$vOf('LK-A')]['width'] ?? '') === '48 in');
+$svg = fn(string $q) => $a->call('GET', "/labels/barcode?$q")['raw'];
+check('barcodes come as pictures: Code 128, EAN-13, Code 39, QR; a bad value gives a visible note', str_starts_with($svg('sym=code128&value=ABC-1'), '<svg') && str_contains($svg('sym=ean13&value=890123456789'), 'EAN-13') && str_contains($svg('sym=code39&value=abc'), 'Code 39') && str_contains($svg('sym=qr&value=hello'), 'QR code') && str_contains($svg('sym=ean13&value=12'), 'bc-bad'));
+
+$tplBody = ['name' => 'Api label', 'for' => 'items', 'w' => 60, 'h' => 30, 'page' => ['mode' => 'roll', 'cols' => 1], 'elements' => [
+    ['id' => 'e1', 'type' => 'text', 'x' => 2, 'y' => 2, 'w' => 56, 'h' => 8, 'text' => '{item_name}', 'size' => 9, 'bold' => true, 'font' => 'Comic Sans', 'color' => 'red', 'fit' => true],
+    ['id' => 'e2', 'type' => 'barcode', 'x' => 2, 'y' => 12, 'w' => 56, 'h' => 14, 'sym' => 'ean13', 'value' => '{barcode}', 'showtext' => true],
+    ['id' => 'e3', 'type' => 'qr', 'x' => 40, 'y' => 2, 'w' => 10, 'h' => 10, 'value' => '{sku}'],
+    ['id' => 'e4', 'type' => 'script', 'x' => 0, 'y' => 0, 'w' => 5, 'h' => 5],
+]];
+$r = $a->call('POST', '/labels/templates', $tplBody);
+$tid = (int)($r['json']['id'] ?? 0);
+check('a designed template saves', $r['status'] === 200 && $tid > 0 && (int)DB::val('SELECT COUNT(*) FROM label_templates WHERE tenant_id = ?', [$tA]) === 1);
+$t = $a->call('GET', "/labels/templates/$tid/edit")['json']['data']['template'];
+check('unknown element kinds are dropped; a bad font and a bad colour fall back; positions and sizes are kept', count($t['elements']) === 3 && $t['elements'][0]['font'] === 'Arial' && $t['elements'][0]['color'] === '#000000' && $t['elements'][0]['bold'] === true && $t['elements'][1]['sym'] === 'ean13' && (float)$t['w'] === 60.0);
+check('the same name twice is refused', $a->call('POST', '/labels/templates', $tplBody)['status'] === 422);
+check('a label that is too small, or a name that is empty, is refused', $a->call('POST', '/labels/templates', ['name' => 'Tiny', 'w' => 5, 'h' => 5] + $tplBody)['status'] === 422 && $a->call('POST', '/labels/templates', ['name' => ''] + $tplBody)['status'] === 422);
+$r = $a->call('POST', '/labels/templates', ['name' => 'Too wide', 'page' => ['mode' => 'sheet', 'paper' => 'A4', 'cols' => 4, 'rows' => 8]] + $tplBody);
+check('a sheet layout that does not fit the paper is refused, with the reason', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'do not fit'));
+$r = $a->call('POST', '/labels/templates', ['name' => 'Too many', 'elements' => array_fill(0, 41, ['type' => 'text', 'x' => 0, 'y' => 0, 'w' => 5, 'h' => 5, 'text' => 'x'])] + $tplBody);
+check('too many elements is refused', $r['status'] === 422);
+$tplBody['name'] = 'Api label (edited)'; $tplBody['w'] = 62;
+$r = $a->call('POST', "/labels/templates/$tid", $tplBody);
+check('a template can be edited', $r['status'] === 200 && (string)DB::val('SELECT name FROM label_templates WHERE id = ?', [$tid]) === 'Api label (edited)' && (float)DB::val('SELECT width_mm FROM label_templates WHERE id = ?', [$tid]) === 62.0);
+$a->call('POST', "/labels/templates/$tid/default");
+$dflt = $a->call('GET', '/labels')['json']['data'];
+check('a template can be made the default for its kind', $dflt['default'] === (string)$tid && (int)DB::val('SELECT is_default FROM label_templates WHERE id = ?', [$tid]) === 1 && $a->call('GET', '/labels?type=rolls')['json']['data']['default'] !== (string)$tid);
+$b2 = $a->call('GET', '/labels/templates/create?copy=b:roll-100x50')['json']['data']['template'];
+check('a ready-made template opens as a copy to customise (no id, own name, same elements)', $b2['id'] === null && str_starts_with($b2['name'], 'Copy of') && count($b2['elements']) >= 6 && $a->call('GET', '/labels/templates/b:item-50x25/edit')['status'] === 200);
+check('ready-made templates cannot be changed or deleted', $a->call('POST', '/labels/templates/b:item-50x25', $tplBody)['status'] === 404 && $a->call('POST', '/labels/templates/b:item-50x25/delete')['status'] === 404);
+$h = new Client($base); $h->post('/login', ['email' => $emA, 'password' => 'Password123'], '/login');
+$pr = $h->get("/labels/print?type=items&template=$tid&n[{$vOf('APR')}]=2");
+check('the printout uses the saved template: its size, text and a barcode that is the right kind', $pr['status'] === 200 && substr_count($pr['body'], 'class="lbl') === 2 && str_contains($pr['body'], 'size: 62mm 30mm') && str_contains($pr['body'], 'Api Reorder') && str_contains($pr['body'], 'aria-label="QR code"'));
+check('a template of another company cannot be opened or printed', (function () use ($tid, $base, $emB) { $x = new J($base); $x->session(); $x->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $x->session(); return $x->call('GET', "/labels/templates/$tid/edit")['status'] === 404 && $x->call('POST', "/labels/templates/$tid", ['name' => 'x', 'w' => 50, 'h' => 25])['status'] === 404; })());
+$a->call('POST', '/roles', ['name' => 'Label viewer ' . $sfx, 'perms' => ['labels.view', 'stock.view']]);
+$rLv = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Label viewer ' . $sfx]);
+$a->call('POST', '/users', ['name' => 'Lv', 'email' => "lv-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rLv, 'warehouse_id' => '0']);
+$lv = new J($base); $lv->session(); $lv->call('POST', '/login', ['email' => "lv-$sfx@test.local", 'password' => 'Password123']); $lv->session();
+check('someone who may only print labels can open and print, but cannot design, edit or delete', $lv->call('GET', '/labels')['status'] === 200 && $lv->call('GET', "/labels/templates/$tid/edit")['status'] === 200
+    && $lv->call('GET', '/labels/templates/create')['status'] === 403 && $lv->call('POST', '/labels/templates', $tplBody)['status'] === 403 && $lv->call('POST', "/labels/templates/$tid", $tplBody)['status'] === 403 && $lv->call('POST', "/labels/templates/$tid/delete")['status'] === 403);
+check('the role form offers the new "Barcode labels" permission', isset($a->call('GET', '/roles/create')['json']['data']['modules']['labels']));
+$a->call('POST', "/labels/templates/$tid/delete");
+check('a template can be deleted', !DB::val('SELECT 1 FROM label_templates WHERE id = ?', [$tid]));
 
 echo "Settings, users, roles, masters and profile through the API\n";
 $r = $a->call('GET', '/settings/company');

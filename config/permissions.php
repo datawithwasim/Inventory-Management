@@ -9,6 +9,7 @@ return [
     'customers'  => ['label' => 'Customers',            'actions' => ['view', 'create', 'edit', 'delete']],
     'purchase'   => ['label' => 'Purchase',             'actions' => ['view', 'create', 'edit', 'delete', 'approve']],
     'sales'      => ['label' => 'Sales',                'actions' => ['view', 'create', 'edit', 'delete', 'approve']],
+    'labels'     => ['label' => 'Barcode labels',       'actions' => ['view', 'create', 'edit', 'delete']],
     'reports'    => ['label' => 'Reports',              'actions' => ['view', 'export']],
     'users'      => ['label' => 'Users',                'actions' => ['view', 'create', 'edit', 'delete']],
     'roles'      => ['label' => 'Roles & permissions',  'actions' => ['view', 'create', 'edit', 'delete']],

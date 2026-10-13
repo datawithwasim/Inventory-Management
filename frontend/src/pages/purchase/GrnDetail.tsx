@@ -18,6 +18,7 @@ export default function GrnDetail() {
   const createBill = async () => { const r = await post(`/purchase/grns/${id}/bill`); setMsgs(r.messages ?? []); qc.invalidateQueries({ queryKey: ['grn'] }); qc.invalidateQueries({ queryKey: ['record'] }); if (r.ok && r.redirect) nav('/' + r.redirect.replace(/^\//, '')); };
   const actions = <>
     {g.bill_id ? <Link className="btn btn-sm btn-outline-primary" to={`/purchase/bills/${g.bill_id}`}>Bill {g.bill_no}</Link> : can('purchase.create') && <button className="btn btn-sm btn-primary" onClick={createBill}>Create bill</button>}
+    {can('labels.view') && <Link className="btn btn-sm btn-outline-secondary" to={`/labels?type=rolls&grn=${g.id}`} title="Print a label for each roll received on this receipt"><i className="bi bi-upc" /> Roll labels</Link>}
     {can('purchase.create') && <Link className="btn btn-sm btn-outline-danger" to={`/purchase/returns/create?grn=${g.id}`}>Return goods</Link>}
   </>;
   return (
