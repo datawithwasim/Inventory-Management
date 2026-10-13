@@ -37,10 +37,12 @@ final class Sales
     }
 
     /** Selling price and default discount for this customer (group price list, then group discount, then list price). */
-    public static function priceFor(int $variantId, int $customerId): array
+    /** Selling price and default discount for a customer. A product brings its own list price; otherwise the item's sale price is used. */
+    public static function priceFor(int $variantId, int $customerId, ?float $base = null): array
     {
         $v = DB::one('SELECT sale_price FROM item_variants WHERE tenant_id = ? AND id = ?', [self::tid(), $variantId]);
         if (!$v) return [0.0, 0.0];
+        if ($base !== null) $v['sale_price'] = $base;
         $c = self::customer($customerId);
         if ($c && $c['group_id']) {
             $gp = DB::val('SELECT price FROM group_prices WHERE tenant_id = ? AND group_id = ? AND variant_id = ?', [self::tid(), $c['group_id'], $variantId]);
@@ -241,7 +243,7 @@ final class Sales
             $note = "$no · " . ($head['customer_name'] ?? 'customer');
 
             $row = fn(array $l, int $variant, int $batch, int $loc, float $qty, float $price, float $disc, float $tax, ?int $parent) => DB::insert('delivery_items', [
-                'tenant_id' => $t, 'delivery_id' => $id, 'order_item_id' => $l['order_item_id'] ?? null, 'parent_id' => $parent, 'variant_id' => $variant,
+                'tenant_id' => $t, 'delivery_id' => $id, 'order_item_id' => $l['order_item_id'] ?? null, 'parent_id' => $parent, 'variant_id' => $variant, 'product_id' => $parent === null ? ($l['product_id'] ?? null) : null,
                 'batch_id' => $batch, 'location_id' => $loc, 'qty' => $qty, 'unit_price' => $price, 'discount_pct' => $disc, 'tax_rate' => $tax,
                 'unit_cost' => $batch >= 0 ? self::unitCost($variant, $batch) : 0]);
 

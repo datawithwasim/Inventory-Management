@@ -12,3 +12,6 @@ export const saleLine = (qty: number, price: number, discPct: number, taxPct: nu
   const gross = r2(qty * price); const disc = r2(gross * discPct / 100); const net = r2(gross - disc); const tax = r2(net * taxPct / 100);
   return { gross, disc, net, tax, total: r2(net + tax) };
 };
+
+/** What a sales line is called: the product the customer chose, or the item itself when it was sold without a product. */
+export const lineName = (l: any): string => l.product_name || `${l.item_name}${l.vname ? ` — ${l.vname}` : ''}`;

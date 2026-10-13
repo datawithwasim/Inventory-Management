@@ -30,6 +30,8 @@ return [
         ]],
         'sales' => ['label' => 'Sales', 'icon' => 'bag-check', 'items' => [
             ['label' => fn() => term('customers'), 'icon' => 'person-lines-fill', 'path' => '/customers', 'perm' => ['customers.view']],
+            ['label' => fn() => 'Catalogues', 'icon' => 'journal-bookmark', 'path' => '/catalogues', 'perm' => ['products.view'], 'module' => 'catalogues'],
+            ['label' => fn() => 'Products', 'icon' => 'grid', 'path' => '/products', 'perm' => ['products.view'], 'module' => 'catalogues'],
             ['label' => fn() => 'Sales orders', 'icon' => 'bag-check', 'path' => '/sales/orders', 'perm' => ['sales.view']],
             ['label' => fn() => 'Deliveries', 'icon' => 'truck-flatbed', 'path' => '/sales/deliveries', 'perm' => ['sales.view']],
             ['label' => fn() => 'Invoices & payments', 'icon' => 'receipt', 'path' => '/sales/invoices', 'perm' => ['sales.view']],

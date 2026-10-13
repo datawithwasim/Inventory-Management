@@ -12,6 +12,8 @@ import ItemImport from './pages/items/Import';
 import RateList from './pages/purchase/RateList';
 import FormDesigner from './pages/settings/FormDesigner';
 import PrintDesigner from './pages/settings/PrintDesigner';
+import { CatalogueList, CatalogueDetail, CatalogueForm } from './pages/catalogues/Catalogues';
+import { ProductList, ProductForm } from './pages/products/Products';
 import { PoPrint, InvoicePrint, DeliveryPrint, VoucherPrint, ChallanPrint, ReportPrint, LabelPrint } from './pages/print/Print';
 import { useSearchParams } from 'react-router-dom';
 import SupplierList from './pages/suppliers/List';
@@ -98,6 +100,13 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/customers" element={<CustomerList />} />
         <Route path="/customers/create" element={<CustomerForm />} />
+        <Route path="/catalogues" element={<CatalogueList />} />
+        <Route path="/catalogues/create" element={<CatalogueForm />} />
+        <Route path="/catalogues/:id" element={<CatalogueDetail />} />
+        <Route path="/catalogues/:id/edit" element={<CatalogueForm />} />
+        <Route path="/products" element={<ProductList />} />
+        <Route path="/products/create" element={<ProductForm />} />
+        <Route path="/products/:id/edit" element={<ProductForm />} />
         <Route path="/customers/groups" element={<GroupList />} />
         <Route path="/customers/groups/create" element={<GroupForm />} />
         <Route path="/customers/groups/:id/edit" element={<GroupForm />} />

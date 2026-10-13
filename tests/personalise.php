@@ -62,7 +62,7 @@ check('print layout forces light mode', str_contains((string)file_get_contents(d
 
 echo "Modules\n";
 check('everything is on by default', str_contains($body('/dashboard'), 'Requisitions') && str_contains($body('/dashboard'), 'Reports') && $a->get('/purchase/requisitions')['status'] === 200);
-$a->post('/settings/modules', ['on' => ['purchase_returns', 'sales_returns', 'transfers', 'takes', 'labels']], '/settings/modules');   // requisitions + reports off
+$a->post('/settings/modules', ['on' => ['purchase_returns', 'sales_returns', 'transfers', 'takes', 'labels', 'catalogues']], '/settings/modules');   // requisitions + reports off
 $h = $body('/dashboard');
 check('requisitions and reports vanish from the menu', !str_contains($h, 'href="' . url('purchase/requisitions') . '"') && !str_contains($h, 'href="' . url('reports') . '"'));
 check('their pages stop opening (404)', $a->get('/purchase/requisitions')['status'] === 404 && $a->get('/reports')['status'] === 404 && $a->get('/reports/stock-summary')['status'] === 404);
@@ -70,7 +70,7 @@ check('search shortcuts drop them too', !str_contains($h, '"Requisitions"'));
 check('other parts still work', $a->get('/sales/orders')['status'] === 200 && $a->get('/stock')['status'] === 200);
 check('dashboard no longer links to the low-stock report', !str_contains($h, 'reports/low-stock'));
 check('another company is unaffected', $b->get('/purchase/requisitions')['status'] === 200 && $b->get('/reports')['status'] === 200);
-$a->post('/settings/modules', ['on' => ['bogus', 'reports', 'requisitions', 'purchase_returns', 'sales_returns', 'transfers', 'takes', 'labels']], '/settings/modules');
+$a->post('/settings/modules', ['on' => ['bogus', 'reports', 'requisitions', 'purchase_returns', 'sales_returns', 'transfers', 'takes', 'labels', 'catalogues']], '/settings/modules');
 check('switching back on restores everything; unknown keys ignored', $a->get('/purchase/requisitions')['status'] === 200 && $a->get('/reports')['status'] === 200 && $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'modules.off'", [$tA]) === '[]');
 $a->post('/settings/modules', ['on' => []], '/settings/modules');
 check('all off: transfers, labels, takes, returns blocked', $a->get('/stock/transfers')['status'] === 404 && $a->get('/labels')['status'] === 404 && $a->get('/stock/takes')['status'] === 404 && $a->get('/purchase/returns')['status'] === 404);

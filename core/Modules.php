@@ -12,6 +12,7 @@ final class Modules
         'sales_returns'    => ['Sales returns', 'Take goods back from a customer.', ['/sales/returns']],
         'transfers'        => ['Stock transfers', 'Move stock between warehouses.', ['/stock/transfers']],
         'takes'            => ['Stock-takes', 'Physical stock counting and corrections.', ['/stock/takes']],
+        'catalogues'       => ['Catalogues & products', 'Showroom names and prices: books (catalogues) and their designs (products), each sold from an item.', ['/catalogues', '/products']],
         'labels'           => ['Barcode labels', 'Print item and roll labels.', ['/labels']],
         'reports'          => ['Reports', 'The reports section.', ['/reports']],
     ];

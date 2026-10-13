@@ -30,10 +30,11 @@ export default function ItemSearch({ value, label, onPick, supplier, placeholder
         <div className="ip-list" style={{ position: 'absolute', left: 0, right: 0, zIndex: 20 }}>
           {!rows.length && <div className="ip-msg">No items found — check the spelling or try the SKU.</div>}
           {rows.map((v) => {
-            const ours = v.item_name + (v.name ? ' — ' + v.name : '');
+            const ours = v.product_name ? v.product_name : v.item_name + (v.name ? ' — ' + v.name : '');
+            const sub = v.product_name ? [v.catalogue, v.item_name, v.sku].filter(Boolean).join(' · ') : v.sku;
             return (
-              <div key={v.id} className="ip-row" onMouseDown={(e) => { e.preventDefault(); const l = `${ours} (${v.sku})`; setText(l); setOpen(false); onPick({ id: v.id, label: l, row: v }); }}>
-                <div className="ip-main"><div className="ip-title">{ours}</div><div className="ip-sub">{v.sku}</div></div>
+              <div key={v.id} className="ip-row" onMouseDown={(e) => { e.preventDefault(); const l = v.product_name ? `${v.product_name} · ${v.item_name}` : `${ours} (${v.sku})`; setText(l); setOpen(false); onPick({ id: v.id, label: l, row: v }); }}>
+                <div className="ip-main"><div className="ip-title">{ours}</div><div className="ip-sub">{sub}{v.available != null ? ` · stock ${v.available}` : ''}</div></div>
               </div>
             );
           })}

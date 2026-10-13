@@ -44,7 +44,7 @@ export function normalise(kind: DocKind, a: any): DocData {
       meta: { due: i.due_date ? fdate(i.due_date) : '', order: i.order_no ?? '' },
       parties: { billed_to: compact([i.customer, i.cust_address, i.cust_phone, i.cust_tax ? `Tax no. ${i.cust_tax}` : '']), ship_to: compact([i.ship_to]) },
       rows: (a.items as any[]).filter((l) => l.parent_id === null).map((l) => ({
-        cells: { item: l.item_name + (l.vname ? ` — ${l.vname}` : ''), sku: l.sku ?? '', hsn: l.hsn_code ?? '', roll: l.batch_no ?? '', qty: `${qty(l.qty)} ${l.unit}`, price: money(l.unit_price),
+        cells: { item: l.product_name || l.item_name + (l.vname ? ` — ${l.vname}` : ''), sku: l.sku ?? '', hsn: l.hsn_code ?? '', roll: l.batch_no ?? '', qty: `${qty(l.qty)} ${l.unit}`, price: money(l.unit_price),
           disc: l.dsc > 0 ? money(l.dsc) : '', tax: `${money(l.tx)} (${qty(l.tax_rate)}%)` }, net: money(l.net), tot: money(l.tot) })),
       totals: { gross: money(i.subtotal), discount: Number(i.discount_total) > 0 ? `− ${money(i.discount_total)}` : null, tax: money(i.tax_total), delivery: Number(i.delivery_charge) > 0 ? money(i.delivery_charge) : null,
         installation: Number(i.installation_charge) > 0 ? money(i.installation_charge) : null, total: money(i.total), returns: Number(i.returned_amount) > 0 ? `− ${money(i.returned_amount)}` : null,
@@ -70,7 +70,7 @@ export function normalise(kind: DocKind, a: any): DocData {
     parties: { delivered_to: compact([d.customer, d.cust_phone, d.ship_to || d.cust_address]) },
     rows: (a.items as any[]).map((l) => {
       const part = l.parent_id !== null;
-      return { part, cells: { item: (part ? '↳ ' : '') + l.item_name + (l.vname ? ` — ${l.vname}` : ''), sku: l.sku ?? '', hsn: l.hsn_code ?? '', roll: l.batch_no ?? '', rack: l.is_bundle ? '' : l.rack ?? '', qty: `${qty(l.qty)} ${l.unit}`, amount: part ? '' : money(l.tot) } };
+      return { part, cells: { item: (part ? '↳ ' : '') + (l.product_name || l.item_name + (l.vname ? ` — ${l.vname}` : '')), sku: l.sku ?? '', hsn: l.hsn_code ?? '', roll: l.batch_no ?? '', rack: l.is_bundle ? '' : l.rack ?? '', qty: `${qty(l.qty)} ${l.unit}`, amount: part ? '' : money(l.tot) } };
     }),
     totals: {},
   };

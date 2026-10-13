@@ -18,6 +18,13 @@ abstract class SalesBase extends PurchaseBase
         return $v && $v['item_active'] && $v['is_active'] ? $v : null;
     }
 
+    /** The product a line was chosen as, if it really is one of this company's products for that item; otherwise none. */
+    protected function productFor(mixed $id, int $variantId): ?int
+    {
+        $id = (int)$id;
+        return $id > 0 && DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND id = ? AND variant_id = ?', [$this->tid(), $id, $variantId]) ? $id : null;
+    }
+
     protected function activeCustomer(mixed $id, string $back): array
     {
         $c = Sales::customer((int)$id);
@@ -62,7 +69,7 @@ abstract class SalesBase extends PurchaseBase
             $seen[$v['id']] = 1;
             $disc = $this->percent($l['discount_pct'] ?? '', "$prefix discount", $back);
             $this->checkDiscount($disc, $prefix, $back);
-            $out[] = ['variant_id' => (int)$v['id'], 'qty' => $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back),
+            $out[] = ['variant_id' => (int)$v['id'], 'product_id' => $this->productFor($l['product_id'] ?? 0, (int)$v['id']), 'qty' => $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back),
                 'price' => $this->money($l['unit_price'] ?? '', "$prefix price", $back), 'disc' => $disc,
                 'tax' => $this->taxFor($l['tax_rate'] ?? '', $prefix, $back)];
         }
@@ -71,6 +78,6 @@ abstract class SalesBase extends PurchaseBase
 
     protected function saleLabel(array $l): string
     {
-        return $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')';
+        return (!empty($l['product_name']) ? $l['product_name'] . ' · ' . $l['item_name'] : $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '')) . ' (' . $l['sku'] . ')';
     }
 }

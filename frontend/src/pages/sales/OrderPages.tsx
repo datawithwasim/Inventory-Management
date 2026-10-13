@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { fdate, money, qty } from '../../lib/format';
-import { saleLine } from '../../lib/docs';
+import { saleLine, lineName } from '../../lib/docs';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
@@ -53,13 +53,13 @@ export function OrderForm() {
     if (!id) { v.order_date = new Date().toISOString().slice(0, 10); v.warehouse_id = String(d.warehouses?.[0]?.id ?? ''); v.customer_id = sp.get('customer') ?? String(d.customers?.[0]?.id ?? ''); v.delivery_charge = ''; v.installation_charge = ''; }
     setValues(v); setBackorder(!!Number(o.allow_backorder ?? 0));
     const old: any[] = d.oldLines ?? [];
-    if (old.length) setLines(old.map((l) => ({ variant_id: String(l.variant_id), label: l.label, unit: l.unit ?? '', dec: l.dec !== 0, qty: String(Number(l.qty)), unit_price: String(l.unit_price ?? ''), discount_pct: Number(l.discount_pct) ? String(Number(l.discount_pct)) : '', tax_rate: Number(l.tax_rate) ? String(Number(l.tax_rate)) : '', hint: '' })));
+    if (old.length) setLines(old.map((l) => ({ variant_id: String(l.variant_id), product_id: String(l.product_id ?? ''), label: l.label, unit: l.unit ?? '', dec: l.dec !== 0, qty: String(Number(l.qty)), unit_price: String(l.unit_price ?? ''), discount_pct: Number(l.discount_pct) ? String(Number(l.discount_pct)) : '', tax_rate: Number(l.tax_rate) ? String(Number(l.tax_rate)) : '', hint: '' })));
   }, [schema.data, src.data, values, id, sp, nav]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;
   const o = src.data.data.o;
   const save = async () => {
     setSaving(true); setMsgs([]);
-    const body = { ...toPayload(schema.data!, values), allow_backorder: backorder ? 1 : '', lines: lines.filter((l) => l.variant_id).map((l) => ({ variant_id: l.variant_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
+    const body = { ...toPayload(schema.data!, values), allow_backorder: backorder ? 1 : '', lines: lines.filter((l) => l.variant_id).map((l) => ({ variant_id: l.variant_id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
     const r = await post(id ? `/sales/orders/${id}` : '/sales/orders', body);
     setSaving(false);
     if (!r.ok) { setMsgs(r.messages ?? []); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
@@ -100,7 +100,7 @@ export function OrderDetail() {
   };
   const addAdvance = async () => { const r = await post(`/sales/orders/${id}/advance`, adv); setMsgs(r.messages ?? []); if (r.ok) { setAdv({ ...adv, amount: '', reference: '' }); refreshSales(qc); } };
   const lineRow = (l: any) => { const c = saleLine(Number(l.qty_ordered), Number(l.unit_price), Number(l.discount_pct), Number(l.tax_rate)); return (
-    <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}
+    <tr key={l.id}><td>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}
       {l.free !== undefined && <div className="small text-muted">free for others now: {qty(l.free)}</div>}</td>
       <td className="text-end">{qty(l.qty_ordered)} {l.unit}</td><td className="text-end">{qty(l.qty_delivered)}</td><td className="text-end">{money(l.unit_price)}</td>
       <td className="text-end">{Number(l.discount_pct) ? qty(l.discount_pct) : ''}</td><td className="text-end">{qty(l.tax_rate)}</td><td className="text-end">{money(c.total)}</td></tr>); };

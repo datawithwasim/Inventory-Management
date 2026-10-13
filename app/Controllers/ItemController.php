@@ -51,7 +51,7 @@ final class ItemController extends Controller
         'bundles' => ['bundle_components', 'component_variant_id'], 'supplier items' => ['supplier_items', 'variant_id'], 'supplier rates' => ['supplier_rates', 'variant_id'],
         'purchase requisitions' => ['purchase_requisition_items', 'variant_id'], 'purchase orders' => ['purchase_order_items', 'variant_id'], 'goods receipts' => ['grn_items', 'variant_id'],
         'purchase returns' => ['purchase_return_items', 'variant_id'], 'sales orders' => ['sales_order_items', 'variant_id'], 'deliveries' => ['delivery_items', 'variant_id'],
-        'sales returns' => ['sales_return_items', 'variant_id'], 'customer-group prices' => ['group_prices', 'variant_id'],
+        'sales returns' => ['sales_return_items', 'variant_id'], 'customer-group prices' => ['group_prices', 'variant_id'], 'products' => ['products', 'variant_id'],
     ];
 
     private function variantUses(array $variantIds): array
@@ -163,6 +163,8 @@ final class ItemController extends Controller
             'title' => $item['name'], 'item' => $item, 'meta' => $meta, 'variants' => $variants, 'components' => $components,
             'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::values('item', (int)$item['id']),
             'rates' => \App\Models\Purchase::suppliersForItem((int)$item['id']),
+            'products' => can('products.view') ? DB::all('SELECT p.id, p.name, p.price, p.is_active, p.catalogue_id, c.name AS catalogue FROM products p JOIN item_variants v ON v.id = p.variant_id LEFT JOIN catalogues c ON c.id = p.catalogue_id
+                WHERE p.tenant_id = ? AND v.item_id = ? ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', [$t, $item['id']]) : [],
             'history' => $history, 'bundleAvailable' => $item['is_bundle'] ? Stock::bundleAvailable((int)$item['id']) : null,
         ]);
     }

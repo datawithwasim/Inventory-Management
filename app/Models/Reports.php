@@ -273,9 +273,9 @@ final class Reports
 
         $defs['sales-summary'] = [
             'title' => 'Sales summary', 'group' => 'sales',
-            'desc' => 'Sales by item, by category or by customer for a period (invoices net of returns, before tax).',
+            'desc' => 'Sales by item, product, catalogue, category or customer for a period (invoices net of returns, before tax).',
             'filters' => ['from', 'to', 'by', 'customer', 'category'],
-            'select' => ['by' => ['item' => 'By item', 'category' => 'By category', 'customer' => 'By customer']],
+            'select' => ['by' => ['item' => 'By item', 'product' => 'By product', 'catalogue' => 'By catalogue', 'category' => 'By category', 'customer' => 'By customer']],
             'columns' => ['name' => $col('Name'), 'qty' => $col('Quantity', 'qty'), 'invoices' => $col('Invoices', 'int'), 'value' => $col('Sales value', 'money', true)],
             'run' => function (array $f, int $limit) use ($t) {
                 if ($f['by'] === 'customer') {
@@ -291,12 +291,19 @@ final class Reports
                 $w = '';
                 if ($f['customer']) { $w .= ' AND inv.customer_id = ?'; $p[] = $f['customer']; }
                 if ($f['category']) { $w .= ' AND i.category_id = ?'; $p[] = $f['category']; }
-                $g = $f['by'] === 'category' ? ["COALESCE(c.name,'Uncategorised')", 'c.id, c.name', 'NULL'] : ['i.name', 'i.id, i.name', 'SUM(di.qty - di.qty_returned)'];
+                $qtySum = 'SUM(di.qty - di.qty_returned)';
+                $g = match ($f['by']) {
+                    'category' => ["COALESCE(c.name,'Uncategorised')", 'c.id, c.name', 'NULL'],
+                    'product' => ['COALESCE(pr.name, i.name)', 'pr.id, i.id, COALESCE(pr.name, i.name)', $qtySum],
+                    'catalogue' => ["COALESCE(ct.name,'No catalogue')", 'ct.id, ct.name', $qtySum],
+                    default => ['i.name', 'i.id, i.name', $qtySum],
+                };
                 return DB::all(
                     "SELECT {$g[0]} AS name, {$g[2]} AS qty, COUNT(DISTINCT inv.id) AS invoices,
                             SUM((di.qty - di.qty_returned) * di.unit_price * (1 - di.discount_pct / 100)) AS value
                      FROM delivery_items di JOIN sales_invoices inv ON inv.delivery_id = di.delivery_id AND inv.tenant_id = di.tenant_id
                      JOIN item_variants v ON v.id = di.variant_id JOIN items i ON i.id = v.item_id LEFT JOIN categories c ON c.id = i.category_id
+                     LEFT JOIN products pr ON pr.id = di.product_id LEFT JOIN catalogues ct ON ct.id = pr.catalogue_id
                      WHERE di.tenant_id = ? AND inv.invoice_date BETWEEN ? AND ? AND di.parent_id IS NULL$w
                      GROUP BY {$g[1]} HAVING value <> 0 ORDER BY value DESC LIMIT " . (int)$limit, $p);
             },

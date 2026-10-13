@@ -67,7 +67,7 @@ export function GroupForm() {
         {row && <div className="col-lg-7"><div className="card"><div className="card-header">Special prices for {row.name}</div>
           <div className="card-body"><Messages items={pmsgs} />
             <form onSubmit={setPrc} className="row g-2 align-items-end">
-              <div className="col-md-7"><label className="form-label">{term('item')}</label><ItemSearch path="/lookup/sale-items" value={item.id} label={item.label} placeholder="Search item, SKU or barcode" onPick={(p) => setItem(p ? { id: String(p.id), label: p.label } : { id: '', label: '' })} /></div>
+              <div className="col-md-7"><label className="form-label">{term('item')}</label><ItemSearch path="/lookup/sale-items" extra="&mode=item" value={item.id} label={item.label} placeholder="Search item, SKU or barcode" onPick={(p) => setItem(p ? { id: String(p.id), label: p.label } : { id: '', label: '' })} /></div>
               <div className="col-md-3"><label className="form-label">Price</label><input type="number" step="0.01" min="0" className="form-control" value={price} onChange={(e) => setPrice(e.target.value)} required /></div>
               <div className="col-md-2"><button className="btn btn-primary w-100">Set</button></div>
             </form></div>

@@ -23,6 +23,11 @@ final class SearchController extends Controller
                     'SELECT i.id, i.name, v.name AS vname, v.sku FROM items i JOIN item_variants v ON v.item_id = i.id
                      WHERE i.tenant_id = ? AND (i.name LIKE ? OR v.sku LIKE ? OR v.barcode = ? OR v.name LIKE ?) GROUP BY i.id, v.id ORDER BY i.name LIMIT 6', [$t, $like, $like, $q, $like])));
             }
+            if (can('products.view')) {
+                $add('Products', array_map(fn($r) => ['l' => $r['name'], 's' => $r['catalogue'] ?? 'No catalogue', 'i' => 'grid', 'u' => url('products/' . $r['id'] . '/edit')], DB::all(
+                    'SELECT p.id, p.name, c.name AS catalogue FROM products p LEFT JOIN catalogues c ON c.id = p.catalogue_id
+                     WHERE p.tenant_id = ? AND (p.name LIKE ? OR c.name LIKE ?) ORDER BY LENGTH(p.name), p.name LIMIT 6', [$t, $like, $like])));
+            }
             if (can('stock.view')) {
                 $add(term('rolls'), array_map(fn($r) => ['l' => $r['batch_no'] . ' · ' . $r['name'], 's' => 'Roll', 'i' => 'layers', 'u' => url('stock/batches/' . $r['id'])], DB::all(
                     'SELECT b.id, b.batch_no, i.name FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id

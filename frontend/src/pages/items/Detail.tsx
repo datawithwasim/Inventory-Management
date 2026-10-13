@@ -20,7 +20,7 @@ export default function ItemDetail() {
   const best: Record<string, number> = {};
   rates.forEach((r) => { if (r.net !== null && best[r.variant_id] === undefined) best[r.variant_id] = r.net; });
   const types = session?.stockTypes ?? {};
-  const related = [bundle ? { id: 'contents', label: 'Bundle contents' } : null, !bundle ? { id: 'rates', label: 'Suppliers & rates' } : null, { id: 'variants', label: 'Stock & SKU' }, !bundle ? { id: 'history', label: 'Stock movements' } : null].filter(Boolean) as { id: string; label: string }[];
+  const related = [bundle ? { id: 'contents', label: 'Bundle contents' } : null, !bundle ? { id: 'rates', label: 'Suppliers & rates' } : null, (d.products ?? []).length ? { id: 'products', label: 'Sold as products' } : null, { id: 'variants', label: 'Stock & SKU' }, !bundle ? { id: 'history', label: 'Stock movements' } : null].filter(Boolean) as { id: string; label: string }[];
   return (
     <RecordPage entity="item" id={it.id} name={it.name} back="/items"
       badges={<>{bundle ? <><Badge tone="info">Bundle</Badge> </> : null}{tracked ? <><Badge>Tracked by roll</Badge> </> : null}{Number(it.is_active) ? null : <Badge tone="dark">Inactive</Badge>}</>}
@@ -52,6 +52,12 @@ export default function ItemDetail() {
             : <div className="card-body text-muted small">No supplier is linked to this {term('item').toLowerCase()} yet. You can buy it from any {term('supplier').toLowerCase()} — linking one here just keeps their name, code and rate for quick purchase orders. Several suppliers can be linked.</div>}
         </div>
       )}
+      {(d.products ?? []).length > 0 && (
+        <section className="card mb-3" id="products"><div className="card-header">Sold as products <span className="act-n">{d.products.length}</span><span className="small text-muted ms-2">the names and prices the showroom sells this {term('item').toLowerCase()} by</span></div>
+          <div className="table-responsive"><table className="table table-sm mb-0"><thead><tr><th>Product</th><th>Catalogue</th><th className="text-end">Price</th></tr></thead><tbody>
+            {d.products.map((p: any) => <tr key={p.id} className={Number(p.is_active) ? '' : 'text-muted'}><td>{can('products.edit') ? <Link to={`/products/${p.id}/edit`}>{p.name}</Link> : p.name}{Number(p.is_active) ? null : <> <Badge tone="dark">Inactive</Badge></>}</td>
+              <td>{p.catalogue_id ? <Link to={`/catalogues/${p.catalogue_id}`}>{p.catalogue}</Link> : <span className="text-muted">—</span>}</td><td className="text-end">{money(p.price)}</td></tr>)}
+          </tbody></table></div></section>)}
       <section className="card mb-3" id="variants"><div className="card-header d-flex justify-content-between align-items-center"><span>Stock &amp; SKU <span className="act-n">{d.variants.length}</span></span>
         {can('items.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/items/${it.id}/edit`}><i className="bi bi-pencil" /> Edit</Link>}</div>
         <div className="table-responsive"><table className="table var-table align-middle mb-0"><thead><tr><th>{term('item')}</th><th>SKU</th><th className="text-end" title="Default cost: for stock value and as a last-resort price">Default cost</th><th className="text-end">Sale</th>{!bundle && <><th className="text-end">In stock</th><th>Where</th></>}</tr></thead><tbody>

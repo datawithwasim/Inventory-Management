@@ -11,7 +11,7 @@ namespace Core;
 final class Spa
 {
     /** Address starts that the app shows. Keep in step with frontend/src/lib/routes.ts. */
-    public const PREFIXES = ['/dashboard', '/customers', '/suppliers', '/purchase/supplier-items', '/purchase/rates', '/items', '/purchase/orders', '/purchase/grns', '/purchase/bills',
+    public const PREFIXES = ['/dashboard', '/customers', '/catalogues', '/products', '/suppliers', '/purchase/supplier-items', '/purchase/rates', '/items', '/purchase/orders', '/purchase/grns', '/purchase/bills',
         '/purchase/requisitions', '/purchase/returns', '/warehouses', '/locations', '/stock', '/sales/orders', '/sales/deliveries', '/sales/invoices', '/sales/returns', '/reports',
         '/labels', '/settings', '/users', '/roles', '/masters', '/profile', '/login', '/forgot-password', '/reset-password', '/admin'];
 

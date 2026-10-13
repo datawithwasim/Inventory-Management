@@ -938,6 +938,86 @@ check('a new field added in the designer is saved (JSON answer, no redirect cras
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
 DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
 
+echo "Catalogues and products\n";
+$bq = new J($base); $bq->session(); $bq->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bq->session();
+$itemRv = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$rv]);
+$itemV2 = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$v2]);
+$r = $c->call('POST', '/catalogues', ['name' => 'CARAVAN', 'notes' => 'Showroom book']);
+$catA = (int)DB::val('SELECT id FROM catalogues WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN']);
+check('a catalogue is created; the same name twice is refused', $r['status'] === 200 && $catA > 0 && $c->call('POST', '/catalogues', ['name' => 'CARAVAN'])['status'] === 422 && $c->call('POST', '/catalogues', ['name' => ''])['status'] === 422);
+$csv = function (string $text) { $f = tempnam(sys_get_temp_dir(), 'pc'); file_put_contents($f, $text); return new CURLFile($f, 'text/csv', 'p.csv'); };
+$before = (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]);
+$r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\nCARAVAN,CARAVAN-3,No Such Item,100\n")]);
+check('an import with an unknown item is refused as a whole: nothing is added and the row is named', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'Row 6') && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]) === $before);
+$r = $c->form('/products/import', ['file' => $csv("catalogue name,product name,item name,price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\nCARAVAN,CARAVAN-2,\"$itemV2\",500\n")]);
+check('a file that lists a product twice is refused', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'twice'));
+$r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\n")]);
+$p1 = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN-1']); $p9 = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'SECOND-9']);
+check('the sheet imports: catalogues are created, products land in them, the same item sits in two catalogues, one product has no catalogue',
+    $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]) === $before + 4 && (int)DB::val('SELECT COUNT(*) FROM catalogues WHERE tenant_id = ?', [$tA]) === 2
+    && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p1]) === $rv && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p9]) === $rv && DB::val('SELECT catalogue_id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'Plain Product']) === null);
+check('a product without a price takes the item\'s sale price', (float)DB::val('SELECT price FROM products WHERE id = ?', [$p1]) === (float)DB::val('SELECT sale_price FROM item_variants WHERE id = ?', [$rv]));
+$r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",450\n")]);
+check('importing a name again updates that product instead of adding another', $r['status'] === 200 && (float)DB::val('SELECT price FROM products WHERE id = ?', [$p1]) === 450.0 && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN-1']) === 1);
+$r = $c->call('GET', '/products?catalogue=none');
+check('the product list filters by "no catalogue"', count($r['json']['data']['rows'] ?? []) === 1 && ($r['json']['data']['rows'][0]['name'] ?? '') === 'Plain Product');
+$r = $c->call('GET', "/products?catalogue=$catA");
+check('and by catalogue, with the item and its stock', count($r['json']['data']['rows']) === 2 && isset($r['json']['data']['rows'][0]['stock'], $r['json']['data']['rows'][0]['item_name']));
+$r = $c->call('GET', '/catalogues');
+check('the catalogue list counts the products in each', in_array(2, array_map('intval', array_column($r['json']['data']['rows'], 'products')), true) && ($r['json']['data']['loose'] ?? -1) === 1);
+
+$r = $c->call('GET', "/lookup/sale-items?q=" . rawurlencode('caravan 1') . "&customer=$cid&warehouse=$wh");
+check('"caravan 1" finds CARAVAN-1 with its own price, its item and the free stock', ($r['json'][0]['product_name'] ?? '') === 'CARAVAN-1' && (int)($r['json'][0]['product_id'] ?? 0) === $p1 && (int)$r['json'][0]['id'] === $rv && (float)$r['json'][0]['price'] === 450.0 && isset($r['json'][0]['available']) && ($r['json'][0]['catalogue'] ?? '') === 'CARAVAN');
+$r = $c->call('GET', "/lookup/sale-items?q=" . rawurlencode($itemRv) . "&customer=$cid&warehouse=$wh");
+$names = array_column($r['json'], 'product_name');
+check('searching by the item\'s name lists its products, not the bare item (the same item is in two catalogues)', in_array('CARAVAN-1', $names, true) && in_array('SECOND-9', $names, true) && !array_filter($r['json'], fn($x) => !isset($x['product_id']) && (int)$x['id'] === $rv));
+$r = $c->call('GET', "/lookup/sale-items?q=" . rawurlencode($itemRv) . "&mode=item");
+check('?mode=item still gives plain items (price lists use it)', (int)($r['json'][0]['id'] ?? 0) === $rv && !isset($r['json'][0]['product_id']));
+$c->call('POST', "/catalogues/$catA", ['name' => 'CARAVAN', 'is_active' => 0]);
+$r = $c->call('GET', "/lookup/sale-items?q=" . rawurlencode('caravan-2') . "&customer=$cid");
+check('an inactive catalogue hides its products from selling', !array_filter($r['json'], fn($x) => ($x['product_name'] ?? '') === 'CARAVAN-2'));
+$c->call('POST', "/catalogues/$catA", ['name' => 'CARAVAN', 'is_active' => 1]);
+
+$r = $c->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => [
+    ['variant_id' => $rv, 'product_id' => $p1, 'qty' => '2', 'unit_price' => '450', 'discount_pct' => '', 'tax_rate' => '0'], ['variant_id' => $v2, 'product_id' => $p1, 'qty' => '1', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0']]]);
+$soP = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+check('an order line remembers its product; a product that does not belong to that item is ignored', $r['status'] === 200 && (int)DB::val('SELECT product_id FROM sales_order_items WHERE order_id = ? AND variant_id = ?', [$soP, $rv]) === $p1
+    && DB::val('SELECT product_id FROM sales_order_items WHERE order_id = ? AND variant_id = ?', [$soP, $v2]) === null);
+$r = $c->call('GET', "/sales/orders/$soP");
+check('the order page names the line by its product (and still has the item)', ($r['json']['data']['items'][0]['product_name'] ?? '') === 'CARAVAN-1' && ($r['json']['data']['items'][0]['item_name'] ?? '') === $itemRv && array_key_exists('product_name', $r['json']['data']['items'][1]) && $r['json']['data']['items'][1]['product_name'] === null);
+$r = $c->call('GET', "/sales/orders/$soP/edit");
+check('editing the order brings the product back', (int)($r['json']['data']['oldLines'][0]['product_id'] ?? 0) === $p1 && str_contains((string)$r['json']['data']['oldLines'][0]['label'], 'CARAVAN-1'));
+$r = $c->call('POST', '/sales/deliveries', ['customer_id' => $cid, 'warehouse_id' => $wh, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
+    ['variant_id' => $rv, 'product_id' => $p9, 'qty' => '1', 'batch_id' => $bid2, 'location_id' => $rack1, 'unit_price' => '450', 'discount_pct' => '', 'tax_rate' => '0']]]);
+$dlvP = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]); $invP = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $dlvP]);
+check('a direct sale by product: stock leaves the item, the delivery line keeps the product', $r['status'] === 200 && $invP > 0 && (int)DB::val('SELECT product_id FROM delivery_items WHERE delivery_id = ? AND parent_id IS NULL', [$dlvP]) === $p9);
+$r = $c->call('GET', "/sales/invoices/$invP/print");
+check('the invoice and its printout name the line by product', ($r['json']['data']['items'][0]['product_name'] ?? '') === 'SECOND-9' && ($c->call('GET', "/sales/invoices/$invP")['json']['data']['items'][0]['product_name'] ?? '') === 'SECOND-9');
+$vch = $c->call('GET', "/sales/deliveries/$dlvP/voucher");
+check('the warehouse voucher still says the item (the cutter works by item)', str_contains(json_encode($vch['json']['data']['lines'] ?? []), $itemRv) && !str_contains(json_encode($vch['json']['data']['lines'] ?? []), 'SECOND-9'));
+$rep = $c->call('GET', '/reports/sales-summary?by=catalogue&from=' . date('Y-m-01') . '&to=' . date('Y-m-t'));
+check('the sales summary can be grouped by catalogue and by product', in_array('SECOND', array_column($rep['json']['data']['rows'] ?? [], 'name'), true) && in_array('SECOND-9', array_column($c->call('GET', '/reports/sales-summary?by=product&from=' . date('Y-m-01') . '&to=' . date('Y-m-t'))['json']['data']['rows'] ?? [], 'name'), true));
+$r = $c->call('POST', "/products/$p9/delete");
+check('a product on a sales document cannot be deleted (it can be made inactive)', $r['status'] === 422 && (int)DB::val('SELECT COUNT(*) FROM products WHERE id = ?', [$p9]) === 1);
+$r = $c->call('GET', "/items/" . (int)DB::val('SELECT item_id FROM item_variants WHERE id = ?', [$rv]));
+check('the item page lists the products it is sold as', count($r['json']['data']['products'] ?? []) === 3);
+check('a catalogue that still has products cannot be deleted', $c->call('POST', "/catalogues/$catA/delete")['status'] === 422);
+$pPlain = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'Plain Product']);
+$r = $c->call('POST', "/products/$pPlain", ['name' => 'Plain Product', 'catalogue_id' => '', 'variant_id' => $v2, 'price' => '320', 'is_active' => 1]);
+check('a product can be moved to another item and repriced', $r['status'] === 200 && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$pPlain]) === $v2 && (float)DB::val('SELECT price FROM products WHERE id = ?', [$pPlain]) === 320.0);
+$r = $c->call('POST', '/products', ['name' => 'CARAVAN-1', 'variant_id' => $rv, 'price' => '1']);
+check('a duplicate product name, a missing item and a bad price are refused', $r['status'] === 422 && $c->call('POST', '/products', ['name' => 'X1', 'price' => '1'])['status'] === 422 && $c->call('POST', '/products', ['name' => 'X1', 'variant_id' => $rv, 'price' => '-5'])['status'] === 422);
+$r = $c->call('POST', "/products/$pPlain/delete");
+check('an unused product is deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM products WHERE id = ?', [$pPlain]));
+check('another company cannot see, change or delete them', $bq->call('GET', "/products/$p1/edit")['status'] === 404 && $bq->call('POST', "/products/$p1", ['name' => 'Hack', 'variant_id' => $rv, 'price' => '1'])['status'] === 404
+    && $bq->call('POST', "/products/$p1/delete")['status'] === 404 && $bq->call('GET', "/catalogues/$catA")['status'] === 404 && $bq->call('POST', "/catalogues/$catA/delete")['status'] === 404
+    && !array_filter($bq->call('GET', '/products')['json']['data']['rows'] ?? [], fn($x) => str_starts_with((string)$x['name'], 'CARAVAN')));
+$r = $c->call('GET', '/search?q=CARAVAN');
+check('search finds products', in_array('Products', array_column($r['json']['groups'] ?? [], 'title'), true));
+// no one is left with the test data
+DB::run('UPDATE delivery_items SET product_id = NULL WHERE tenant_id = ?', [$tA]); DB::run('UPDATE sales_order_items SET product_id = NULL WHERE tenant_id = ?', [$tA]);
+DB::run('DELETE FROM products WHERE tenant_id = ?', [$tA]); DB::run('DELETE FROM catalogues WHERE tenant_id = ?', [$tA]);
+
 echo "Print templates\n";
 $r = $c->call('GET', '/settings/templates/design?doc=invoice');
 $cfg = $r['json']['data']['cfg'] ?? [];

@@ -66,7 +66,7 @@ final class SalesReturnController extends SalesBase
         foreach ((array)($d['lines'] ?? []) as $itemId => $l) {
             $raw = trim((string)($l['qty'] ?? ''));
             if ($raw === '' || (is_numeric($raw) && (float)$raw == 0.0)) continue;
-            $it = DB::one('SELECT l.*, i.name AS item_name, i.is_bundle, u.allow_decimal, u.short_name AS unit FROM delivery_items l JOIN item_variants v ON v.id = l.variant_id
+            $it = DB::one('SELECT l.*, (SELECT name FROM products WHERE id = l.product_id) AS product_name, i.name AS item_name, i.is_bundle, u.allow_decimal, u.short_name AS unit FROM delivery_items l JOIN item_variants v ON v.id = l.variant_id
                            JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id WHERE l.tenant_id = ? AND l.delivery_id = ? AND l.id = ?', [$t, $i['delivery_id'], (int)$itemId])
                 ?? $this->bounce('A returned line does not belong to this invoice.', $back);
             if (!is_numeric($raw) || (float)$raw < 0) $this->bounce($it['item_name'] . ': enter a quantity of zero or more.', $back);

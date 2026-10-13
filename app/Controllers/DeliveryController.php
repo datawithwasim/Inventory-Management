@@ -88,12 +88,12 @@ final class DeliveryController extends SalesBase
         $lines = $this->oldLines();
         if (!$lines) {
             foreach (DB::all(
-                'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, u.short_name AS unit, u.allow_decimal
-                 FROM sales_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+                'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, u.short_name AS unit, u.allow_decimal
+                 FROM sales_order_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
                  WHERE l.tenant_id = ? AND l.order_id = ? ORDER BY l.id', [$this->tid(), $o['id']]) as $l) {
                 $left = round((float)$l['qty_ordered'] - (float)$l['qty_delivered'], 3);
                 if ($left <= 0) continue;
-                $base = ['order_item_id' => (int)$l['id'], 'variant_id' => (int)$l['variant_id'], 'label' => $this->saleLabel($l), 'tb' => (int)$l['track_batch'], 'bundle' => (int)$l['is_bundle'],
+                $base = ['order_item_id' => (int)$l['id'], 'variant_id' => (int)$l['variant_id'], 'product_id' => $l['product_id'] ? (int)$l['product_id'] : null, 'label' => $this->saleLabel($l), 'tb' => (int)$l['track_batch'], 'bundle' => (int)$l['is_bundle'],
                     'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'], 'qty' => $left, 'left' => $left, 'unit_price' => $l['unit_price'], 'discount_pct' => $l['discount_pct'], 'tax_rate' => $l['tax_rate']];
                 if ($l['is_bundle']) { $lines[] = $base + ['batch_id' => 0, 'location_id' => 0]; continue; }
                 array_push($lines, ...$this->suggest($base, (int)$o['warehouse_id']));
@@ -126,16 +126,17 @@ final class DeliveryController extends SalesBase
             if ($order) {
                 $oi = $orderItems[(int)($l['order_item_id'] ?? 0)] ?? $this->bounce("$prefix: this line is not on the order.", $back);
                 $v = Stock::variant((int)$oi['variant_id']);
-                $price = (float)$oi['unit_price']; $disc = (float)$oi['discount_pct']; $tax = (float)$oi['tax_rate'];
+                $price = (float)$oi['unit_price']; $disc = (float)$oi['discount_pct']; $tax = (float)$oi['tax_rate']; $product = $oi['product_id'] ? (int)$oi['product_id'] : null;
             } else {
                 $oi = null;
                 $v = $this->sellable((int)($l['variant_id'] ?? 0)) ?? $this->bounce("$prefix: choose a valid item.", $back);
+                $product = $this->productFor($l['product_id'] ?? 0, (int)$v['id']);
                 $price = $this->money($l['unit_price'] ?? '', "$prefix price", $back); $disc = $this->percent($l['discount_pct'] ?? '', "$prefix discount", $back); $this->checkDiscount($disc, $prefix, $back); $tax = $this->taxFor($l['tax_rate'] ?? '', $prefix, $back);
             }
             $qty = $this->qtyFor($v, $qtyRaw, $prefix, $back);
             $batch = (int)($l['batch_id'] ?? 0);
             if (!$v['is_bundle'] && $v['track_batch'] && $batch <= 0) $this->bounce("$prefix: choose the roll (batch) to cut " . $v['item_name'] . ' from.', $back);
-            $lines[] = ['order_item_id' => $oi['id'] ?? null, 'variant_id' => (int)$v['id'], 'qty' => $qty, 'price' => $price, 'disc' => $disc, 'tax' => $tax,
+            $lines[] = ['order_item_id' => $oi['id'] ?? null, 'variant_id' => (int)$v['id'], 'product_id' => $product, 'qty' => $qty, 'price' => $price, 'disc' => $disc, 'tax' => $tax,
                 'batch_id' => $batch, 'location_id' => (int)($l['location_id'] ?? 0), 'auto' => false];
             if ($oi) $perItem[$oi['id']] = ($perItem[$oi['id']] ?? 0) + $qty;
         }
@@ -169,8 +170,8 @@ final class DeliveryController extends SalesBase
     public static function rows(int $deliveryId, int $tenantId): array
     {
         return DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.hsn_code, i.is_bundle, u.short_name AS unit, b.batch_no, k.code AS rack
-             FROM delivery_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+            'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.hsn_code, i.is_bundle, u.short_name AS unit, b.batch_no, k.code AS rack
+             FROM delivery_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations k ON k.id = l.location_id AND l.location_id > 0
              WHERE l.tenant_id = ? AND l.delivery_id = ? ORDER BY COALESCE(l.parent_id, l.id), l.parent_id IS NOT NULL, l.id', [$tenantId, $deliveryId]);
     }

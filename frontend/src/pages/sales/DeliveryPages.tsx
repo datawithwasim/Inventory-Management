@@ -34,8 +34,8 @@ export function DeliveryList() {
 
 // ------------------------------------------------------------------ the delivery editor
 
-type DL = { order_item_id: string; variant_id: string; label: string; tb: boolean; bundle: boolean; unit: string; dec: boolean; qty: string; left: string; unit_price: string; discount_pct: string; tax_rate: string; batch_id: string; location_id: string; warn: string; multi: boolean; hint: string };
-const blankDl = (): DL => ({ order_item_id: '', variant_id: '', label: '', tb: false, bundle: false, unit: '', dec: true, qty: '', left: '', unit_price: '', discount_pct: '', tax_rate: '', batch_id: '0', location_id: '0', warn: '', multi: false, hint: '' });
+type DL = { order_item_id: string; variant_id: string; product_id: string; label: string; tb: boolean; bundle: boolean; unit: string; dec: boolean; qty: string; left: string; unit_price: string; discount_pct: string; tax_rate: string; batch_id: string; location_id: string; warn: string; multi: boolean; hint: string };
+const blankDl = (): DL => ({ order_item_id: '', variant_id: '', product_id: '', label: '', tb: false, bundle: false, unit: '', dec: true, qty: '', left: '', unit_price: '', discount_pct: '', tax_rate: '', batch_id: '0', location_id: '0', warn: '', multi: false, hint: '' });
 type Stock = { tb: boolean; batches: { id: number; batch_no: string; lot: string | null; balance: number; racks: { location_id: number; code: string; qty: number }[] }[]; racks: { location_id: number; code: string; qty: number }[] };
 
 function Row({ l, linked, warehouse, customer, shade, patch, remove, split }: { l: DL; linked: boolean; warehouse: string; customer: string; shade: boolean; patch: (p: Partial<DL>) => void; remove: () => void; split?: () => void }) {
@@ -63,9 +63,9 @@ function Row({ l, linked, warehouse, customer, shade, patch, remove, split }: { 
     <tr>
       <td style={{ minWidth: linked ? 170 : 250 }}>
         {linked ? <span>{l.label}</span> : (
-          <ItemSearch path="/lookup/sale-items" extra={`&customer=${customer || 0}&warehouse=${warehouse || 0}`} value={l.variant_id} label={l.label} placeholder="Search item, SKU or barcode"
-            onPick={(p) => patch(p ? { variant_id: String(p.row.id), label: p.label, tb: !!Number(p.row.track_batch), bundle: !!Number(p.row.is_bundle), unit: p.row.unit, dec: !!Number(p.row.allow_decimal), unit_price: String(p.row.price ?? ''), discount_pct: Number(p.row.discount) ? String(p.row.discount) : '', tax_rate: Number(p.row.tax_rate) ? String(Number(p.row.tax_rate)) : '', batch_id: '0', location_id: '0', hint: p.row.available != null ? `Free stock: ${fq(p.row.available)} ${p.row.unit}` : '' }
-              : { variant_id: '', label: '', hint: '' })} />)}
+          <ItemSearch path="/lookup/sale-items" extra={`&customer=${customer || 0}&warehouse=${warehouse || 0}`} value={l.variant_id} label={l.label} placeholder="Search product, catalogue, item or SKU"
+            onPick={(p) => patch(p ? { variant_id: String(p.row.id), product_id: String(p.row.product_id ?? ''), label: p.label, tb: !!Number(p.row.track_batch), bundle: !!Number(p.row.is_bundle), unit: p.row.unit, dec: !!Number(p.row.allow_decimal), unit_price: String(p.row.price ?? ''), discount_pct: Number(p.row.discount) ? String(p.row.discount) : '', tax_rate: Number(p.row.tax_rate) ? String(Number(p.row.tax_rate)) : '', batch_id: '0', location_id: '0', hint: p.row.available != null ? `Free stock: ${fq(p.row.available)} ${p.row.unit}` : '' }
+              : { variant_id: '', product_id: '', label: '', hint: '' })} />)}
         {linked && l.left !== '' && <div className="form-text small">Still due: {fq(l.left)} {l.unit}</div>}
         {!linked && l.hint && <div className="form-text small">{l.hint}</div>}
         {l.warn && <div className="small text-danger">{l.warn}</div>}
@@ -112,7 +112,7 @@ export function DeliveryForm() {
     setValues(v);
     setCustomer(String(o?.customer_id ?? d.customers?.[0]?.id ?? '')); setWh(String(o?.warehouse_id ?? d.warehouses?.[0]?.id ?? ''));
     const old: any[] = d.oldLines ?? [];
-    setLines(old.length ? old.map((l) => ({ ...blankDl(), order_item_id: String(l.order_item_id ?? ''), variant_id: String(l.variant_id), label: l.label, tb: !!Number(l.tb), bundle: !!Number(l.bundle), unit: l.unit ?? '', dec: !!Number(l.dec ?? 1), qty: l.qty !== undefined && l.qty !== '' ? String(Number(l.qty)) : '', left: l.left !== undefined ? String(l.left) : '', unit_price: String(l.unit_price ?? ''), discount_pct: Number(l.discount_pct) ? String(Number(l.discount_pct)) : '', tax_rate: Number(l.tax_rate) ? String(Number(l.tax_rate)) : '', batch_id: String(l.batch_id ?? 0), location_id: String(l.location_id ?? 0), warn: l.warn ?? '', multi: !!l.multi })) : orderId ? [] : [blankDl()]);
+    setLines(old.length ? old.map((l) => ({ ...blankDl(), order_item_id: String(l.order_item_id ?? ''), variant_id: String(l.variant_id), product_id: String(l.product_id ?? ''), label: l.label, tb: !!Number(l.tb), bundle: !!Number(l.bundle), unit: l.unit ?? '', dec: !!Number(l.dec ?? 1), qty: l.qty !== undefined && l.qty !== '' ? String(Number(l.qty)) : '', left: l.left !== undefined ? String(l.left) : '', unit_price: String(l.unit_price ?? ''), discount_pct: Number(l.discount_pct) ? String(Number(l.discount_pct)) : '', tax_rate: Number(l.tax_rate) ? String(Number(l.tax_rate)) : '', batch_id: String(l.batch_id ?? 0), location_id: String(l.location_id ?? 0), warn: l.warn ?? '', multi: !!l.multi })) : orderId ? [] : [blankDl()]);
   }, [schema.data, src.data, values, orderId, nav]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;
   const d = src.data.data; if (!d) return <div className="alert alert-danger">{(src.data.messages ?? []).map((m: Msg) => m.msg).join(' ') || 'Goods cannot be delivered on this order right now.'}</div>;
@@ -125,7 +125,7 @@ export function DeliveryForm() {
   const save = async () => {
     setSaving(true); setMsgs([]);
     const body: Record<string, any> = { ...toPayload(schema.data!, values), make_invoice: invoice ? 1 : '',
-      lines: lines.filter((l) => l.variant_id).map((l) => ({ order_item_id: l.order_item_id, variant_id: l.variant_id, qty: l.qty, batch_id: l.batch_id, location_id: l.location_id, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
+      lines: lines.filter((l) => l.variant_id).map((l) => ({ order_item_id: l.order_item_id, variant_id: l.variant_id, product_id: l.product_id, qty: l.qty, batch_id: l.batch_id, location_id: l.location_id, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
     if (linked) body.order_id = order.id; else { body.customer_id = customer; body.warehouse_id = wh; }
     const r = await post('/sales/deliveries', body);
     setSaving(false);
@@ -151,10 +151,10 @@ export function DeliveryForm() {
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="mk" checked={invoice} onChange={(e) => setInvoice(e.target.checked)} /><label className="form-check-label" htmlFor="mk">Create the invoice now</label></div>
         <p className="text-muted small mb-0">Fabric: pick the <strong>roll</strong> each length is cut from. The oldest roll that can cover the quantity is suggested; if the quantity needs more than one roll you will see a shade warning. Set the quantity to 0 on lines you are not delivering now.</p>
       </div></div>
-      <div className="card mb-3"><div className="card-header d-flex justify-content-between align-items-center"><span>{term('item', true)}</span>
-        {!linked && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setLines((ls) => [...ls, blankDl()])}><i className="bi bi-plus-lg" /> Add {term('item').toLowerCase()}</button>}</div>
+      <div className="card mb-3"><div className="card-header d-flex justify-content-between align-items-center"><span>Products</span>
+        {!linked && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setLines((ls) => [...ls, blankDl()])}><i className="bi bi-plus-lg" /> Add product</button>}</div>
         <div className="table-responsive" style={{ overflow: 'visible' }}><table className="table mb-0 align-middle">
-          <thead><tr><th>{term('item')}</th><th>Roll ({term('batch', true).toLowerCase()})</th><th>{term('rack')}</th><th>Qty</th><th>Price</th><th>Disc %</th><th>Tax %</th><th /></tr></thead>
+          <thead><tr><th>Product</th><th>Roll ({term('batch', true).toLowerCase()})</th><th>{term('rack')}</th><th>Qty</th><th>Price</th><th>Disc %</th><th>Tax %</th><th /></tr></thead>
           <tbody>{lines.map((l, i) => (
             <Row key={i} l={l} linked={!!l.order_item_id} warehouse={linked ? String(order.warehouse_id) : wh} customer={customer} shade={shadeFor(l)} patch={patch(i)}
               remove={() => setLines((ls) => (ls.length > 1 || linked ? ls.filter((_, j) => j !== i) : [blankDl()]))}

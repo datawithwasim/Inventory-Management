@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { lineName } from '../../lib/docs';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
@@ -84,7 +85,7 @@ function ReturnForm({ invoice }: { invoice: string }) {
         <thead><tr><th>{term('item')}</th><th>Roll ({term('batch', true).toLowerCase()})</th><th className="text-end">Sold</th><th className="text-end">Can return</th><th>Put back on {term('rack').toLowerCase()}</th><th style={{ width: 130 }}>Return qty</th></tr></thead><tbody>
           {d.items.map((l: any) => { const part = l.parent_id !== null && l.parent_id !== undefined; const row = rows[l.id]; if (!row) return null; return (
             <tr key={l.id} className={part ? 'small' : ''}>
-              <td>{part ? '  ↳ ' : ''}{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}</td>
+              <td>{part ? '  ↳ ' : ''}{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}</td>
               <td>{l.batch_no ?? ''}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{qty(l.returnable)}</td>
               <td>{!Number(l.is_bundle) && l.returnable > 0 && <div className="d-flex align-items-center gap-2">
                 <select className="form-select form-select-sm" style={{ width: 'auto' }} value={row.location_id} onChange={(e) => setRow(l.id, { location_id: e.target.value })}><option value="0">No {term('rack').toLowerCase()}</option>{racks.map((r) => <option key={r.id} value={r.id}>{r.code}</option>)}</select>
@@ -104,7 +105,7 @@ export function SalesReturnDetail() {
   return (
     <RecordPage entity="sales_return" id={r.id} name={r.return_no} back="/sales/returns" related={[{ id: 'items', label: 'Items returned' }]}>
       <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0"><thead><tr><th>{term('item')}</th><th>Roll</th><th>Back on</th><th className="text-end">Qty</th><th className="text-end">Credit</th></tr></thead><tbody>
-        {d.items.map((l: any) => <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''}</td><td>{l.batch_no ?? ''}</td><td>{Number(l.restock) ? l.rack ?? 'No rack' : <Badge tone="secondary">Not put back</Badge>}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.line_total)}</td></tr>)}</tbody>
+        {d.items.map((l: any) => <tr key={l.id}><td>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null}</td><td>{l.batch_no ?? ''}</td><td>{Number(l.restock) ? l.rack ?? 'No rack' : <Badge tone="secondary">Not put back</Badge>}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.line_total)}</td></tr>)}</tbody>
         <tfoot><tr><th colSpan={4} className="text-end">Total credit (incl. tax)</th><th className="text-end">{money(r.total)}</th></tr></tfoot></table></div></div>
     </RecordPage>
   );

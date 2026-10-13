@@ -27,8 +27,8 @@ final class SalesOrderController extends SalesBase
     private function items(int $id): array
     {
         return DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, i.id AS item_id, u.short_name AS unit, u.allow_decimal
-             FROM sales_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+            'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, i.id AS item_id, u.short_name AS unit, u.allow_decimal
+             FROM sales_order_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              WHERE l.tenant_id = ? AND l.order_id = ? ORDER BY l.id', [$this->tid(), $id]);
     }
 
@@ -78,7 +78,7 @@ final class SalesOrderController extends SalesBase
     {
         DB::run('DELETE FROM sales_order_items WHERE tenant_id = ? AND order_id = ?', [$this->tid(), $id]);
         foreach ($lines as $l) {
-            DB::insert('sales_order_items', ['tenant_id' => $this->tid(), 'order_id' => $id, 'variant_id' => $l['variant_id'], 'qty_ordered' => $l['qty'],
+            DB::insert('sales_order_items', ['tenant_id' => $this->tid(), 'order_id' => $id, 'variant_id' => $l['variant_id'], 'product_id' => $l['product_id'] ?? null, 'qty_ordered' => $l['qty'],
                 'unit_price' => $l['price'], 'discount_pct' => $l['disc'], 'tax_rate' => $l['tax']]);
         }
         Sales::recalc('sales_orders', 'sales_order_items', 'order_id', 'qty_ordered', $id);
@@ -111,7 +111,7 @@ final class SalesOrderController extends SalesBase
             flash('warning', 'Only draft orders can be edited. Cancel and recreate it if the order has changed.');
             redirect("sales/orders/{$o['id']}");
         }
-        $lines = $this->oldLines() ?: array_map(fn($l) => ['variant_id' => $l['variant_id'], 'label' => $this->saleLabel($l), 'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'],
+        $lines = $this->oldLines() ?: array_map(fn($l) => ['variant_id' => $l['variant_id'], 'product_id' => $l['product_id'], 'label' => $this->saleLabel($l), 'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'],
             'qty' => (float)$l['qty_ordered'], 'unit_price' => $l['unit_price'], 'discount_pct' => $l['discount_pct'], 'tax_rate' => $l['tax_rate']], $this->items((int)$o['id']));
         $this->form('Edit ' . $o['order_no'], $o, $lines);
     }
