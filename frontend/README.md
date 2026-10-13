@@ -56,6 +56,7 @@ Upload `public/ui/` to the server after a build.
 | Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile; the page layout designer (full screen, `/app/settings/formdesign`) | done |
 | Forgot / reset password (company and Super Admin), customer groups with special prices, rate lists, items CSV import, global search (Ctrl K) | done |
 | Super Admin (sign-in, dashboard, companies with open-as-owner support mode, plans, system updates and backup, audit log) at `/app/admin` | done |
+| Print templates (Settings → Print templates): list, full-screen designer with live preview (`src/pages/settings/PrintDesigner.tsx`), drawn by `src/components/DocView.tsx` | done |
 | Printouts: purchase order, invoice, delivery note, stock-out vouchers (delivery / adjustment / transfer), transfer challan, report print, barcode labels (`src/pages/print/Print.tsx`, open without the menu, Print button, light colours) | done |
 | CSV / Excel downloads, backup download, installer | stay server-made on purpose (they are files, not screens) |
 

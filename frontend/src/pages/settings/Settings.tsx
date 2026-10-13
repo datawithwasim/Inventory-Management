@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, Navigate, NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
+import { appUrl, get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
 
@@ -262,34 +262,37 @@ export function WorkflowTab() {
 // ------------------------------------------------------------------ print templates
 
 export function TemplatesTab() {
-  const [sp, setSp] = useSearchParams(); const doc = sp.get('doc') ?? 'invoice';
-  const qc = useQueryClient(); const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
+  const [sp, setSp] = useSearchParams(); const doc = sp.get('doc') ?? 'invoice'; const nav = useNavigate();
+  const qc = useQueryClient(); const [msgs, setMsgs] = useState<Msg[]>([]);
   const q = useQuery({ queryKey: ['settings', 'templates', doc], gcTime: 0, queryFn: async () => (await get(`/settings/templates?doc=${doc}`)).data });
-  const [v, setV] = useState<Record<string, any> | null>(null);
-  useEffect(() => { setV(null); }, [doc]);
-  useEffect(() => { if (q.data && !v) setV(q.data.values); }, [q.data, v]);
-  if (q.isLoading || !v) return <Spinner />;
-  const d = q.data;
-  const save = async () => {
-    setBusy(true); setMsgs([]);
-    const r = await post('/settings/templates', { ...v, doc });
-    setBusy(false); setMsgs(r.messages ?? []); if (r.ok) qc.invalidateQueries({ queryKey: ['settings', 'templates'] });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (q.isLoading || !q.data) return <Spinner />;
+  const d = q.data; const list = d.templates as { id: string; name: string; builtin: boolean; is_default: boolean }[];
+  const label = String(d.docs[doc]);
+  const printPath = ({ invoice: (i: number) => `/sales/invoices/${i}/print`, delivery_note: (i: number) => `/sales/deliveries/${i}/print`, purchase_order: (i: number) => `/purchase/orders/${i}/print` } as Record<string, (i: number) => string>)[doc];
+  const act = async (path: string, ok?: (r: any) => void) => {
+    const r = await post(path, { doc }); setMsgs(r.messages ?? []);
+    if (r.ok) { qc.invalidateQueries({ queryKey: ['settings', 'templates'] }); ok?.(r); }
   };
   return (
     <Frame msgs={msgs} onClose={() => setMsgs([])}>
       <div className="row g-3"><div className="col-lg-3"><div className="list-group">
         {Object.entries(d.docs as Record<string, string>).map(([k, l]) => <button type="button" key={k} className={`list-group-item list-group-item-action ${k === doc ? 'active' : ''}`} onClick={() => setSp({ doc: k })}>{l}</button>)}</div></div>
-      <div className="col-lg-9"><div className="card"><div className="card-header d-flex justify-content-between align-items-center"><span>{d.docs[doc]} layout</span>
-        {d.previewUrl ? <a className="btn btn-sm btn-outline-primary" target="_blank" rel="noreferrer" href={d.previewUrl}><i className="bi bi-eye" /> Preview with your latest {String(d.docs[doc]).toLowerCase()}</a> : <span className="text-muted small">Create a {String(d.docs[doc]).toLowerCase()} to preview it.</span>}</div>
-        <div className="card-body"><form onSubmit={(e) => { e.preventDefault(); void save(); }}><div className="row g-3">
-          {Object.entries(d.fields as Record<string, [string, string, any]>).map(([k, [label, type]]) => type === 'bool'
-            ? <div className="col-md-6" key={k}><div className="form-check"><input className="form-check-input" type="checkbox" id={`f_${k}`} checked={!!Number(v[k])} onChange={(e) => setV({ ...v, [k]: e.target.checked ? 1 : 0 })} /><label className="form-check-label" htmlFor={`f_${k}`}>{label}</label></div></div>
-            : type === 'color' ? <div className="col-md-6" key={k}><label className="form-label">{label}</label><input type="color" className="form-control form-control-color" value={v[k] ?? '#1f2937'} onChange={(e) => setV({ ...v, [k]: e.target.value })} /></div>
-            : type === 'textarea' ? <div className="col-12" key={k}><label className="form-label">{label}</label><textarea className="form-control" rows={3} maxLength={1000} value={v[k] ?? ''} onChange={(e) => setV({ ...v, [k]: e.target.value })} /></div>
-            : <div className="col-md-6" key={k}><label className="form-label">{label}</label><input className="form-control" maxLength={120} value={v[k] ?? ''} onChange={(e) => setV({ ...v, [k]: e.target.value })} /></div>)}
-        </div><button className="btn btn-primary mt-3" disabled={busy}>{busy ? 'Saving…' : 'Save template'}</button></form></div></div>
-      <p className="text-muted small mt-2">Your logo, address and tax number come from <NavLink to="/settings/company">Company profile</NavLink>.</p></div></div>
+      <div className="col-lg-9"><div className="card"><div className="card-header d-flex justify-content-between align-items-center"><span>{label} templates</span>
+        <Link className="btn btn-sm btn-primary" to={`/settings/templates/design?doc=${doc}`}><i className="bi bi-plus-lg" /> New template</Link></div>
+        <div className="list-group list-group-flush">
+          {list.map((t) => (
+            <div key={t.id} className="list-group-item d-flex flex-wrap align-items-center gap-2">
+              <div className="flex-grow-1"><span className="fw-semibold">{t.name}</span> {t.builtin && <span className="badge text-bg-light border fw-normal">Built in</span>} {t.is_default && <span className="badge text-bg-success fw-normal">Used for printing</span>}</div>
+              {d.latest && <a className="btn btn-sm btn-outline-secondary" target="_blank" rel="noreferrer" href={appUrl(`${printPath(d.latest)}?tpl=${t.id}`)}><i className="bi bi-eye" /> Preview</a>}
+              {t.builtin
+                ? <button className="btn btn-sm btn-outline-primary" onClick={() => act(`/settings/templates/${t.id}/duplicate`, (r) => { const m = String(r.redirect ?? '').match(/id=(\d+)/); if (m) nav(`/settings/templates/design?doc=${doc}&id=${m[1]}`); })}><i className="bi bi-pencil" /> Customise a copy</button>
+                : <Link className="btn btn-sm btn-outline-primary" to={`/settings/templates/design?doc=${doc}&id=${t.id}`}><i className="bi bi-pencil" /> Edit</Link>}
+              {!t.builtin && <button className="btn btn-sm btn-outline-secondary" onClick={() => act(`/settings/templates/${t.id}/duplicate`)}>Duplicate</button>}
+              {!t.is_default && <button className="btn btn-sm btn-outline-success" onClick={() => act(`/settings/templates/${t.id}/default`)}>Use for printing</button>}
+              {!t.builtin && <button className="btn btn-sm btn-outline-danger" aria-label="Delete" onClick={() => { if (confirm(`Delete the template "${t.name}"?`)) void act(`/settings/templates/${t.id}/delete`); }}><i className="bi bi-trash" /></button>}
+            </div>))}
+        </div></div>
+      <p className="text-muted small mt-2">Design your own: paper size, letterhead, columns, totals, terms, signatures and your own text. The template marked “Used for printing” is the one printed documents use; anyone can switch template on the print page. Your logo, address and tax number come from <NavLink to="/settings/company">Company profile</NavLink>.</p></div></div>
     </Frame>
   );
 }

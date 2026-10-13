@@ -11,6 +11,7 @@ import { GroupList, GroupForm } from './pages/customers/Groups';
 import ItemImport from './pages/items/Import';
 import RateList from './pages/purchase/RateList';
 import FormDesigner from './pages/settings/FormDesigner';
+import PrintDesigner from './pages/settings/PrintDesigner';
 import { PoPrint, InvoicePrint, DeliveryPrint, VoucherPrint, ChallanPrint, ReportPrint, LabelPrint } from './pages/print/Print';
 import { useSearchParams } from 'react-router-dom';
 import SupplierList from './pages/suppliers/List';
@@ -82,6 +83,7 @@ export default function App() {
       </Route>
       <Route element={<Protected bare />}>
         <Route path="/settings/formdesign" element={<FormDesigner />} />
+        <Route path="/settings/templates/design" element={<PrintDesigner />} />
         <Route path="/purchase/orders/:id/print" element={<PoPrint />} />
         <Route path="/sales/invoices/:id/print" element={<InvoicePrint />} />
         <Route path="/sales/deliveries/:id/print" element={<DeliveryPrint />} />

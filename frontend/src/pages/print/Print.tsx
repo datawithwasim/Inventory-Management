@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import DocView from '../../components/DocView';
+import { normalise, paperMm, type Cfg, type DocKind } from '../../lib/printdoc';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../../lib/api';
 import { fdate, money, qty } from '../../lib/format';
@@ -13,22 +15,32 @@ import { barcodesPending, LabelView, type El, type Page, type Template, type Val
 type Head = { name: string; address: string; phone: string; email: string; website: string; tax_no: string; bank: string; logo: string | null };
 type Tpl = Record<string, any>;
 
-function PrintFrame({ back, backLabel = 'Back', layoutDoc, children, wide = false }: { back: string; backLabel?: string; layoutDoc?: string; children: ReactNode; wide?: boolean }) {
+function PrintFrame({ back, backLabel = 'Back', layoutDoc, children, wide = false, design }: { back: string; backLabel?: string; layoutDoc?: string; children: ReactNode; wide?: boolean; design?: { id: string; cfg: Cfg; list: { id: string; name: string; is_default: boolean }[] } }) {
   useEffect(() => {
     const root = document.documentElement; const was = [root.getAttribute('data-bs-theme'), root.getAttribute('data-theme')];
     root.setAttribute('data-bs-theme', 'light'); root.setAttribute('data-theme', 'light'); document.body.classList.add('print-doc');
     return () => { root.setAttribute('data-bs-theme', was[0] ?? 'light'); root.setAttribute('data-theme', was[1] ?? 'light'); document.body.classList.remove('print-doc'); };
   }, []);
-  const { can } = useSession();
+  const { can } = useSession(); const [sp, setSp] = useSearchParams();
+  const [pw, ph] = design ? paperMm(design.cfg.page) : [0, 0]; const m = design?.cfg.page.margin ?? 0;
+  // a designed document is a sheet of its own paper size; the printer margin is the layout's margin
+  const paper = design ? `.print-root .sheet{width:${pw}mm;max-width:none;min-height:${ph}mm;padding:${m}mm;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.2)}body.print-doc{background:#e5e7eb!important}@page{size:${pw}mm ${ph}mm;margin:${m}mm}@media print{.print-root .sheet{width:auto;min-height:0;padding:0;box-shadow:none}body.print-doc{background:#fff!important}}` : '';
   return (
     <div className="print-root">
-      <style>{`body.print-doc{background:#fff!important;color:#111!important}.print-root .sheet{max-width:${wide ? 'none' : '820px'};margin:0 auto;padding:24px}@media screen{.print-root .sheet{overflow-x:auto}}@media print{.no-print{display:none!important}.print-root .sheet{padding:0;max-width:none}}`}</style>
+      <style>{`body.print-doc{background:#fff!important;color:#111!important}.print-root .sheet{max-width:${wide ? 'none' : '820px'};margin:0 auto;padding:24px}@media screen{.print-root .sheet{overflow-x:auto}}@media print{.no-print{display:none!important}.print-root .sheet{padding:0;max-width:none}}${paper}`}</style>
+      {design && <div className="no-print" style={{ maxWidth: pw + 'mm', margin: '12px auto 0' }}><div className="d-flex gap-2 align-items-center flex-wrap">
+        <button className="btn btn-primary btn-sm" onClick={() => window.print()}><i className="bi bi-printer" /> Print</button>
+        <Link className="btn btn-outline-secondary btn-sm" to={back}>{backLabel}</Link>
+        {design.list.length > 1 && <select className="form-select form-select-sm w-auto" aria-label="Template" value={design.id} onChange={(e) => { const n = new URLSearchParams(sp); n.set('tpl', e.target.value); setSp(n, { replace: true }); }}>
+          {design.list.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (default)' : ''}</option>)}</select>}
+        {layoutDoc && can('settings.edit') && <Link className="btn btn-outline-secondary btn-sm" to={`/settings/templates?doc=${layoutDoc}`}>Change this layout</Link>}
+      </div></div>}
       <div className="sheet">
-        <div className="no-print mb-3 d-flex gap-2">
+        {!design && <div className="no-print mb-3 d-flex gap-2">
           <button className="btn btn-primary btn-sm" onClick={() => window.print()}><i className="bi bi-printer" /> Print</button>
           <Link className="btn btn-outline-secondary btn-sm" to={back}>{backLabel}</Link>
           {layoutDoc && can('settings.edit') && <Link className="btn btn-outline-secondary btn-sm" to={`/settings/templates?doc=${layoutDoc}`}>Change this layout</Link>}
-        </div>
+        </div>}
         {children}
       </div>
     </div>
@@ -36,29 +48,30 @@ function PrintFrame({ back, backLabel = 'Back', layoutDoc, children, wide = fals
 }
 
 function usePrint(path: string, key: unknown[]) {
-  const q = useQuery({ queryKey: ['print', ...key], gcTime: 0, staleTime: 0, queryFn: async () => { const r = await get(path); return { data: r.ok ? r.data : null, msg: r.messages?.[0]?.msg as string | undefined }; } });
+  const tpl = useSearchParams()[0].get('tpl');
+  if (tpl && !path.includes('?')) path += `?tpl=${encodeURIComponent(tpl)}`;
+  const q = useQuery({ queryKey: ['print', ...key, tpl], gcTime: 0, staleTime: 0, queryFn: async () => { const r = await get(path); return { data: r.ok ? r.data : null, msg: r.messages?.[0]?.msg as string | undefined }; } });
   return { isLoading: q.isLoading, data: q.data?.data, msg: q.data?.msg };
 }
 
 const accentOf = (tpl: Tpl) => (/^#[0-9a-fA-F]{6}$/.test(String(tpl.accent ?? '')) ? tpl.accent : '#1f2937');
 
-/** Company letterhead and the document title block. */
-function Letterhead({ head, tpl, title, no, date, meta = {} }: { head: Head; tpl: Tpl; title: string; no: string; date: string; meta?: Record<string, string | null | undefined> }) {
-  const accent = accentOf(tpl);
+/** Company letterhead for the documents that are not designed pages (vouchers, challan): follows the Delivery note layout's header. */
+function Letterhead({ head, cfg, title, no, date, meta = {} }: { head: Head; cfg: Cfg; title: string; no: string; date: string; meta?: Record<string, string | null | undefined> }) {
+  const h = cfg.header; const accent = cfg.page.accent;
+  const rule = h.rule === 'none' ? 'none' : `${h.rule_w}px ${h.rule} ${accent}`;
   return (
     <>
-      <style>{`.doc-accent{color:${accent}}.doc-rule{border-bottom:3px solid ${accent}}.doc-table thead th{border-bottom:2px solid ${accent}}`}</style>
-      <div className="d-flex justify-content-between align-items-start pb-2 mb-3 doc-rule">
+      <style>{`.doc-accent{color:${accent}}.doc-table thead th{border-bottom:2px solid ${accent}}`}</style>
+      <div className="d-flex justify-content-between align-items-start pb-2 mb-3" style={{ borderBottom: rule }}>
         <div className="d-flex align-items-center gap-3">
-          {tpl.show_logo && head.logo ? <img src={head.logo} alt="" style={{ maxHeight: 70, maxWidth: 180 }} /> : null}
-          <div><div className="h5 mb-0">{head.name}</div>
-            {tpl.show_company ? <>
-              {head.address && <div className="small" style={{ whiteSpace: 'pre-line' }}>{head.address}</div>}
-              <div className="small text-muted">{[head.phone, head.email, head.website].filter(Boolean).join(' · ')}</div>
-              {head.tax_no && <div className="small">Tax no. {head.tax_no}</div>}
-            </> : null}</div>
+          {h.logo !== 'none' && head.logo ? <img src={head.logo} alt="" style={{ height: `${h.logo_h}mm`, maxWidth: '60mm', objectFit: 'contain' }} /> : null}
+          <div><div className="mb-0" style={{ fontSize: `${h.name_size}pt`, fontWeight: 600 }}>{head.name}</div>
+            {h.show_address && head.address && <div className="small" style={{ whiteSpace: 'pre-line' }}>{head.address}</div>}
+            <div className="small text-muted">{[h.show_phone && head.phone, h.show_email && head.email, h.show_website && head.website].filter(Boolean).join(' · ')}</div>
+            {h.show_tax && head.tax_no && <div className="small">Tax no. {head.tax_no}</div>}</div>
         </div>
-        <div className="text-end"><div className="h4 mb-0 doc-accent">{tpl.title ? tpl.title : title}</div><div><strong>{no}</strong></div><div className="small text-muted">{fdate(date)}</div>
+        <div className="text-end"><div className="doc-accent" style={{ fontSize: `${h.title_size}pt` }}>{title}</div><div><strong>{no}</strong></div><div className="small text-muted">{fdate(date)}</div>
           {Object.entries(meta).map(([k, v]) => (v ? <div key={k} className="small text-muted">{k}: {v}</div> : null))}</div>
       </div>
     </>
@@ -80,90 +93,22 @@ function DocFoot({ head, tpl, notes, showBank }: { head: Head; tpl: Tpl; notes?:
 
 const Fail = ({ what, msg }: { what: string; msg?: string }) => <div className="p-4"><div className="alert alert-warning">{msg || `${what} not found.`}</div></div>;
 
-/* ---------------- purchase order ---------------- */
-export function PoPrint() {
-  const { id } = useParams(); const { term } = useSession();
-  const q = usePrint(`/purchase/orders/${id}/print`, ['po', id]);
-  if (q.isLoading) return <Spinner />;
-  const d = q.data; if (!d) return <Fail what="Purchase order" msg={q.msg} />;
-  const { po, items, tpl, head } = d;
-  return (
-    <PrintFrame back={`/purchase/orders/${po.id}`} layoutDoc="purchase_order">
-      <Letterhead head={head} tpl={tpl} title="Purchase order" no={po.po_no} date={po.order_date} meta={tpl.show_expected ? { Expected: po.expected_date ? fdate(po.expected_date) : '' } : {}} />
-      <div className="row mb-3"><div className="col-6"><div className="small text-muted">{term('supplier')}</div><strong>{po.supplier}</strong>
-        {po.sup_address && <div className="small">{po.sup_address}</div>}{po.sup_phone && <div className="small">{po.sup_phone}</div>}{po.sup_tax && <div className="small">Tax no. {po.sup_tax}</div>}</div>
-        <div className="col-6"><div className="small text-muted">Deliver to</div><strong>{po.warehouse}</strong></div></div>
-      <table className="table table-sm align-middle doc-table"><thead><tr><th>Item</th><th className="text-end">Qty</th><th className="text-end">Price</th>{tpl.show_tax ? <th className="text-end">Tax %</th> : null}<th className="text-end">Amount</th></tr></thead><tbody>
-        {items.map((l: any) => (
-          <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small>{l.their ? <div className="small text-muted">Their: {l.their}</div> : null}</td>
-            <td className="text-end">{qty(l.qty_ordered)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td>{tpl.show_tax ? <td className="text-end">{qty(l.tax_rate)}</td> : null}<td className="text-end">{money(tpl.show_tax ? l.net : l.tot)}</td></tr>))}
-      </tbody></table>
-      <div className="row justify-content-end"><div className="col-md-5"><table className="table table-sm table-borderless"><tbody>
-        <tr><td>Subtotal</td><td className="text-end">{money(po.subtotal)}</td></tr><tr><td>Tax</td><td className="text-end">{money(po.tax_total)}</td></tr>
-        <tr className="border-top"><th>Total</th><th className="text-end">{money(po.total)}</th></tr></tbody></table></div></div>
-      <DocFoot head={head} tpl={tpl} notes={po.notes} showBank={!!tpl.show_bank} />
-    </PrintFrame>
-  );
-}
-
-/* ---------------- sales invoice ---------------- */
-export function InvoicePrint() {
+/* ---------------- purchase order, invoice, delivery note: drawn from the company's designed layout ---------------- */
+function Designed({ kind, path, back, backLabel, layoutDoc, what, titleFallback }: { kind: DocKind; path: string; back: (a: any) => string; backLabel?: string; layoutDoc: string; what: string; titleFallback: string }) {
   const { id } = useParams();
-  const q = usePrint(`/sales/invoices/${id}/print`, ['inv', id]);
+  const q = usePrint(path.replace(':id', String(id)), [kind, id]);
   if (q.isLoading) return <Spinner />;
-  const d = q.data; if (!d) return <Fail what="Invoice" msg={q.msg} />;
-  const { i, items, tpl, head, due } = d;
+  const a = q.data; if (!a) return <Fail what={what} msg={q.msg} />;
+  const design = a.design as { id: string; name: string; cfg: Cfg; list: any[] };
   return (
-    <PrintFrame back={`/sales/invoices/${i.id}`} backLabel="Back to invoice" layoutDoc="invoice">
-      <Letterhead head={head} tpl={tpl} title="Tax invoice" no={i.invoice_no} date={i.invoice_date} meta={{ Due: i.due_date ? fdate(i.due_date) : '', Order: i.order_no }} />
-      <div className="mb-3"><div className="small text-muted">Billed to</div><strong>{i.customer}</strong>
-        {i.cust_address && <div>{i.cust_address}</div>}{i.cust_phone && <div>{i.cust_phone}</div>}{i.cust_tax && <div>Tax no. {i.cust_tax}</div>}
-        {i.ship_to && tpl.show_ship_to ? <div className="small text-muted mt-1">Deliver to: {i.ship_to}</div> : null}</div>
-      <table className="table table-sm align-middle doc-table"><thead><tr><th>Item</th><th className="text-end">Qty</th><th className="text-end">Price</th>{tpl.show_discount ? <th className="text-end">Disc</th> : null}{tpl.show_tax ? <th className="text-end">Tax</th> : null}<th className="text-end">Amount</th></tr></thead><tbody>
-        {items.filter((l: any) => l.parent_id === null).map((l: any) => (
-          <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''}{l.batch_no && tpl.show_batch ? <div className="small text-muted">Roll {l.batch_no}</div> : null}</td>
-            <td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td>
-            {tpl.show_discount ? <td className="text-end">{l.dsc > 0 ? money(l.dsc) : ''}</td> : null}
-            {tpl.show_tax ? <td className="text-end">{money(l.tx)} <small className="text-muted">({qty(l.tax_rate)}%)</small></td> : null}
-            <td className="text-end">{money(tpl.show_tax ? l.net : l.tot)}</td></tr>))}
-      </tbody></table>
-      <div className="row justify-content-end"><div className="col-md-5"><table className="table table-sm table-borderless"><tbody>
-        <tr><td>Gross</td><td className="text-end">{money(i.subtotal)}</td></tr>
-        {Number(i.discount_total) > 0 && <tr><td>Discount</td><td className="text-end">− {money(i.discount_total)}</td></tr>}
-        <tr><td>Tax</td><td className="text-end">{money(i.tax_total)}</td></tr>
-        {Number(i.delivery_charge) > 0 && <tr><td>Delivery</td><td className="text-end">{money(i.delivery_charge)}</td></tr>}
-        {Number(i.installation_charge) > 0 && <tr><td>Installation</td><td className="text-end">{money(i.installation_charge)}</td></tr>}
-        <tr className="border-top"><th>Total</th><th className="text-end">{money(i.total)}</th></tr>
-        {Number(i.returned_amount) > 0 && <tr><td>Returns</td><td className="text-end">− {money(i.returned_amount)}</td></tr>}
-        <tr><td>Paid</td><td className="text-end">{money(i.paid_amount)}</td></tr>
-        <tr><th>Balance due</th><th className="text-end">{money(Math.max(0, Number(due)))}</th></tr></tbody></table></div></div>
-      <DocFoot head={head} tpl={tpl} notes={i.notes} showBank={!!tpl.show_bank} />
+    <PrintFrame back={back(a)} backLabel={backLabel} layoutDoc={layoutDoc} design={design}>
+      <DocView cfg={design.cfg} title={titleFallback} d={normalise(kind, a)} head={a.head} />
     </PrintFrame>
   );
 }
-
-/* ---------------- delivery note ---------------- */
-export function DeliveryPrint() {
-  const { id } = useParams();
-  const q = usePrint(`/sales/deliveries/${id}/print`, ['del', id]);
-  if (q.isLoading) return <Spinner />;
-  const x = q.data; if (!x) return <Fail what="Delivery" msg={q.msg} />;
-  const { d, items, tpl, head } = x;
-  return (
-    <PrintFrame back={`/sales/deliveries/${d.id}`} layoutDoc="delivery_note">
-      <Letterhead head={head} tpl={tpl} title="Delivery note" no={d.delivery_no} date={d.delivery_date} meta={{ Order: d.order_no, Invoice: d.invoice_no }} />
-      <div className="mb-3"><div className="small text-muted">Delivered to</div><strong>{d.customer}</strong>
-        {d.cust_phone && <div>{d.cust_phone}</div>}{tpl.show_ship_to ? <div>{d.ship_to || d.cust_address || ''}</div> : null}</div>
-      <table className="table table-sm align-middle doc-table"><thead><tr><th>Item</th>{tpl.show_batch ? <th>Roll</th> : null}{tpl.show_rack ? <th>Rack</th> : null}<th className="text-end">Qty</th>{tpl.show_prices ? <th className="text-end">Amount</th> : null}</tr></thead><tbody>
-        {items.map((l: any) => { const part = l.parent_id !== null; return (
-          <tr key={l.id} className={part ? 'small text-muted' : ''}><td>{part ? '  ↳ ' : ''}{l.item_name}{l.vname ? ` — ${l.vname}` : ''}</td>
-            {tpl.show_batch ? <td>{l.batch_no ?? ''}</td> : null}{tpl.show_rack ? <td>{l.is_bundle ? '' : l.rack ?? ''}</td> : null}
-            <td className="text-end">{qty(l.qty)} {l.unit}</td>{tpl.show_prices ? <td className="text-end">{part ? '' : money(l.tot)}</td> : null}</tr>); })}
-      </tbody></table>
-      <DocFoot head={head} tpl={tpl} notes={d.note} />
-    </PrintFrame>
-  );
-}
+export const PoPrint = () => <Designed kind="purchase_order" path="/purchase/orders/:id/print" back={(a) => `/purchase/orders/${a.po.id}`} layoutDoc="purchase_order" what="Purchase order" titleFallback="Purchase order" />;
+export const InvoicePrint = () => <Designed kind="invoice" path="/sales/invoices/:id/print" back={(a) => `/sales/invoices/${a.i.id}`} backLabel="Back to invoice" layoutDoc="invoice" what="Invoice" titleFallback="Tax invoice" />;
+export const DeliveryPrint = () => <Designed kind="delivery_note" path="/sales/deliveries/:id/print" back={(a) => `/sales/deliveries/${a.d.id}`} layoutDoc="delivery_note" what="Delivery" titleFallback="Delivery note" />;
 
 /* ---------------- stock-out voucher (delivery, adjustment, transfer) ---------------- */
 export function VoucherPrint({ kind }: { kind: 'delivery' | 'adjustment' | 'transfer' }) {
@@ -177,7 +122,7 @@ export function VoucherPrint({ kind }: { kind: 'delivery' | 'adjustment' | 'tran
   return (
     <PrintFrame back={'/' + String(v.back).replace(/^\//, '')}>
       <style>{`.vch-table th,.vch-table td{vertical-align:middle}.vch-qty{font-size:1.15rem;font-weight:700;white-space:nowrap}.vch-table td{height:46px}.vch-blank{min-width:80px;border:1px solid #aaa!important}.vch-table th{font-size:.7rem}.vch-table td.roll{white-space:nowrap}.vch-rack{font-size:1.05rem;font-weight:700;white-space:nowrap}.vch-sign{border-top:1px solid #333;padding-top:4px;font-size:.8rem;margin-top:46px}@media print{.vch-table tr{page-break-inside:avoid}}`}</style>
-      <Letterhead head={head} tpl={tpl} title="Stock-out voucher" no={v.no} date={v.date} meta={v.meta} />
+      <Letterhead head={head} cfg={d.design.cfg} title="Stock-out voucher" no={v.no} date={v.date} meta={v.meta} />
       <div className="d-flex justify-content-between mb-3"><div><div className="small text-muted">{v.kind === 'delivery' ? 'Issued for' : 'Purpose'}</div><strong>{v.for}</strong></div>
         <div className="text-end"><div className="small text-muted">Take stock from</div><strong>{v.warehouse}</strong></div></div>
       <table className="table table-sm doc-table vch-table">
@@ -209,7 +154,7 @@ export function ChallanPrint() {
   return (
     <PrintFrame back={`/stock/transfers/${doc.id}`}>
       <style>{`.chl-table th,.chl-table td{vertical-align:middle}.chl-table td{height:40px}.chl-blank{min-width:80px;border:1px solid #aaa!important}.chl-table td.roll{white-space:nowrap}.chl-sign{border-top:1px solid #333;padding-top:4px;font-size:.8rem;margin-top:46px}@media print{.chl-table tr{page-break-inside:avoid}}`}</style>
-      <Letterhead head={head} tpl={tpl} title="Transfer challan" no={doc.doc_no} date={date} meta={{ Expected: doc.expected_date ? fdate(doc.expected_date) : '' }} />
+      <Letterhead head={head} cfg={x.design.cfg} title="Transfer challan" no={doc.doc_no} date={date} meta={{ Expected: doc.expected_date ? fdate(doc.expected_date) : '' }} />
       <div className="row g-3 mb-3">
         <div className="col-6"><div className="small text-muted">From</div><strong>{from.name}</strong>{from.address ? <div className="small" style={{ whiteSpace: 'pre-line' }}>{from.address}</div> : null}</div>
         <div className="col-6"><div className="small text-muted">To</div><strong>{to.name}</strong>{to.address ? <div className="small" style={{ whiteSpace: 'pre-line' }}>{to.address}</div> : null}</div>

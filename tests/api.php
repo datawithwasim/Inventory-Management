@@ -938,6 +938,47 @@ check('a new field added in the designer is saved (JSON answer, no redirect cras
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
 DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
 
+echo "Print templates\n";
+$r = $c->call('GET', '/settings/templates/design?doc=invoice');
+$cfg = $r['json']['data']['cfg'] ?? [];
+check('the designer gives the vocabulary of the document and the Standard layout to start from', $r['status'] === 200 && isset($r['json']['data']['spec']['columns']['item'], $r['json']['data']['spec']['totals']['balance']) && ($cfg['v'] ?? 0) === 2 && count($cfg['blocks'] ?? []) >= 6 && !empty($r['json']['data']['head']['name']));
+$mine = $cfg; $mine['page']['size'] = 'Nonsense'; $mine['page']['margin'] = 999; $mine['page']['accent'] = 'red'; $mine['header']['title'] = 'GST INVOICE';
+foreach ($mine['blocks'] as &$bk) if ($bk['type'] === 'items') { $bk['columns'][] = ['k' => 'bogus', 'label' => 'x', 'show' => 1]; foreach ($bk['columns'] as &$col) if ($col['k'] === 'hsn') $col['show'] = 1; unset($col); }
+unset($bk);
+$mine['blocks'][] = ['id' => 'text:abc123', 'type' => 'text', 'show' => 1, 'title' => 'Jurisdiction', 'text' => 'Surat only', 'align' => 'center', 'boxed' => 1, 'size' => 9];
+$mine['blocks'][] = ['id' => 'evil', 'type' => 'items', 'show' => 1];
+$r = $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'id' => '', 'name' => 'Premium', 'cfg' => $mine, 'make_default' => '']);
+$ptid = (int)DB::val('SELECT id FROM print_templates WHERE tenant_id = ? AND name = ?', [$tA, 'Premium']);
+check('a template is saved', $r['status'] === 200 && $ptid > 0);
+$saved = json_decode((string)DB::val('SELECT config FROM print_templates WHERE id = ?', [$ptid]), true);
+$itemsBlock = null; foreach ($saved['blocks'] as $bk) if ($bk['type'] === 'items') $itemsBlock = $bk;
+check('what is saved is checked: bad paper, margin and colour fall back, unknown columns and sections are dropped, own text and the HSN column stay',
+    $saved['page']['size'] === 'A4' && (float)$saved['page']['margin'] === 40.0 && $saved['page']['accent'] === '#1f2937' && $saved['header']['title'] === 'GST INVOICE'
+    && !in_array('bogus', array_column($itemsBlock['columns'], 'k'), true) && !in_array('evil', array_column($saved['blocks'], 'id'), true) && in_array('text:abc123', array_column($saved['blocks'], 'id'), true)
+    && (bool)array_filter($itemsBlock['columns'], fn($x) => $x['k'] === 'hsn' && $x['show'] === 1));
+check('the same name twice, an empty name and the name "Standard" are refused', $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => 'Premium', 'cfg' => $mine])['status'] === 422
+    && $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => '', 'cfg' => $mine])['status'] === 422 && $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => 'standard', 'cfg' => $mine])['status'] === 422);
+$invId = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? LIMIT 1', [$tA]);
+$pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
+check('until one is chosen, printing uses Standard (which follows the older simple options)', !$pr || (($pr['json']['data']['design']['id'] ?? '') === 'std' && count($pr['json']['data']['design']['list'] ?? []) === 2));
+$c->call('POST', "/settings/templates/$ptid/default", ['doc' => 'invoice']);
+$pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
+check('the default template is the one printing uses; ?tpl= picks another', !$pr || (($pr['json']['data']['design']['id'] ?? '') === (string)$ptid && ($pr['json']['data']['design']['cfg']['header']['title'] ?? '') === 'GST INVOICE'
+    && ($c->call('GET', "/sales/invoices/$invId/print?tpl=std")['json']['data']['design']['id'] ?? '') === 'std'));
+$r = $c->call('POST', "/settings/templates/$ptid/duplicate", ['doc' => 'invoice']);
+check('a template can be copied (and Standard too)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM print_templates WHERE tenant_id = ?', [$tA]) === 2
+    && $c->call('POST', '/settings/templates/std/duplicate', ['doc' => 'invoice'])['status'] === 200);
+$b3 = new J($base); $b3->session(); $b3->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b3->session();
+check('another company cannot see, edit, default or delete it', $b3->call('GET', "/settings/templates/design?doc=invoice&id=$ptid")['status'] === 404
+    && $b3->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'id' => $ptid, 'name' => 'Hack', 'cfg' => $mine])['status'] === 404
+    && $b3->call('POST', "/settings/templates/$ptid/default", ['doc' => 'invoice'])['status'] === 404 && $b3->call('POST', "/settings/templates/$ptid/delete", ['doc' => 'invoice'])['status'] === 404
+    && (string)DB::val('SELECT name FROM print_templates WHERE id = ?', [$ptid]) === 'Premium');
+$c->call('POST', "/settings/templates/$ptid/delete", ['doc' => 'invoice']);
+$pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
+check('deleting the default hands printing back to Standard', !$pr || ($pr['json']['data']['design']['id'] ?? '') === 'std');
+check('a document with no total row (delivery note) has no totals section to design', !array_filter($c->call('GET', '/settings/templates/design?doc=delivery_note')['json']['data']['cfg']['blocks'] ?? [], fn($x) => $x['type'] === 'totals'));
+DB::run('DELETE FROM print_templates WHERE tenant_id = ?', [$tA]);
+
 echo "The app is the front door\n";
 $sp = ['/' => '/app/', '/dashboard' => '/app/dashboard', '/customers/12/edit' => '/app/customers/12/edit', '/settings/formdesign' => '/app/settings/formdesign', '/forgot-password' => '/app/forgot-password',
     '/admin' => '/app/admin', '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];

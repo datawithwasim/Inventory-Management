@@ -70,7 +70,7 @@ final class InvoiceController extends SalesBase
                 [, $dsc, $net, $tx, $tot] = \App\Models\Sales::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']);
                 return $l + ['dsc' => $dsc, 'net' => $net, 'tx' => $tx, 'tot' => $tot];
             }, $this->lines($i)), 'due' => Purchase::outstanding($i),
-            'tpl' => PrintTemplate::get('invoice'), 'head' => PrintTemplate::head(),
+            'tpl' => PrintTemplate::get('invoice'), 'design' => \App\Models\PrintDoc::forPrint('invoice', $_GET['tpl'] ?? null), 'head' => PrintTemplate::head(),
         ], 'layouts/print');
     }
 

@@ -251,6 +251,11 @@ $router->post('/settings/custom-fields', $A . 'CustomFieldController@store', ['a
 $router->get('/settings/custom-fields/{id}/edit', $A . 'CustomFieldController@edit', ['auth', 'perm:settings.edit']);
 $router->post('/settings/custom-fields/{id}', $A . 'CustomFieldController@update', ['auth', 'perm:settings.edit']);
 $router->post('/settings/custom-fields/{id}/delete', $A . 'CustomFieldController@destroy', ['auth', 'perm:settings.edit']);
+$router->get('/settings/templates/design', $A . 'PrintTemplateController@design', ['auth', 'perm:settings.view']);
+$router->post('/settings/templates/save', $A . 'PrintTemplateController@save', ['auth', 'perm:settings.edit']);
+$router->post('/settings/templates/{id}/default', $A . 'PrintTemplateController@makeDefault', ['auth', 'perm:settings.edit']);
+$router->post('/settings/templates/{id}/duplicate', $A . 'PrintTemplateController@duplicate', ['auth', 'perm:settings.edit']);
+$router->post('/settings/templates/{id}/delete', $A . 'PrintTemplateController@destroy', ['auth', 'perm:settings.edit']);
 $router->get('/settings/{tab}', $A . 'SettingsController@show', ['auth', 'perm:settings.view']);
 $router->post('/settings/{tab}', $A . 'SettingsController@save', ['auth', 'perm:settings.edit']);
 $router->get('/company/logo', $A . 'SettingsController@logo', ['auth']);

@@ -108,7 +108,7 @@ final class SettingsController extends Controller
             case 'templates':
                 $doc = (string)($_GET['doc'] ?? 'invoice');
                 if (!isset(PrintTemplate::DOCS[$doc])) $doc = 'invoice';
-                $data += ['docs' => PrintTemplate::DOCS, 'doc' => $doc, 'fields' => PrintTemplate::fields($doc), 'values' => PrintTemplate::get($doc), 'previewUrl' => $this->previewUrl($doc)];
+                $data += ['docs' => PrintTemplate::DOCS, 'doc' => $doc, 'fields' => PrintTemplate::fields($doc), 'values' => PrintTemplate::get($doc), 'previewUrl' => $this->previewUrl($doc), 'templates' => \App\Models\PrintDoc::list($doc), 'latest' => \App\Models\PrintDoc::latestId($doc)];
                 break;
         }
         $this->settingsView('app/settings/' . $tab, $data, $tab);

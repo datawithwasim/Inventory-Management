@@ -169,7 +169,7 @@ final class DeliveryController extends SalesBase
     public static function rows(int $deliveryId, int $tenantId): array
     {
         return DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.is_bundle, u.short_name AS unit, b.batch_no, k.code AS rack
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.hsn_code, i.is_bundle, u.short_name AS unit, b.batch_no, k.code AS rack
              FROM delivery_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations k ON k.id = l.location_id AND l.location_id > 0
              WHERE l.tenant_id = ? AND l.delivery_id = ? ORDER BY COALESCE(l.parent_id, l.id), l.parent_id IS NOT NULL, l.id', [$tenantId, $deliveryId]);
@@ -185,7 +185,7 @@ final class DeliveryController extends SalesBase
             [, , , , $tot] = Sales::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']);
             return $l + ['tot' => $tot];
         }, self::rows((int)$d['id'], $this->tid()));
-        $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => $items, 'tpl' => PrintTemplate::get('delivery_note'), 'head' => PrintTemplate::head()], 'layouts/print');
+        $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => $items, 'tpl' => PrintTemplate::get('delivery_note'), 'design' => \App\Models\PrintDoc::forPrint('delivery_note', $_GET['tpl'] ?? null), 'head' => PrintTemplate::head()], 'layouts/print');
     }
 
     public function invoice(string $id): void
