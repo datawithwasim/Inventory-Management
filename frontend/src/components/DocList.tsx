@@ -27,7 +27,7 @@ export default function DocList({ title, api, queryKey, columns, filters, action
 }) {
   const [sp, setSp] = useSearchParams();
   const set = (patch: Record<string, string>) => { const n = new URLSearchParams(sp); Object.entries(patch).forEach(([k, v]) => (v ? n.set(k, v) : n.delete(k))); if (!('page' in patch)) n.delete('page'); setSp(n); };
-  const res = useQuery({ queryKey: [queryKey, sp.toString()], queryFn: async () => (await get(`${api}?${sp.toString()}`)).data });
+  const res = useQuery({ queryKey: [queryKey, api, sp.toString()], queryFn: async () => (await get(`${api}?${sp.toString()}`)).data });
   const d = res.data;
   return (
     <>

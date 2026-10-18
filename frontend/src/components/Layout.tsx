@@ -7,6 +7,7 @@ import { useSession, type MenuItem } from '../lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dropdown } from './ui';
 import Palette from './Palette';
+import ErrorBoundary from './ErrorBoundary';
 
 /** A menu link: React route when the screen has been rebuilt, otherwise the PHP page. */
 export function AppLink({ item, className, children, onClick }: { item: { path: string; href?: string }; className?: string; children: ReactNode; onClick?: () => void }) {
@@ -146,7 +147,7 @@ export default function Layout() {
             </Dropdown>
           </div>
         </header>
-        <main className="content" id="main">{denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<Outlet /></main>
+        <main className="content" id="main">{denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<ErrorBoundary resetKey={loc.pathname}><Outlet /></ErrorBoundary></main>
         <Palette open={searching} onClose={() => setSearching(false)} />
       </div>
     </>
