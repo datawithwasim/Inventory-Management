@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
@@ -11,9 +12,9 @@ import ItemSearch from '../../components/ItemSearch';
 /** One roll (or, for an item that is not tracked by roll, the one quantity). location_id '' means the rack chosen for the item. */
 type Roll = { qty: string; lot_no: string; location_id: string };
 /** One item on the receipt: what the supplier billed, and the rolls that actually arrived. */
-type Item = { po_item_id: string; variant_id: string; label: string; tb: boolean; unit: string; dec: boolean; billed: string; left: string; unit_price: string; tax_rate: string; rack: string; rolls: Roll[]; open: boolean };
+type Item = { po_item_id: string; variant_id: string; label: string; tb: boolean; unit: string; dec: boolean; billed: string; left: string; unit_price: string; tax_rate: string; rack: string; rolls: Roll[] };
 const blankRoll = (): Roll => ({ qty: '', lot_no: '', location_id: '' });
-const blank = (): Item => ({ po_item_id: '', variant_id: '', label: '', tb: false, unit: '', dec: true, billed: '', left: '', unit_price: '', tax_rate: '', rack: '', rolls: [blankRoll()], open: false });
+const blank = (): Item => ({ po_item_id: '', variant_id: '', label: '', tb: false, unit: '', dec: true, billed: '', left: '', unit_price: '', tax_rate: '', rack: '', rolls: [blankRoll()] });
 const num = (v: string) => Number(v) || 0;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const MAX_ROLLS = 200;
@@ -138,7 +139,7 @@ function ItemRows({ x, i, has, got, billed, diff, po, cols, term, supplier, roll
   change: (i: number, fn: (x: Item) => Item) => void; applyText: (i: number, l: number[]) => void; rackSelect: (v: string, on: (v: string) => void, first: string) => React.ReactNode; onRemove: () => void;
 }) {
   const shown = rollsText(x.rolls.map((r) => num(r.qty)).filter((n) => n > 0));
-  const [draft, setDraft] = useState<string | null>(null); const [err, setErr] = useState('');
+  const [draft, setDraft] = useState<string | null>(null); const [err, setErr] = useState(''); const [modal, setModal] = useState(false);
   const commit = () => {
     if (draft === null) return;
     const r = parseRolls(draft, x.dec);
@@ -173,26 +174,69 @@ function ItemRows({ x, i, has, got, billed, diff, po, cols, term, supplier, roll
         {!po && <><td><input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} /></td>
           <td><input type="number" step="0.01" min="0" max="100" className="form-control form-control-sm" value={x.tax_rate} onChange={(e) => change(i, (y) => ({ ...y, tax_rate: e.target.value }))} /></td></>}
         <td className="text-nowrap text-end">
-          {has && x.tb && <button type="button" className={`btn btn-sm ${x.open ? 'btn-secondary' : 'btn-outline-secondary'} me-1`} title={`Edit roll by roll (lot numbers, a different ${term('rack').toLowerCase()} for one roll)`} aria-expanded={x.open} onClick={() => change(i, (y) => ({ ...y, open: !y.open }))}><i className={`bi bi-chevron-${x.open ? 'up' : 'down'}`} /></button>}
+          {has && x.tb && <button type="button" className="btn btn-sm btn-outline-secondary me-1" title={`Roll by roll: lengths, a different ${term('rack').toLowerCase()} for one roll, supplier roll numbers`} onClick={() => setModal(true)}><i className="bi bi-list-ol" /> Rolls</button>}
           {!po && <button type="button" className="btn btn-sm btn-outline-danger" aria-label="Remove item" onClick={onRemove}>×</button>}
         </td>
       </tr>
-      {x.open && has && x.tb && (
-        <tr><td colSpan={cols + 1} className="bg-body-tertiary">
-          <div className="p-2">
-            <table className="table table-sm align-middle mb-2" style={{ maxWidth: 760 }}>
-              <thead><tr><th style={{ width: 40 }}>#</th><th style={{ width: 160 }}>Length</th><th style={{ width: 190 }}>{term('rack')}</th><th>Supplier roll / lot no.</th><th style={{ width: 40 }} /></tr></thead>
+      {modal && has && x.tb && createPortal(
+        <RollsModal x={x} i={i} got={got} billed={billed} diff={diff} term={term} change={change} rackSelect={rackSelect} onClose={() => setModal(false)} />, document.body)}
+    </tbody>
+  );
+}
+
+/** Pop-up for one item's rolls: length, rack and supplier roll number of each roll. Changes apply straight away; Done closes it. */
+function RollsModal({ x, i, got, billed, diff, term, change, rackSelect, onClose }: {
+  x: Item; i: number; got: number; billed: number; diff: number; term: (k: string, p?: boolean) => string; change: (i: number, fn: (x: Item) => Item) => void;
+  rackSelect: (v: string, on: (v: string) => void, first: string) => React.ReactNode; onClose: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState<string | null>(null); const [err, setErr] = useState('');
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', k); document.body.classList.add('modal-open');
+    box.current?.querySelector<HTMLInputElement>('input[data-rl]')?.focus();
+    return () => { document.removeEventListener('keydown', k); document.body.classList.remove('modal-open'); };
+  }, [onClose]);
+  const setRoll = (m: number, patch: Partial<Roll>) => change(i, (y) => ({ ...y, rolls: y.rolls.map((z, k) => (k === m ? { ...z, ...patch } : z)) }));
+  const addRoll = () => { change(i, (y) => ({ ...y, rolls: [...y.rolls, blankRoll()] })); setTimeout(() => { const all = box.current?.querySelectorAll<HTMLInputElement>('input[data-rl]'); all?.[all.length - 1]?.focus(); }, 30); };
+  const shown = rollsText(x.rolls.map((r) => num(r.qty)).filter((n) => n > 0));
+  const commit = () => {
+    if (text === null) return; const r = parseRolls(text, x.dec);
+    if (typeof r === 'string') { setErr(r); return; }
+    setErr(''); setText(null);
+    change(i, (y) => ({ ...y, rolls: r.length ? r.map((l, k) => ({ qty: String(l), lot_no: y.rolls[k]?.lot_no ?? '', location_id: y.rolls[k]?.location_id ?? '' })) : [blankRoll()] }));
+  };
+  const n = x.rolls.filter((r) => num(r.qty) > 0).length;
+  return (
+    <>
+      <div className="modal-backdrop fade show" />
+      <div className="modal fade show d-block" role="dialog" aria-modal="true" aria-label="Rolls" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="modal-dialog modal-lg modal-dialog-scrollable" ref={box}><div className="modal-content">
+          <div className="modal-header"><div><h2 className="modal-title h5 mb-0">Rolls · {x.label}</h2>
+            <div className="small text-muted">{billed > 0 ? <>Billed {fmtQty(billed)} {x.unit} · </> : null}received <b>{fmtQty(got)} {x.unit}</b> in {n} {n === 1 ? 'roll' : 'rolls'}
+              {billed > 0 && got > 0 && (Math.abs(diff) < 0.0005 ? <span className="badge text-bg-success ms-2">matches the bill</span> : diff < 0 ? <span className="badge text-bg-warning ms-2">short by {fmtQty(-diff)} {x.unit}</span> : <span className="badge text-bg-danger ms-2">{fmtQty(diff)} {x.unit} more than billed</span>)}</div></div>
+            <button type="button" className="btn-close" aria-label="Close" onClick={onClose} /></div>
+          <div className="modal-body">
+            <label className="form-label small mb-1">Type them quickly <span className="text-muted fw-normal">(for example 4x50 or 50, 50, 48.5; lot numbers and racks below stay with their roll)</span></label>
+            <input className={`form-control form-control-sm mb-3 ${err ? 'is-invalid' : ''}`} style={{ maxWidth: 360 }} value={text ?? shown} placeholder="4x50" onChange={(e) => { setText(e.target.value); setErr(''); }} onBlur={commit}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />
+            {err && <div className="invalid-feedback d-block mb-2">{err}</div>}
+            <table className="table table-sm align-middle mb-2">
+              <thead><tr><th style={{ width: 40 }}>#</th><th style={{ width: 170 }}>Length</th><th style={{ width: 200 }}>{term('rack')}</th><th>Supplier roll / lot no.</th><th style={{ width: 40 }} /></tr></thead>
               <tbody>{x.rolls.map((r, m) => (
                 <tr key={m}><td className="text-muted">{m + 1}</td>
-                  <td><div className="input-group input-group-sm"><input type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={r.qty} onChange={(e) => change(i, (y) => ({ ...y, rolls: y.rolls.map((z, k) => (k === m ? { ...z, qty: e.target.value } : z)) }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div></td>
-                  <td>{rackSelect(r.location_id, (v) => change(i, (y) => ({ ...y, rolls: y.rolls.map((z, k) => (k === m ? { ...z, location_id: v } : z)) })), 'Same as the item')}</td>
-                  <td><input className="form-control form-control-sm" maxLength={60} value={r.lot_no} placeholder="optional" onChange={(e) => change(i, (y) => ({ ...y, rolls: y.rolls.map((z, k) => (k === m ? { ...z, lot_no: e.target.value } : z)) }))} /></td>
+                  <td><div className="input-group input-group-sm"><input data-rl type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={r.qty} onChange={(e) => setRoll(m, { qty: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (m === x.rolls.length - 1 && num(r.qty) > 0) addRoll(); else (e.currentTarget.closest('tr')?.nextElementSibling?.querySelector('input[data-rl]') as HTMLInputElement | null)?.focus(); } }} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div></td>
+                  <td>{rackSelect(r.location_id, (v) => setRoll(m, { location_id: v }), 'Same as the item')}</td>
+                  <td><input className="form-control form-control-sm" maxLength={60} value={r.lot_no} placeholder="optional" onChange={(e) => setRoll(m, { lot_no: e.target.value })} /></td>
                   <td><button type="button" className="btn btn-sm btn-link text-danger px-1" aria-label="Remove this roll" onClick={() => change(i, (y) => ({ ...y, rolls: y.rolls.length > 1 ? y.rolls.filter((_, k) => k !== m) : [blankRoll()] }))}><i className="bi bi-x-lg" /></button></td></tr>))}</tbody>
             </table>
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => change(i, (y) => ({ ...y, rolls: [...y.rolls, blankRoll()] }))}><i className="bi bi-plus-lg" /> Add a roll</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={addRoll}><i className="bi bi-plus-lg" /> Add a roll</button>
+            <span className="text-muted small ms-2">Enter on the last length adds the next roll.</span>
           </div>
-        </td></tr>
-      )}
-    </tbody>
+          <div className="modal-footer"><button type="button" className="btn btn-primary" onClick={onClose}>Done</button></div>
+        </div></div>
+      </div>
+    </>
   );
 }
