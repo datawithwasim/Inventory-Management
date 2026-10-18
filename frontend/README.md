@@ -56,6 +56,7 @@ Upload `public/ui/` to the server after a build.
 | Settings: company profile (with logo upload), currency & dates, document numbers, appearance (live colour preview), modules & menu, names (labels), print templates, rules & workflow; users, roles & permissions, masters (categories, brands, units, taxes), my profile; the page layout designer (full screen, `/app/settings/formdesign`) | done |
 | Forgot / reset password (company and Super Admin), customer groups with special prices, rate lists, items CSV import, global search (Ctrl K) | done |
 | Super Admin (sign-in, dashboard, companies with open-as-owner support mode, plans, system updates and backup, audit log) at `/app/admin` | done |
+| Goods receipt by rolls (billed qty, "4 × 50 m" roll maker, rack and supplier roll no. per roll, billed vs received) | done |
 | Catalogues (list, book page with its products, form) and Products (list with filters and stock, form, CSV import / export); the sales pickers search products first and sales documents show the product name | done |
 | Print templates (Settings → Print templates): list, full-screen designer with live preview (`src/pages/settings/PrintDesigner.tsx`), drawn by `src/components/DocView.tsx` | done |
 | Printouts: purchase order, invoice, delivery note, stock-out vouchers (delivery / adjustment / transfer), transfer challan, report print, barcode labels (`src/pages/print/Print.tsx`, open without the menu, Print button, light colours) | done |

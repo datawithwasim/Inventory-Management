@@ -938,6 +938,33 @@ check('a new field added in the designer is saved (JSON answer, no redirect cras
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
 DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
 
+echo "Goods receipt: rolls against a bill\n";
+$r = $c->call('POST', '/items', ['name' => 'Roll Test Fabric', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'RTF-1', 'cost_price' => '100', 'sale_price' => '150']], 'cf' => (object)[]]);
+$rtf = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RTF-1'", [$tA]);
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'BILL-77', 'lines' => [
+    ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-1', 'billed_qty' => '200'],
+    ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-2', 'billed_qty' => ''],
+    ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-3', 'billed_qty' => ''],
+    ['variant_id' => $rtf, 'qty' => '48.5', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-4', 'billed_qty' => '']]]);
+$gR = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
+check('a bill of 200 m arrives as four rolls: one batch is created for each roll and the stock is what really arrived', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM grn_items WHERE grn_id = ? AND batch_id > 0', [$gR]) === 4
+    && (int)DB::val('SELECT COUNT(DISTINCT batch_id) FROM grn_items WHERE grn_id = ?', [$gR]) === 4 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 198.5
+    && (int)DB::val('SELECT COUNT(*) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 4);
+check('each roll keeps its own length and the supplier\'s roll no.; the batches are numbered one after another', DB::all('SELECT b.batch_no, b.received_qty, b.supplier_lot FROM batches b WHERE b.tenant_id = ? AND b.variant_id = ? ORDER BY b.id', [$tA, $rtf])
+    === [['batch_no' => 'RTF-1-B0001', 'received_qty' => '50.000', 'supplier_lot' => 'R-1'], ['batch_no' => 'RTF-1-B0002', 'received_qty' => '50.000', 'supplier_lot' => 'R-2'], ['batch_no' => 'RTF-1-B0003', 'received_qty' => '50.000', 'supplier_lot' => 'R-3'], ['batch_no' => 'RTF-1-B0004', 'received_qty' => '48.500', 'supplier_lot' => 'R-4']]);
+$r = $c->call('GET', "/purchase/grns/$gR");
+$rows = $r['json']['data']['items'] ?? [];
+check('the receipt remembers the billed quantity on the first roll only (so billed against received can be shown)', count($rows) === 4 && (float)$rows[0]['billed_qty'] === 200.0 && $rows[1]['billed_qty'] === null && $rows[3]['billed_qty'] === null);
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'lines' => [['variant_id' => $rtf, 'qty' => '5', 'unit_price' => '100', 'billed_qty' => 'abc']]]);
+check('a billed quantity that is not a number is refused', $r['status'] === 422);
+$big = []; for ($i = 0; $i < 120; $i++) $big[] = ['variant_id' => $rtf, 'qty' => '1', 'unit_price' => '100', 'location_id' => '0', 'billed_qty' => $i === 0 ? '120' : ''];
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'lines' => $big]);
+check('a truck with more than 100 rolls is received in one go (up to 500 lines)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 124);
+$lab = $c->call('GET', "/labels?type=rolls&grn=$gR");
+check('the roll labels of that receipt are ready to print, one per roll', count($lab['json']['data']['rows'] ?? []) === 4);
+// leave no trace for the sections that follow
+DB::run('DELETE FROM grn_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+
 echo "Catalogues and products\n";
 $bq = new J($base); $bq->session(); $bq->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bq->session();
 $itemRv = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$rv]);

@@ -118,12 +118,12 @@ abstract class PurchaseBase extends Controller
         return round((float)$raw, 2);
     }
 
-    protected function postedLines(string $back, string $key = 'lines'): array
+    protected function postedLines(string $back, string $key = 'lines', int $max = 200): array
     {
         $lines = array_values(array_filter((array)($this->input()[$key] ?? []),
             fn($l) => is_array($l) && ((int)($l['variant_id'] ?? 0) > 0 || (int)($l['po_item_id'] ?? 0) > 0)));
         if (!$lines) $this->bounce('Add at least one item.', $back);
-        if (count($lines) > 200) $this->bounce('Too many lines (max 200).', $back);
+        if (count($lines) > $max) $this->bounce("Too many lines (max $max).", $back);
         return $lines;
     }
 

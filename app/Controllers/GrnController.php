@@ -112,7 +112,7 @@ final class GrnController extends PurchaseBase
         }
         $lines = [];
         $perPoItem = [];
-        foreach ($this->postedLines($back) as $n => $l) {
+        foreach ($this->postedLines($back, 'lines', 500) as $n => $l) {
             $prefix = 'Line ' . ($n + 1);
             if ($po) {
                 $pi = $poItems[(int)($l['po_item_id'] ?? 0)] ?? $this->bounce("$prefix: this line is not on the purchase order.", $back);
@@ -127,8 +127,12 @@ final class GrnController extends PurchaseBase
             }
             $qty = $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back);
             $lot = $this->text($l['lot_no'] ?? '', 60, "$prefix supplier lot", $back);
+            // what the supplier's bill said for this item (set on its first roll line); the rolls received may add up to less or more
+            $billedRaw = trim((string)($l['billed_qty'] ?? ''));
+            if ($billedRaw !== '' && (!is_numeric($billedRaw) || (float)$billedRaw < 0)) $this->bounce("$prefix: the billed quantity must be a number of zero or more.", $back);
+            $billed = $billedRaw === '' ? null : round((float)$billedRaw, 3);
             if ($this->rackRequired((int)$wh['id'], (int)($l['location_id'] ?? 0))) $this->bounce("$prefix: choose the rack this goes on (your settings require it).", $back);
-            $lines[] = ['n' => $n + 1, 'po_item' => $pi, 'v' => $v, 'qty' => $qty, 'price' => $price, 'tax' => $tax, 'lot' => $lot, 'rack' => (int)($l['location_id'] ?? 0)];
+            $lines[] = ['n' => $n + 1, 'po_item' => $pi, 'v' => $v, 'qty' => $qty, 'price' => $price, 'tax' => $tax, 'lot' => $lot, 'rack' => (int)($l['location_id'] ?? 0), 'billed' => $billed];
             if ($pi) $perPoItem[$pi['id']] = ($perPoItem[$pi['id']] ?? 0) + $qty;
         }
         foreach ($perPoItem as $piId => $got) {
@@ -161,7 +165,7 @@ final class GrnController extends PurchaseBase
                         throw new StockException('Line ' . $l['n'] . ': ' . $e->getMessage());
                     }
                     DB::insert('grn_items', ['tenant_id' => $t, 'grn_id' => $grnId, 'po_item_id' => $l['po_item']['id'] ?? null, 'variant_id' => $v['id'],
-                        'batch_id' => $batch, 'location_id' => $l['rack'], 'qty' => $l['qty'], 'unit_price' => $l['price'], 'tax_rate' => $l['tax'],
+                        'batch_id' => $batch, 'location_id' => $l['rack'], 'qty' => $l['qty'], 'billed_qty' => $l['billed'], 'unit_price' => $l['price'], 'tax_rate' => $l['tax'],
                         'landed_unit_cost' => $landed, 'supplier_lot' => $l['lot']]);
                     if ($l['po_item']) {
                         DB::run('UPDATE purchase_order_items SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$l['qty'], $t, $l['po_item']['id']]);
