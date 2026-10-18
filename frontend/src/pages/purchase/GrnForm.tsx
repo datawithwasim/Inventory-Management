@@ -191,12 +191,14 @@ function RollsModal({ x, i, got, billed, diff, term, change, rackSelect, onClose
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [text, setText] = useState<string | null>(null); const [err, setErr] = useState('');
+  // set up once when the pop-up opens (onClose is a new function on every render, so it must not be a dependency: that pulled the cursor back to the first roll after every key)
+  const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     document.addEventListener('keydown', k); document.body.classList.add('modal-open');
-    box.current?.querySelector<HTMLInputElement>('input[data-rl]')?.focus();
+    const all = box.current?.querySelectorAll<HTMLInputElement>('input[data-rl]'); (all && all.length > 1 ? all[all.length - 1] : all?.[0])?.focus();
     return () => { document.removeEventListener('keydown', k); document.body.classList.remove('modal-open'); };
-  }, [onClose]);
+  }, []);
   const setRoll = (m: number, patch: Partial<Roll>) => change(i, (y) => ({ ...y, rolls: y.rolls.map((z, k) => (k === m ? { ...z, ...patch } : z)) }));
   const addRoll = () => { change(i, (y) => ({ ...y, rolls: [...y.rolls, blankRoll()] })); setTimeout(() => { const all = box.current?.querySelectorAll<HTMLInputElement>('input[data-rl]'); all?.[all.length - 1]?.focus(); }, 30); };
   const shown = rollsText(x.rolls.map((r) => num(r.qty)).filter((n) => n > 0));
