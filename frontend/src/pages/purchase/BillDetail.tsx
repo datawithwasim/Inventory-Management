@@ -7,6 +7,7 @@ import { lineTotals } from '../../lib/docs';
 import { useSession } from '../../lib/session';
 import { Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
+import { ItemCell, anyTheirs, theirText } from '../../components/ItemCell';
 import { PayBadge } from '../../components/Badges';
 
 export default function BillDetail() {
@@ -23,7 +24,7 @@ export default function BillDetail() {
   const submitPay = async () => { const r = await post(`/purchase/bills/${id}/payments`, pay); setMsgs(r.messages ?? []); if (r.ok) { setPay(null); refresh(); } };
   const delPay = async (pid: number) => { if (!confirm('Remove this payment?')) return; const r = await post(`/purchase/bills/${id}/payments/${pid}/delete`); setMsgs(r.messages ?? []); refresh(); };
   const methods = session?.payMethods ?? {};
-  const itemRow = (l: any) => { const t = lineTotals(Number(l.qty), Number(l.unit_price), Number(l.tax_rate)); return <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small>{(l.sup_code || l.sup_name) && <div className="small text-muted">Their: {[l.sup_code, l.sup_name].filter(Boolean).join(' · ')}</div>}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td><td className="text-end">{qty(l.tax_rate)}</td><td className="text-end">{money(t.total)}</td></tr>; };
+  const itemRow = (l: any) => { const t = lineTotals(Number(l.qty), Number(l.unit_price), Number(l.tax_rate)); return <tr key={l.id}><td><ItemCell l={l} /></td>{anyTheirs(d.items) && <td className="small text-muted">{theirText(l)}</td>}<td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td><td className="text-end">{qty(l.tax_rate)}</td><td className="text-end">{money(t.total)}</td></tr>; };
   return (
     <RecordPage entity="bill" id={b.id} name={b.bill_no} back="/purchase/bills" badges={<PayBadge state={d.status} />}
       actions={<>{can('purchase.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/bills/${id}/edit`}>Edit details</Link>}{b.grn_id && can('purchase.create') && <Link className="btn btn-sm btn-outline-danger" to={`/purchase/returns/create?grn=${b.grn_id}`}>Return goods</Link>}</>}
@@ -36,7 +37,7 @@ export default function BillDetail() {
         {Number(b.returned_amount) > 0 && <tr><td>Returns credited</td><td className="text-end">− {money(b.returned_amount)}</td></tr>}
         <tr><td>Paid</td><td className="text-end">− {money(b.paid_amount)}</td></tr>
         <tr className="border-top"><th>{due < -0.004 ? 'Credit with ' + term('supplier').toLowerCase() : 'Balance due'}</th><th className={`text-end ${due > 0.004 ? 'text-danger' : 'text-success'}`}>{money(Math.abs(due))}</th></tr></tbody></table></div></div>
-      {d.items.length > 0 && <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0 align-middle"><thead><tr><th>{term('item')}</th><th className="text-end">Qty</th><th className="text-end">Price</th><th className="text-end">Tax %</th><th className="text-end">Amount</th></tr></thead><tbody>{d.items.map(itemRow)}</tbody></table></div></div>}
+      {d.items.length > 0 && <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0 align-middle"><thead><tr><th>{term('item')}</th>{anyTheirs(d.items) && <th>{term('supplier')}'s item</th>}<th className="text-end">Qty</th><th className="text-end">Price</th><th className="text-end">Tax %</th><th className="text-end">Amount</th></tr></thead><tbody>{d.items.map(itemRow)}</tbody></table></div></div>}
       <div className="row g-3" id="payments">
         <div className="col-lg-7"><div className="card"><div className="card-header">Payments made</div><div className="table-responsive"><table className="table table-sm mb-0 align-middle"><tbody>
           {d.payments.map((p: any) => <tr key={p.id}><td>{fdate(p.paid_on)}</td><td>{methods[p.method] ?? p.method}{p.reference ? <span className="text-muted small"> · {p.reference}</span> : null}</td><td className="text-end">{money(p.amount)}</td>
