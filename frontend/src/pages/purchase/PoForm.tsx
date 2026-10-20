@@ -50,7 +50,7 @@ export default function PoForm() {
       </PageHead>
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body"><SchemaForm schema={schema.data} values={values} onChange={setValues} /></div></div>
-      <PurchaseLines lines={lines} setLines={setLines} supplier={values.supplier_id || undefined} showTax={schema.data.lines?.tax !== false} term={term} />
+      <PurchaseLines lines={lines} setLines={setLines} supplier={values.supplier_id || undefined} grid={schema.data.grid} term={term} />
     </form>
   );
 }

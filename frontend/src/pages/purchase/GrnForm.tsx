@@ -8,6 +8,7 @@ import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
 import ItemSearch from '../../components/ItemSearch';
+import { gridCols, type GridCol } from '../../components/LineGrid';
 
 /** One roll (or, for an item that is not tracked by roll, the one quantity). location_id '' means the rack chosen for the item. */
 type Roll = { qty: string; lot_no: string; location_id: string };
@@ -106,7 +107,8 @@ export default function GrnForm() {
   const rackSelect = (value: string, onChange: (v: string) => void, first: string) => (
     <select className="form-select form-select-sm" value={value} onChange={(e) => onChange(e.target.value)}><option value="">{first}</option>{myRacks.map((r) => <option key={r.id} value={r.id}>{r.code}</option>)}</select>
   );
-  const cols = 8;
+  const gcols = gridCols(schema.data.grid, { item: term('item'), billed: 'Billed / due', rolls: 'Rolls received', received: 'Received', rack: term('rack'), price: 'Unit price', tax: 'Tax %' });
+  const widths: Record<string, React.CSSProperties> = { item: { minWidth: 230 }, billed: { width: 120 }, rolls: { minWidth: 200 }, received: { width: 150 }, rack: { width: 150 }, price: { width: 100 }, tax: { width: 70 } };
   const addPo = (p: OpenPo) => {
     setPos((xs) => [...xs, { id: String(p.id), po_no: p.po_no, warehouse_id: String(p.warehouse_id) }]);
     setItems((xs) => [...xs.filter((x) => x.variant_id || x.po_item_id), ...p.lines.map(fromPoLine)]);
@@ -135,16 +137,15 @@ export default function GrnForm() {
         <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"><span>Items <span className="act-n">{live.length}</span></span>
           <span className="small text-muted">Write the <b>billed</b> quantity, then the rolls that arrived: <code>4x50</code>, <code>50, 50, 48.5</code> or <code>3x50 + 48.5</code>. Each roll becomes its own {term('batch').toLowerCase()}.</span></div>
         <div style={{ overflow: 'visible' }}><table className="table table-sm align-middle mb-0">
-          <thead><tr><th style={{ minWidth: 230 }}>{term('item')}</th><th style={{ width: 120 }}>Billed / due</th><th style={{ minWidth: 200 }}>Rolls received</th><th style={{ width: 150 }}>Received</th><th style={{ width: 150 }}>{term('rack')}</th>
-            <th style={{ width: 100 }}>Unit price</th><th style={{ width: 70 }}>Tax %</th><th style={{ width: 84 }} /></tr></thead>
+          <thead><tr>{gcols.map((c) => <th key={c.key} style={widths[c.key]}>{c.label}</th>)}<th style={{ width: 84 }} /></tr></thead>
           {items.map((x, i) => {
             const got = received(x); const billed = num(x.billed) || (x.po_item_id ? num(x.left) : 0); const diff = r3(got - billed); const has = !!(x.variant_id || x.po_item_id);
             return (
-              <ItemRows key={i} x={x} i={i} has={has} got={got} billed={billed} diff={diff} cols={cols} term={term} supplier={supplier} rollInputs={rollInputs}
+              <ItemRows key={i} x={x} i={i} has={has} got={got} billed={billed} diff={diff} grid={gcols} term={term} supplier={supplier} rollInputs={rollInputs}
                 change={change} applyText={applyText} rackSelect={rackSelect} onRemove={() => setItems((xs) => (xs.length > 1 ? xs.filter((_, k) => k !== i) : [blank()]))} />
             );
           })}
-          <tfoot><tr><td colSpan={cols + 1} className="small text-muted">{live.length} {live.length === 1 ? 'item' : 'items'} · {rollTotal} {rollTotal === 1 ? 'line' : 'lines'} to stock{differ > 0 ? <span className="ms-2 text-warning-emphasis"><i className="bi bi-exclamation-triangle" /> {differ} {differ === 1 ? 'item differs' : 'items differ'} from the bill</span> : live.length ? <span className="ms-2 text-success"><i className="bi bi-check-circle" /> everything matches the bill</span> : null}</td></tr></tfoot>
+          <tfoot><tr><td colSpan={gcols.length + 1} className="small text-muted">{live.length} {live.length === 1 ? 'item' : 'items'} · {rollTotal} {rollTotal === 1 ? 'line' : 'lines'} to stock{differ > 0 ? <span className="ms-2 text-warning-emphasis"><i className="bi bi-exclamation-triangle" /> {differ} {differ === 1 ? 'item differs' : 'items differ'} from the bill</span> : live.length ? <span className="ms-2 text-success"><i className="bi bi-check-circle" /> everything matches the bill</span> : null}</td></tr></tfoot>
         </table></div>
       </div>
       <button type="button" className="btn btn-outline-primary mb-4" onClick={() => setItems((xs) => [...xs, blank()])}><i className="bi bi-plus-lg" /> Add another item</button>
@@ -153,8 +154,8 @@ export default function GrnForm() {
 }
 
 /** One item: a single compact row (billed, rolls typed as text, received, rack, price) and, when opened, the roll-by-roll editor. */
-function ItemRows({ x, i, has, got, billed, diff, cols, term, supplier, rollInputs, change, applyText, rackSelect, onRemove }: {
-  x: Item; i: number; has: boolean; got: number; billed: number; diff: number; cols: number; term: (k: string, p?: boolean) => string; supplier: string; rollInputs: React.MutableRefObject<(HTMLInputElement | null)[]>;
+function ItemRows({ x, i, has, got, billed, diff, grid, term, supplier, rollInputs, change, applyText, rackSelect, onRemove }: {
+  x: Item; i: number; has: boolean; got: number; billed: number; diff: number; grid: GridCol[]; term: (k: string, p?: boolean) => string; supplier: string; rollInputs: React.MutableRefObject<(HTMLInputElement | null)[]>;
   change: (i: number, fn: (x: Item) => Item) => void; applyText: (i: number, l: number[]) => void; rackSelect: (v: string, on: (v: string) => void, first: string) => React.ReactNode; onRemove: () => void;
 }) {
   const shown = rollsText(x.rolls.map((r) => num(r.qty)).filter((n) => n > 0));
@@ -167,16 +168,15 @@ function ItemRows({ x, i, has, got, billed, diff, cols, term, supplier, rollInpu
     if (r.length) applyText(i, r); else change(i, (y) => ({ ...y, rolls: [blankRoll()] }));
   };
   const n = x.rolls.filter((r) => num(r.qty) > 0).length;
-  return (
-    <tbody>
-      <tr>
-        <td>
+  const cellClass: Record<string, string | undefined> = { received: 'small text-nowrap' };
+  const cells: Record<string, React.ReactNode> = {
+    item: (<>
           {x.po_item_id ? <><span className="fw-medium">{x.label}</span>{x.tb && <> <span className="badge text-bg-secondary">{term('batch')}</span></>}{x.po_no && <div className="small text-muted">{x.po_no}</div>}</>
             : <ItemSearch value={x.variant_id} label={x.label} supplier={supplier || undefined} placeholder="Search item, SKU or barcode"
               onPick={(p) => { if (!p) { change(i, (y) => ({ ...y, variant_id: '', label: '' })); return; } const v = p.row; change(i, (y) => ({ ...y, variant_id: String(v.id), label: p.label, unit: v.unit, dec: !!Number(v.allow_decimal), tb: !!Number(v.track_batch), unit_price: String(v.rate ?? v.cost_price ?? ''), tax_rate: String(Number(v.tax_rate ?? 0)) })); setTimeout(() => rollInputs.current[i]?.focus(), 60); }} />}
-        </td>
-        <td><div className="input-group input-group-sm"><input type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.billed} placeholder={x.po_item_id && x.left ? fmtQty(x.left) : ''} onChange={(e) => change(i, (y) => ({ ...y, billed: e.target.value }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div></td>
-        <td>
+    </>),
+    billed: <div className="input-group input-group-sm"><input type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.billed} placeholder={x.po_item_id && x.left ? fmtQty(x.left) : ''} onChange={(e) => change(i, (y) => ({ ...y, billed: e.target.value }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>,
+    rolls: (<>
           {!has ? <span className="text-muted small">choose the {term('item').toLowerCase()} first</span> : x.tb ? (
             <>
               <input ref={(el) => { rollInputs.current[i] = el; }} className={`form-control form-control-sm ${err ? 'is-invalid' : ''}`} placeholder="e.g. 4x50 or 50, 50, 48.5" value={draft ?? shown} aria-label="Rolls received"
@@ -185,13 +185,18 @@ function ItemRows({ x, i, has, got, billed, diff, cols, term, supplier, rollInpu
               {err && <div className="invalid-feedback d-block">{err}</div>}
             </>
           ) : <div className="input-group input-group-sm"><input ref={(el) => { rollInputs.current[i] = el; }} type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.rolls[0]?.qty ?? ''} aria-label="Qty received" onChange={(e) => change(i, (y) => ({ ...y, rolls: [{ ...y.rolls[0], qty: e.target.value }] }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>}
-        </td>
-        <td className="small text-nowrap">{has && (got > 0 || billed > 0) && <>
+    </>),
+    received: <>{has && (got > 0 || billed > 0) && <>
           <b>{fmtQty(got)} {x.unit}</b>{x.tb && n > 0 && <span className="text-muted"> · {n} {n === 1 ? 'roll' : 'rolls'}</span>}
-          {billed > 0 && got > 0 && <div>{Math.abs(diff) < 0.0005 ? <span className="text-success"><i className="bi bi-check-circle" /> matches</span> : diff < 0 ? <span className="badge text-bg-warning">short {fmtQty(-diff)}</span> : <span className="badge text-bg-danger">+{fmtQty(diff)} extra</span>}</div>}</>}</td>
-        <td>{has ? rackSelect(x.rack, (v) => change(i, (y) => ({ ...y, rack: v })), `No ${term('rack').toLowerCase()}`) : null}</td>
-        {x.po_item_id ? <><td className="small text-muted">{x.unit_price}</td><td className="small text-muted">{x.tax_rate}</td></> : <><td><input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} /></td>
-          <td><input type="number" step="0.01" min="0" max="100" className="form-control form-control-sm" value={x.tax_rate} onChange={(e) => change(i, (y) => ({ ...y, tax_rate: e.target.value }))} /></td></>}
+          {billed > 0 && got > 0 && <div>{Math.abs(diff) < 0.0005 ? <span className="text-success"><i className="bi bi-check-circle" /> matches</span> : diff < 0 ? <span className="badge text-bg-warning">short {fmtQty(-diff)}</span> : <span className="badge text-bg-danger">+{fmtQty(diff)} extra</span>}</div>}</>}</>,
+    rack: <>{has ? rackSelect(x.rack, (v) => change(i, (y) => ({ ...y, rack: v })), `No ${term('rack').toLowerCase()}`) : null}</>,
+    price: x.po_item_id ? <span className="small text-muted">{x.unit_price}</span> : <input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} />,
+    tax: x.po_item_id ? <span className="small text-muted">{x.tax_rate}</span> : <input type="number" step="0.01" min="0" max="100" className="form-control form-control-sm" value={x.tax_rate} onChange={(e) => change(i, (y) => ({ ...y, tax_rate: e.target.value }))} />,
+  };
+  return (
+    <tbody>
+      <tr>
+        {grid.map((c) => <td key={c.key} className={cellClass[c.key]}>{cells[c.key]}</td>)}
         <td className="text-nowrap text-end">
           {has && x.tb && <button type="button" className="btn btn-sm btn-outline-secondary me-1" title={`Roll by roll: lengths, a different ${term('rack').toLowerCase()} for one roll, supplier roll numbers`} onClick={() => setModal(true)}><i className="bi bi-list-ol" /> Rolls</button>}
           <button type="button" className="btn btn-sm btn-outline-danger" aria-label="Remove item" onClick={onRemove}>×</button>

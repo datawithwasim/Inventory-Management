@@ -79,7 +79,7 @@ export function OrderForm() {
         <p className="text-muted small mb-0">Confirming the order <strong>reserves</strong> the stock, so it cannot be sold to someone else before this {term('customer').toLowerCase()}'s delivery.</p>
       </div></div>
       <SalesLines lines={lines} setLines={setLines} customer={String(values.customer_id ?? '')} warehouse={String(values.warehouse_id ?? '')} charges={(Number(values.delivery_charge) || 0) + (Number(values.installation_charge) || 0)}
-        showDisc={schema.data.lines?.disc !== false} showTax={schema.data.lines?.tax !== false} term={term} />
+        grid={schema.data.grid} term={term} />
     </form>
   );
 }

@@ -973,6 +973,34 @@ check('the supplier / customer pickers on the standard forms are searchable look
 DB::run('DELETE FROM custom_field_values WHERE field_id = ?', [$lf['id']]); DB::run('DELETE FROM custom_fields WHERE id = ?', [$lf['id']]);
 DB::run("DELETE FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [$tA]);
 
+echo "Items-table columns (line grids)\n";
+$g = $c->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
+check('a purchase order\'s items table is data: item, qty, unit price, tax, line total, in that order, all shown', array_column($g, 'key') === ['item', 'qty', 'price', 'tax', 'total'] && !in_array(false, array_column($g, 'show'), true) && $g[0]['locked'] === true && $g[2]['locked'] === false);
+foreach (['sales_order' => ['item', 'qty', 'price', 'disc', 'tax', 'total'], 'grn' => ['item', 'billed', 'rolls', 'received', 'rack', 'price', 'tax'], 'adjustment' => ['item', 'batch', 'rack', 'qty', 'cost'], 'transfer' => ['item', 'batch', 'from_rack', 'to_rack', 'qty']] as $ent => $keys) {
+    check("the $ent items table has its columns as data", array_column($c->call('GET', "/schema/$ent")['json']['schema']['grid'] ?? [], 'key') === $keys);
+}
+check('a form without an items table has none', ($c->call('GET', '/schema/customer')['json']['schema']['grid'] ?? []) === []);
+$mm = $c->call('GET', '/settings/formdesign')['json']['data']['model'] ?? [];
+$po = null; foreach ($mm as $f) if ($f['key'] === 'purchase_order') $po = $f;
+check('the designer model says which forms have an items table and what the standard order is', $po && $po['gridForm'] === true && $po['gridDefault'] === ['item', 'qty', 'price', 'tax', 'total'] && count($po['grid']) === 5);
+$design = fn(array $grid) => $c->call('POST', '/settings/formdesign', ['payload' => json_encode(['purchase_order' => ['style' => $po['style'], 'lines' => $po['lines'], 'deleted' => [], 'grid' => $grid,
+    'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => $sec['fields']], $po['sections']), 'fields' => (object)[]]]), 'current' => 'purchase_order', 'close' => '', 'return' => '']);
+$design([['key' => 'item', 'show' => false, 'label' => 'Material'], ['key' => 'price', 'show' => true, 'label' => 'Rate'], ['key' => 'qty', 'show' => true, 'label' => ''], ['key' => 'tax', 'show' => false, 'label' => ''], ['key' => 'total', 'show' => true, 'label' => ''], ['key' => 'bogus', 'show' => true, 'label' => 'x']]);
+$g = $c->call('GET', '/schema/purchase_order')['json']['schema'];
+$byK = array_column($g['grid'], null, 'key');
+check('the company\'s order, own names and hidden columns are kept; a column that cannot be hidden stays; an unknown one is dropped', array_column($g['grid'], 'key') === ['item', 'price', 'qty', 'tax', 'total'] && $byK['item']['show'] === true && $byK['item']['label'] === 'Material' && $byK['price']['label'] === 'Rate' && $byK['tax']['show'] === false && $byK['qty']['label'] === 'Qty');
+check('hiding the tax column also switches off the older tax switch (the classic pages read it)', $g['lines']['tax'] === false);
+$design(array_map(fn($x) => ['key' => $x['key'], 'show' => true, 'label' => str_repeat('é', 60)], $po['grid']));
+$byK = array_column($c->call('GET', '/schema/purchase_order')['json']['schema']['grid'], null, 'key');
+check('a column name is cut to 40 characters', mb_strlen($byK['item']['label']) === 40);
+$design(array_map(fn($x) => ['key' => $x['key'], 'show' => true, 'label' => $x['def']], $po['grid']));
+$g = $c->call('GET', '/schema/purchase_order')['json']['schema'];
+check('naming a column back to its standard name stores no own name, and the tax switch is on again', $g['lines']['tax'] === true && array_column($g['grid'], 'label') === array_column($po['grid'], 'def'));
+$bl2 = $bl->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
+check('another company is not affected by these choices', array_column($bl2, 'key') === ['item', 'qty', 'price', 'tax', 'total'] && array_column($bl2, 'label') !== ['Material', 'Rate']);
+// put the form back the way it was
+$c->call('POST', '/settings/formdesign', ['payload' => json_encode(['purchase_order' => ['reset' => true, 'style' => 'top', 'lines' => ['disc' => true, 'tax' => true], 'deleted' => [], 'sections' => [], 'fields' => (object)[]]]), 'current' => 'purchase_order', 'close' => '', 'return' => '']);
+
 echo "Goods receipt: rolls against a bill\n";
 $r = $c->call('POST', '/items', ['name' => 'Roll Test Fabric', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'RTF-1', 'cost_price' => '100', 'sale_price' => '150']], 'cf' => (object)[]]);
 $rtf = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RTF-1'", [$tA]);

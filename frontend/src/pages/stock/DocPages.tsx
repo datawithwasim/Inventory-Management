@@ -98,7 +98,7 @@ function StockDocForm({ mode }: { mode: 'adjust' | 'transfer' }) {
           ? <>Use a positive quantity to add stock (for fabric, <strong>+ New {term('batch').toLowerCase()}</strong> creates a new roll) and a negative quantity to remove it from a chosen {term('batch').toLowerCase()}.</>
           : <>You can also move stock between {term('rack', true).toLowerCase()} <em>inside</em> one {term('warehouse').toLowerCase()}: choose the same {term('warehouse').toLowerCase()} on both sides and pick different {term('rack', true).toLowerCase()} on each line.</>}</p>
       </div></div>
-      <StockLines mode={mode} lines={lines} setLines={setLines} racks={src.data.racks ?? {}} from={from} to={to} />
+      <StockLines mode={mode} lines={lines} setLines={setLines} racks={src.data.racks ?? {}} from={from} to={to} grid={schema.data.grid} />
     </form>
   );
 }

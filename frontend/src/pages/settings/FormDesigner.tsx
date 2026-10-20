@@ -46,6 +46,7 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
   });
   const [cur, setCur] = useState(() => Math.max(0, model.findIndex((f) => f.key === start)));
   const [sel, setSel] = useState<string | null>(null);
+  const [gridSel, setGridSel] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [mark, setMark] = useState<Mark>(null);
   const [pop, setPop] = useState<Pop>(null);
@@ -150,7 +151,7 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
     const out: Record<string, any> = {};
     data.forEach((f: Form) => {
       if (JSON.stringify(f) === initialByKey.current[f.key]) return;
-      const o: any = { style: f.style, lines: f.lines, deleted: f.deleted, sections: f.sections.map((s: any) => ({ title: s.title, cols: s.cols, fields: s.fields.slice() })), fields: {} };
+      const o: any = { style: f.style, lines: f.lines, ...(f.gridForm ? { grid: f.grid.map((c: any) => ({ key: c.key, show: c.show, label: c.label })) } : {}), deleted: f.deleted, sections: f.sections.map((s: any) => ({ title: s.title, cols: s.cols, fields: s.fields.slice() })), fields: {} };
       if (f.detail) { o.summary = (f.summary || []).slice(); o.related = (f.related || []).map((r: any) => ({ id: r.id, show: r.show })); }
       if (f.resetFlag) o.reset = true;
       Object.keys(f.fields).forEach((k) => {
@@ -182,6 +183,7 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
       if (f.related && f.relatedDefault) { const by: Record<string, any> = {}; f.related.forEach((r: any) => { by[r.id] = r; r.show = true; }); f.related = f.relatedDefault.map((id: string) => by[id]).filter(Boolean); }
       if (!f.layout) f.sections[0].fields = Object.keys(f.fields).filter((k) => !f.fields[k].custom);
       f.style = 'top'; f.lines = { disc: true, tax: true }; f.resetFlag = true;
+      if (f.gridForm) { const by: Record<string, any> = {}; f.grid.forEach((c: any) => { by[c.key] = { ...c, label: c.def, show: true }; }); f.grid = (f.gridDefault as string[]).map((k) => by[k]).filter(Boolean); }
     }, { keepReset: true });
     setSel(null);
   };
@@ -332,15 +334,29 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
               ))}
             </div>
 
-            {F.lineForm && (
+            {F.gridForm && (
               <div className="dz-lines">
-                <div className="dz-sec-head"><div className="dz-sec-name">Line items</div><div className="dz-sec-tools"><span className="dz-hint">Choose the columns of the items table</span></div></div>
+                <div className="dz-sec-head"><div className="dz-sec-name">Items table</div><div className="dz-sec-tools"><span className="dz-hint">Click a column to rename it, hide it or move it. Columns with a lock are needed.</span></div></div>
                 <div className="dz-table">
-                  {['Item', 'Qty', 'Price', 'Disc %', 'Tax %', 'Total'].map((c) => {
-                    const k = c === 'Disc %' ? 'disc' : c === 'Tax %' ? 'tax' : null; const on = !k || F.lines[k];
-                    return <div key={c} className={`dz-col${on ? '' : ' off'}${k ? ' tog' : ''}`} onClick={() => k && edit((_, f) => { f.lines[k] = !f.lines[k]; })}>{c}{k && <i className={`bi bi-${on ? 'eye' : 'eye-slash'}`} />}</div>;
-                  })}
+                  {F.grid.map((c: any) => (
+                    <div key={c.key} className={`dz-col tog${c.show ? '' : ' off'}${gridSel === c.key ? ' sel' : ''}`} style={gridSel === c.key ? { outline: '2px solid var(--bs-primary, #4f46e5)' } : undefined} onClick={() => setGridSel(c.key)}>
+                      {c.label}<i className={`bi bi-${c.locked ? 'lock' : c.show ? 'eye' : 'eye-slash'}`} /></div>
+                  ))}
                 </div>
+                {F.grid.some((c: any) => c.key === gridSel) && (() => {
+                  const i = F.grid.findIndex((c: any) => c.key === gridSel); const c = F.grid[i];
+                  const move = (d: number) => edit((_, f) => { const j = i + d; if (j < 0 || j >= f.grid.length) return; const t = f.grid[i]; f.grid[i] = f.grid[j]; f.grid[j] = t; });
+                  return (
+                    <div className="d-flex align-items-center gap-2 flex-wrap mt-2 small">
+                      <label className="mb-0" htmlFor="gridName">Column name</label>
+                      <input id="gridName" className="form-control form-control-sm" style={{ maxWidth: 220 }} maxLength={40} value={c.label} onChange={(e) => edit((_, f) => { f.grid[i].label = e.target.value; })} onBlur={(e) => { if (!e.target.value.trim()) edit((_, f) => { f.grid[i].label = f.grid[i].def; }); }} />
+                      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === 0} onClick={() => move(-1)} aria-label="Move left"><i className="bi bi-arrow-left" /></button>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === F.grid.length - 1} onClick={() => move(1)} aria-label="Move right"><i className="bi bi-arrow-right" /></button>
+                      {!c.locked && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => edit((_, f) => { f.grid[i].show = !f.grid[i].show; })}><i className={`bi bi-${c.show ? 'eye-slash' : 'eye'}`} /> {c.show ? 'Hide' : 'Show'}</button>}
+                      {c.label !== c.def && <button type="button" className="btn btn-sm btn-link" onClick={() => edit((_, f) => { f.grid[i].label = f.grid[i].def; })}>Use "{c.def}"</button>}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
