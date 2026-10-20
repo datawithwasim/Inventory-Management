@@ -8,7 +8,7 @@ export type Field = {
   key: string; label: string; type: string; required: boolean; help?: string; w?: string; custom?: boolean; sys?: boolean; cfId?: number; choices?: string[]; source?: string;
 };
 export type Section = { id: string; title: string; cols: number; fields: string[] };
-export type Schema = { lines?: { disc: boolean; tax: boolean }; grid?: { key: string; label: string; show: boolean; locked?: boolean; def?: string }[]; entity: string; title: string; style: string; sections: Section[]; fields: Record<string, Field>; canDesign: boolean };
+export type Schema = { lines?: { disc: boolean; tax: boolean }; grid?: { key: string; label: string; show: boolean; locked?: boolean; def?: string }[]; viewgrid?: { key: string; label: string; show: boolean; locked?: boolean; def?: string }[]; entity: string; title: string; style: string; sections: Section[]; fields: Record<string, Field>; canDesign: boolean };
 
 /** Pick-list contents, cached across forms. */
 function useOptions(source?: string) {

@@ -65,7 +65,7 @@ export function InvoiceDetail() {
         {Number(i.returned_amount) > 0 && <tr><td>Returns credited</td><td className="text-end">− {money(i.returned_amount)}</td></tr>}
         <tr><td>Received</td><td className="text-end">− {money(i.paid_amount)}</td></tr>
         <tr className="border-top"><th>{due < -0.004 ? 'Credit due to customer' : 'Balance due'}</th><th className={`text-end ${due > 0.004 ? 'text-danger' : 'text-success'}`}>{money(Math.abs(due))}</th></tr></tbody></table></div></div>
-      {d.items.length > 0 && <div className="card mb-3" id="items"><div className="table-responsive"><DeliveryRows items={d.items} /></div></div>}
+      {d.items.length > 0 && <DeliveryRows entity="invoice" id="items" items={d.items} />}
       <div className="row g-3" id="payments">
         <div className="col-lg-7"><div className="card"><div className="card-header">Payments received</div><div className="table-responsive"><table className="table table-sm mb-0 align-middle"><tbody>
           {d.payments.map((p: any) => <tr key={p.id}><td>{fdate(p.paid_on)}</td><td>{methods[p.method] ?? (p.method === 'advance' ? 'Advance' : p.method)}{p.reference ? <span className="text-muted small"> · {p.reference}</span> : null}</td><td className="text-muted small">{p.note ?? ''}</td><td className="text-end">{money(p.amount)}</td>

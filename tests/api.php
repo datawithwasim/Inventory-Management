@@ -1039,6 +1039,22 @@ $g = $c->call('GET', '/schema/purchase_order')['json']['schema'];
 check('naming a column back to its standard name stores no own name, and the tax switch is on again', $g['lines']['tax'] === true && array_column($g['grid'], 'label') === array_column($po['grid'], 'def'));
 $bl2 = $bl->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
 check('another company is not affected by these choices', array_column($bl2, 'key') === ['item', 'qty', 'price', 'tax', 'total'] && array_column($bl2, 'label') !== ['Material', 'Rate']);
+foreach (['purchase_order' => ['item', 'their', 'ordered', 'received', 'due', 'price', 'tax', 'total'], 'grn' => ['item', 'their', 'po', 'batch', 'rack', 'qty', 'returned', 'price', 'cost'], 'bill' => ['item', 'their', 'qty', 'price', 'tax', 'amount'],
+    'purchase_return' => ['item', 'batch', 'rack', 'qty', 'price', 'value'], 'requisition' => ['item', 'qty', 'note'], 'sales_order' => ['item', 'ordered', 'delivered', 'price', 'disc', 'tax', 'total'],
+    'delivery' => ['item', 'batch', 'rack', 'qty', 'price', 'total'], 'invoice' => ['item', 'batch', 'rack', 'qty', 'price', 'total'], 'sales_return' => ['item', 'batch', 'back', 'qty', 'credit']] as $ent => $keys) {
+    check("the detail page table of $ent has its columns as data", array_column($c->call('GET', "/schema/$ent")['json']['schema']['viewgrid'] ?? [], 'key') === $keys);
+}
+check('a form with no detail table has none', ($c->call('GET', '/schema/customer')['json']['schema']['viewgrid'] ?? []) === []);
+$mm2 = $c->call('GET', '/settings/formdesign')['json']['data']['model'] ?? [];
+$grn = null; foreach ($mm2 as $f) if ($f['key'] === 'grn') $grn = $f;
+check('the designer model carries the detail table of a goods receipt and its standard order', $grn && $grn['viewgridForm'] === true && $grn['viewgridDefault'][0] === 'item' && count($grn['viewgrid']) === 9);
+$vg = array_map(fn($x) => ['key' => $x['key'], 'show' => $x['key'] !== 'cost', 'label' => $x['key'] === 'qty' ? 'Length' : ''], $grn['viewgrid']);
+$c->call('POST', '/settings/formdesign', ['payload' => json_encode(['grn' => ['style' => $grn['style'], 'lines' => $grn['lines'], 'deleted' => [], 'viewgrid' => $vg, 'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => $sec['fields']], $grn['sections']), 'fields' => (object)[]]]), 'current' => 'grn', 'close' => '', 'return' => '']);
+$by = array_column($c->call('GET', '/schema/grn')['json']['schema']['viewgrid'], null, 'key');
+check('the company can rename and hide a column of the detail table; the form\'s own table is untouched', $by['qty']['label'] === 'Length' && $by['cost']['show'] === false && $by['item']['show'] === true
+    && array_column($c->call('GET', '/schema/grn')['json']['schema']['grid'], 'key') === ['item', 'billed', 'rolls', 'received', 'rack', 'price', 'tax']);
+$c->call('POST', '/settings/formdesign', ['payload' => json_encode(['grn' => ['reset' => true, 'style' => 'top', 'lines' => ['disc' => true, 'tax' => true], 'deleted' => [], 'sections' => [], 'fields' => (object)[]]]), 'current' => 'grn', 'close' => '', 'return' => '']);
+check('resetting the form puts the detail table back', ($c->call('GET', '/schema/grn')['json']['schema']['viewgrid'][5]['label'] ?? '') === 'Qty');
 // put the form back the way it was
 $c->call('POST', '/settings/formdesign', ['payload' => json_encode(['purchase_order' => ['reset' => true, 'style' => 'top', 'lines' => ['disc' => true, 'tax' => true], 'deleted' => [], 'sections' => [], 'fields' => (object)[]]]), 'current' => 'purchase_order', 'close' => '', 'return' => '']);
 

@@ -46,7 +46,7 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
   });
   const [cur, setCur] = useState(() => Math.max(0, model.findIndex((f) => f.key === start)));
   const [sel, setSel] = useState<string | null>(null);
-  const [gridSel, setGridSel] = useState<string | null>(null);
+  const [gridSel, setGridSel] = useState<string | null>(null); const [viewSel, setViewSel] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [mark, setMark] = useState<Mark>(null);
   const [pop, setPop] = useState<Pop>(null);
@@ -151,7 +151,7 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
     const out: Record<string, any> = {};
     data.forEach((f: Form) => {
       if (JSON.stringify(f) === initialByKey.current[f.key]) return;
-      const o: any = { style: f.style, lines: f.lines, ...(f.gridForm ? { grid: f.grid.map((c: any) => ({ key: c.key, show: c.show, label: c.label })) } : {}), deleted: f.deleted, sections: f.sections.map((s: any) => ({ title: s.title, cols: s.cols, fields: s.fields.slice() })), fields: {} };
+      const o: any = { style: f.style, lines: f.lines, ...(f.gridForm ? { grid: f.grid.map((c: any) => ({ key: c.key, show: c.show, label: c.label })) } : {}), ...(f.viewgridForm ? { viewgrid: f.viewgrid.map((c: any) => ({ key: c.key, show: c.show, label: c.label })) } : {}), deleted: f.deleted, sections: f.sections.map((s: any) => ({ title: s.title, cols: s.cols, fields: s.fields.slice() })), fields: {} };
       if (f.detail) { o.summary = (f.summary || []).slice(); o.related = (f.related || []).map((r: any) => ({ id: r.id, show: r.show })); }
       if (f.resetFlag) o.reset = true;
       Object.keys(f.fields).forEach((k) => {
@@ -183,9 +183,37 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
       if (f.related && f.relatedDefault) { const by: Record<string, any> = {}; f.related.forEach((r: any) => { by[r.id] = r; r.show = true; }); f.related = f.relatedDefault.map((id: string) => by[id]).filter(Boolean); }
       if (!f.layout) f.sections[0].fields = Object.keys(f.fields).filter((k) => !f.fields[k].custom);
       f.style = 'top'; f.lines = { disc: true, tax: true }; f.resetFlag = true;
-      if (f.gridForm) { const by: Record<string, any> = {}; f.grid.forEach((c: any) => { by[c.key] = { ...c, label: c.def, show: true }; }); f.grid = (f.gridDefault as string[]).map((k) => by[k]).filter(Boolean); }
+      for (const [g, d, on] of [['grid', 'gridDefault', f.gridForm], ['viewgrid', 'viewgridDefault', f.viewgridForm]] as [string, string, boolean][]) { if (!on) continue; const by: Record<string, any> = {}; f[g].forEach((c: any) => { by[c.key] = { ...c, label: c.def, show: true }; }); f[g] = (f[d] as string[]).map((k) => by[k]).filter(Boolean); }
     }, { keepReset: true });
     setSel(null);
+  };
+
+  /** The column chooser of an items table: chips to click, then name / move / hide controls for the chosen column. */
+  const gridBox = (key: 'grid' | 'viewgrid', title: string, hint: string, selKey: string | null, setSelKey: (k: string | null) => void) => {
+    const cols: any[] = F[key] || [];
+    const i = cols.findIndex((c: any) => c.key === selKey); const c = cols[i];
+    const move = (d: number) => edit((_, f) => { const j = i + d; if (j < 0 || j >= f[key].length) return; const t = f[key][i]; f[key][i] = f[key][j]; f[key][j] = t; });
+    return (
+      <div className="dz-lines">
+        <div className="dz-sec-head"><div className="dz-sec-name">{title}</div><div className="dz-sec-tools"><span className="dz-hint">{hint}</span></div></div>
+        <div className="dz-table">
+          {cols.map((x: any) => (
+            <div key={x.key} className={`dz-col tog${x.show ? '' : ' off'}`} style={selKey === x.key ? { outline: '2px solid var(--bs-primary, #4f46e5)' } : undefined} onClick={() => setSelKey(x.key)}>
+              {x.label}<i className={`bi bi-${x.locked ? 'lock' : x.show ? 'eye' : 'eye-slash'}`} /></div>
+          ))}
+        </div>
+        {c && (
+          <div className="d-flex align-items-center gap-2 flex-wrap mt-2 small">
+            <label className="mb-0">Column name</label>
+            <input className="form-control form-control-sm" style={{ maxWidth: 220 }} maxLength={40} value={c.label} onChange={(e) => edit((_, f) => { f[key][i].label = e.target.value; })} onBlur={(e) => { if (!e.target.value.trim()) edit((_, f) => { f[key][i].label = f[key][i].def; }); }} />
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === 0} onClick={() => move(-1)} aria-label="Move left"><i className="bi bi-arrow-left" /></button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === cols.length - 1} onClick={() => move(1)} aria-label="Move right"><i className="bi bi-arrow-right" /></button>
+            {!c.locked && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => edit((_, f) => { f[key][i].show = !f[key][i].show; })}><i className={`bi bi-${c.show ? 'eye-slash' : 'eye'}`} /> {c.show ? 'Hide' : 'Show'}</button>}
+            {c.label !== c.def && <button type="button" className="btn btn-sm btn-link" onClick={() => edit((_, f) => { f[key][i].label = f[key][i].def; })}>Use "{c.def}"</button>}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const groups = useMemo(() => {
@@ -334,31 +362,8 @@ function Inner({ model, types, lookups, widths, start, back, reload }: { model: 
               ))}
             </div>
 
-            {F.gridForm && (
-              <div className="dz-lines">
-                <div className="dz-sec-head"><div className="dz-sec-name">Items table</div><div className="dz-sec-tools"><span className="dz-hint">Click a column to rename it, hide it or move it. Columns with a lock are needed.</span></div></div>
-                <div className="dz-table">
-                  {F.grid.map((c: any) => (
-                    <div key={c.key} className={`dz-col tog${c.show ? '' : ' off'}${gridSel === c.key ? ' sel' : ''}`} style={gridSel === c.key ? { outline: '2px solid var(--bs-primary, #4f46e5)' } : undefined} onClick={() => setGridSel(c.key)}>
-                      {c.label}<i className={`bi bi-${c.locked ? 'lock' : c.show ? 'eye' : 'eye-slash'}`} /></div>
-                  ))}
-                </div>
-                {F.grid.some((c: any) => c.key === gridSel) && (() => {
-                  const i = F.grid.findIndex((c: any) => c.key === gridSel); const c = F.grid[i];
-                  const move = (d: number) => edit((_, f) => { const j = i + d; if (j < 0 || j >= f.grid.length) return; const t = f.grid[i]; f.grid[i] = f.grid[j]; f.grid[j] = t; });
-                  return (
-                    <div className="d-flex align-items-center gap-2 flex-wrap mt-2 small">
-                      <label className="mb-0" htmlFor="gridName">Column name</label>
-                      <input id="gridName" className="form-control form-control-sm" style={{ maxWidth: 220 }} maxLength={40} value={c.label} onChange={(e) => edit((_, f) => { f.grid[i].label = e.target.value; })} onBlur={(e) => { if (!e.target.value.trim()) edit((_, f) => { f.grid[i].label = f.grid[i].def; }); }} />
-                      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === 0} onClick={() => move(-1)} aria-label="Move left"><i className="bi bi-arrow-left" /></button>
-                      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={i === F.grid.length - 1} onClick={() => move(1)} aria-label="Move right"><i className="bi bi-arrow-right" /></button>
-                      {!c.locked && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => edit((_, f) => { f.grid[i].show = !f.grid[i].show; })}><i className={`bi bi-${c.show ? 'eye-slash' : 'eye'}`} /> {c.show ? 'Hide' : 'Show'}</button>}
-                      {c.label !== c.def && <button type="button" className="btn btn-sm btn-link" onClick={() => edit((_, f) => { f.grid[i].label = f.grid[i].def; })}>Use "{c.def}"</button>}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+            {F.gridForm && gridBox('grid', 'Items table', 'Click a column to rename it, hide it or move it. Columns with a lock are needed.', gridSel, setGridSel)}
+            {F.viewgridForm && gridBox('viewgrid', 'Items table on the detail page', 'The same for the table you see after saving: what was ordered, received or delivered.', viewSel, setViewSel)}
 
             {F.detail && rel.length > 0 && (
               <div className="dz-lines dz-rel">

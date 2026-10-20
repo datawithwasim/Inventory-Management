@@ -12,6 +12,7 @@ import Filters from '../../components/Filters';
 import RecordPage from '../../components/RecordPage';
 import { SoBadge } from '../../components/Badges';
 import SalesLines, { blankSLine, type SLine } from '../../components/SalesLines';
+import DetailTable, { useViewCols, type DetailDef } from '../../components/DetailTable';
 
 export const refreshSales = (qc: ReturnType<typeof useQueryClient>) => ['sales-orders', 'sales-order', 'deliveries', 'delivery', 'invoices', 'invoice', 'sales-returns', 'record', 'customer', 'stock'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 const go = (nav: (p: string) => void, redirect: string | undefined, fallback: string) => nav(redirect ? '/' + redirect.replace(/^\//, '') : fallback);
@@ -87,6 +88,7 @@ export function OrderForm() {
 export function OrderDetail() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();
   const { can, term, session } = useSession();
+  const cols = useViewCols('sales_order', { item: term('item'), ordered: 'Qty', delivered: 'Delivered', price: 'Price', disc: 'Disc %', tax: 'Tax %', total: 'Total' });
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [adv, setAdv] = useState({ amount: '', paid_on: new Date().toISOString().slice(0, 10), method: 'cash', reference: '' });
   const q = useQuery({ queryKey: ['sales-order', id], queryFn: async () => (await get(`/sales/orders/${id}`)).data });
@@ -99,12 +101,16 @@ export function OrderDetail() {
     const r = await post(path, {}); setMsgs(r.messages ?? []); refreshSales(qc); if (r.ok) then?.(r);
   };
   const addAdvance = async () => { const r = await post(`/sales/orders/${id}/advance`, adv); setMsgs(r.messages ?? []); if (r.ok) { setAdv({ ...adv, amount: '', reference: '' }); refreshSales(qc); } };
-  const lineRow = (l: any) => { const c = saleLine(Number(l.qty_ordered), Number(l.unit_price), Number(l.discount_pct), Number(l.tax_rate)); return (
-    <tr key={l.id}><td>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}
-      {l.free !== undefined && <div className="small text-muted">free for others now: {qty(l.free)}</div>}</td>
-      <td className="text-end">{qty(l.qty_ordered)} {l.unit}</td><td className="text-end">{qty(l.qty_delivered)}</td><td className="text-end">{money(l.unit_price)}</td>
-      <td className="text-end">{Number(l.discount_pct) ? qty(l.discount_pct) : ''}</td><td className="text-end">{qty(l.tax_rate)}</td><td className="text-end">{money(c.total)}</td></tr>); };
-  const span = 6;
+  const lineDefs: Record<string, DetailDef<any>> = {
+    item: { cell: (l) => <>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null} <small className="text-muted">{l.sku}</small>{Number(l.is_bundle) ? <> <Badge tone="info">Set</Badge></> : null}
+      {l.free !== undefined && <div className="small text-muted">free for others now: {qty(l.free)}</div>}</> },
+    ordered: { className: 'text-end', cell: (l) => <>{qty(l.qty_ordered)} {l.unit}</> },
+    delivered: { className: 'text-end', cell: (l) => qty(l.qty_delivered) },
+    price: { className: 'text-end', cell: (l) => money(l.unit_price) },
+    disc: { className: 'text-end', cell: (l) => Number(l.discount_pct) ? qty(l.discount_pct) : '' },
+    tax: { className: 'text-end', cell: (l) => qty(l.tax_rate) },
+    total: { className: 'text-end', cell: (l) => money(saleLine(Number(l.qty_ordered), Number(l.unit_price), Number(l.discount_pct), Number(l.tax_rate)).total) },
+  };
   return (
     <RecordPage entity="sales_order" id={o.id} name={o.order_no} back="/sales/orders"
       badges={<><SoBadge status={st} />{Number(o.allow_backorder) ? <> <span className="badge text-bg-light border">back-order allowed</span></> : null}</>}
@@ -118,16 +124,14 @@ export function OrderDetail() {
       </>}
       notice={msgs.length ? <div className="mb-3"><Messages items={msgs} onClose={() => setMsgs([])} /></div> : null}
       related={[{ id: 'lines', label: 'Items' }, { id: 'deliveries', label: 'Deliveries & advance' }]}>
-      <div className="card mb-3" id="lines"><div className="table-responsive"><table className="table mb-0 align-middle">
-        <thead><tr><th>{term('item')}</th><th className="text-end">Qty</th><th className="text-end">Delivered</th><th className="text-end">Price</th><th className="text-end">Disc %</th><th className="text-end">Tax %</th><th className="text-end">Total</th></tr></thead>
-        <tbody>{d.items.map(lineRow)}</tbody>
-        <tfoot>
-          <tr><td colSpan={span} className="text-end text-muted">Gross</td><td className="text-end">{money(o.subtotal)}</td></tr>
-          {Number(o.discount_total) > 0 && <tr><td colSpan={span} className="text-end text-muted">Discount</td><td className="text-end">− {money(o.discount_total)}</td></tr>}
-          <tr><td colSpan={span} className="text-end text-muted">Tax</td><td className="text-end">{money(o.tax_total)}</td></tr>
-          {Number(o.delivery_charge) > 0 && <tr><td colSpan={span} className="text-end text-muted">Delivery</td><td className="text-end">{money(o.delivery_charge)}</td></tr>}
-          {Number(o.installation_charge) > 0 && <tr><td colSpan={span} className="text-end text-muted">Installation</td><td className="text-end">{money(o.installation_charge)}</td></tr>}
-          <tr><th colSpan={span} className="text-end">Total</th><th className="text-end">{money(o.total)}</th></tr></tfoot></table></div></div>
+      <DetailTable id="lines" cols={cols} rows={d.items} rowKey={(l: any) => l.id} defs={lineDefs}
+        footer={<>
+          <tr><td className="text-muted">Gross</td><td className="text-end">{money(o.subtotal)}</td></tr>
+          {Number(o.discount_total) > 0 && <tr><td className="text-muted">Discount</td><td className="text-end">− {money(o.discount_total)}</td></tr>}
+          <tr><td className="text-muted">Tax</td><td className="text-end">{money(o.tax_total)}</td></tr>
+          {Number(o.delivery_charge) > 0 && <tr><td className="text-muted">Delivery</td><td className="text-end">{money(o.delivery_charge)}</td></tr>}
+          {Number(o.installation_charge) > 0 && <tr><td className="text-muted">Installation</td><td className="text-end">{money(o.installation_charge)}</td></tr>}
+          <tr><th>Total</th><th className="text-end">{money(o.total)}</th></tr></>} />
       <div className="row g-3 mb-3" id="deliveries">
         <div className="col-lg-6"><div className="card"><div className="card-header">Deliveries &amp; invoices</div><ul className="list-group list-group-flush">
           {d.deliveries.map((x: any) => <li className="list-group-item d-flex justify-content-between" key={x.id}><Link to={`/sales/deliveries/${x.id}`}>{x.delivery_no}</Link>

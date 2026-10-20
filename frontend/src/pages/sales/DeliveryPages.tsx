@@ -184,7 +184,7 @@ export function DeliveryDetail() {
       </>}
       notice={msgs.length ? <div className="mb-3"><Messages items={msgs} onClose={() => setMsgs([])} /></div> : null}
       related={[{ id: 'lines', label: 'Items delivered' }]}>
-      <div className="card mb-3" id="lines"><div className="table-responsive"><DeliveryRows items={d.items} /></div></div>
+      <DeliveryRows entity="delivery" id="lines" items={d.items} />
     </RecordPage>
   );
 }

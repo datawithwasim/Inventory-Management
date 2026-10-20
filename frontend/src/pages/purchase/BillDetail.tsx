@@ -8,12 +8,14 @@ import { useSession } from '../../lib/session';
 import { Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
 import { ItemCell, anyTheirs, theirText } from '../../components/ItemCell';
+import DetailTable, { useViewCols, type DetailDef } from '../../components/DetailTable';
 import { PayBadge } from '../../components/Badges';
 
 export default function BillDetail() {
   const { id } = useParams(); const qc = useQueryClient();
   const { can, term, session } = useSession();
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const allCols = useViewCols('bill', { item: term('item'), their: `${term('supplier')}'s item`, qty: 'Qty', price: 'Price', tax: 'Tax %', amount: 'Amount' });
   const q = useQuery({ queryKey: ['bill', id], queryFn: async () => (await get(`/purchase/bills/${id}`)).data });
   const [pay, setPay] = useState<{ amount: string; paid_on: string; method: string; reference: string; note: string } | null>(null);
   if (q.isLoading) return <Spinner />;
@@ -24,7 +26,15 @@ export default function BillDetail() {
   const submitPay = async () => { const r = await post(`/purchase/bills/${id}/payments`, pay); setMsgs(r.messages ?? []); if (r.ok) { setPay(null); refresh(); } };
   const delPay = async (pid: number) => { if (!confirm('Remove this payment?')) return; const r = await post(`/purchase/bills/${id}/payments/${pid}/delete`); setMsgs(r.messages ?? []); refresh(); };
   const methods = session?.payMethods ?? {};
-  const itemRow = (l: any) => { const t = lineTotals(Number(l.qty), Number(l.unit_price), Number(l.tax_rate)); return <tr key={l.id}><td><ItemCell l={l} /></td>{anyTheirs(d.items) && <td className="small text-muted">{theirText(l)}</td>}<td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td><td className="text-end">{qty(l.tax_rate)}</td><td className="text-end">{money(t.total)}</td></tr>; };
+  const theirs = anyTheirs(d.items); const cols = allCols.filter((c) => c.key !== 'their' || theirs);
+  const billDefs: Record<string, DetailDef<any>> = {
+    item: { cell: (l) => <ItemCell l={l} /> },
+    their: { className: 'small text-muted', cell: (l) => theirText(l) },
+    qty: { className: 'text-end', cell: (l) => <>{qty(l.qty)} {l.unit}</> },
+    price: { className: 'text-end', cell: (l) => money(l.unit_price) },
+    tax: { className: 'text-end', cell: (l) => qty(l.tax_rate) },
+    amount: { className: 'text-end', cell: (l) => money(lineTotals(Number(l.qty), Number(l.unit_price), Number(l.tax_rate)).total) },
+  };
   return (
     <RecordPage entity="bill" id={b.id} name={b.bill_no} back="/purchase/bills" badges={<PayBadge state={d.status} />}
       actions={<>{can('purchase.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/bills/${id}/edit`}>Edit details</Link>}{b.grn_id && can('purchase.create') && <Link className="btn btn-sm btn-outline-danger" to={`/purchase/returns/create?grn=${b.grn_id}`}>Return goods</Link>}</>}
@@ -37,7 +47,7 @@ export default function BillDetail() {
         {Number(b.returned_amount) > 0 && <tr><td>Returns credited</td><td className="text-end">− {money(b.returned_amount)}</td></tr>}
         <tr><td>Paid</td><td className="text-end">− {money(b.paid_amount)}</td></tr>
         <tr className="border-top"><th>{due < -0.004 ? 'Credit with ' + term('supplier').toLowerCase() : 'Balance due'}</th><th className={`text-end ${due > 0.004 ? 'text-danger' : 'text-success'}`}>{money(Math.abs(due))}</th></tr></tbody></table></div></div>
-      {d.items.length > 0 && <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0 align-middle"><thead><tr><th>{term('item')}</th>{anyTheirs(d.items) && <th>{term('supplier')}'s item</th>}<th className="text-end">Qty</th><th className="text-end">Price</th><th className="text-end">Tax %</th><th className="text-end">Amount</th></tr></thead><tbody>{d.items.map(itemRow)}</tbody></table></div></div>}
+      {d.items.length > 0 && <DetailTable cols={cols} rows={d.items} rowKey={(l: any) => l.id} defs={billDefs} />}
       <div className="row g-3" id="payments">
         <div className="col-lg-7"><div className="card"><div className="card-header">Payments made</div><div className="table-responsive"><table className="table table-sm mb-0 align-middle"><tbody>
           {d.payments.map((p: any) => <tr key={p.id}><td>{fdate(p.paid_on)}</td><td>{methods[p.method] ?? p.method}{p.reference ? <span className="text-muted small"> · {p.reference}</span> : null}</td><td className="text-end">{money(p.amount)}</td>

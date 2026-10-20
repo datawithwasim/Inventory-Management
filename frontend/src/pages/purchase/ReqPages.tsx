@@ -8,6 +8,8 @@ import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import RecordPage from '../../components/RecordPage';
+import DetailTable, { useViewCols, type DetailDef } from '../../components/DetailTable';
+import { ItemCell } from '../../components/ItemCell';
 import ItemSearch from '../../components/ItemSearch';
 
 const reqTone: Record<string, string> = { open: 'primary', converted: 'success', cancelled: 'secondary' };
@@ -75,6 +77,7 @@ export function ReqDetail() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();
   const { can, term } = useSession();
   const [msgs, setMsgs] = useState<Msg[]>([]); const [conv, setConv] = useState({ supplier_id: '', warehouse_id: '' });
+  const cols = useViewCols('requisition', { item: term('item'), qty: 'Qty', note: 'Note' });
   const q = useQuery({ queryKey: ['req', id], queryFn: async () => (await get(`/purchase/requisitions/${id}`)).data });
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">Requisition not found.</div>;
@@ -87,8 +90,9 @@ export function ReqDetail() {
       actions={r.status === 'open' && can('purchase.edit') ? <button className="btn btn-sm btn-outline-danger" onClick={cancel}>Cancel requisition</button> : null}
       notice={msgs.length ? <div className="mb-3"><Messages items={msgs} onClose={() => setMsgs([])} /></div> : null}
       related={[{ id: 'items', label: 'Items' }, ...(r.status === 'open' && can('purchase.create') ? [{ id: 'convert', label: 'Turn into PO' }] : [])]}>
-      <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0"><thead><tr><th>{term('item')}</th><th>SKU</th><th className="text-end">Qty</th><th>Note</th></tr></thead><tbody>
-        {d.items.map((l: any) => <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''}</td><td>{l.sku}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td>{l.note ?? ''}</td></tr>)}</tbody></table></div></div>
+      <DetailTable cols={cols} rows={d.items} rowKey={(l: any) => l.id} defs={{
+        item: { cell: (l) => <ItemCell l={l} /> }, qty: { className: 'text-end', cell: (l) => <>{qty(l.qty)} {l.unit}</> }, note: { cell: (l) => l.note ?? '' },
+      } as Record<string, DetailDef<any>>} />
       {r.status === 'open' && can('purchase.create') && <div className="card mb-3" id="convert" style={{ maxWidth: 640 }}><div className="card-header">Turn into a purchase order</div><div className="card-body"><div className="row g-2">
         <div className="col-md-5"><select className="form-select" value={conv.supplier_id} onChange={(e) => setConv({ ...conv, supplier_id: e.target.value })}><option value="">{term('supplier')}…</option>{d.suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div className="col-md-4"><select className="form-select" value={conv.warehouse_id || d.warehouses[0]?.id} onChange={(e) => setConv({ ...conv, warehouse_id: e.target.value })}>{d.warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>

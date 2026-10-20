@@ -9,6 +9,7 @@ import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import RecordPage from '../../components/RecordPage';
+import DetailTable, { useViewCols, type DetailDef } from '../../components/DetailTable';
 import { refreshSales } from './OrderPages';
 
 export function SalesReturnList() {
@@ -98,15 +99,20 @@ function ReturnForm({ invoice }: { invoice: string }) {
 
 export function SalesReturnDetail() {
   const { id } = useParams(); const { term } = useSession();
+  const cols = useViewCols('sales_return', { item: term('item'), batch: 'Roll', back: 'Back on', qty: 'Qty', credit: 'Credit' });
   const q = useQuery({ queryKey: ['sales-return', id], queryFn: async () => (await get(`/sales/returns/${id}`)).data });
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">Return not found.</div>;
   const r = d.r;
   return (
     <RecordPage entity="sales_return" id={r.id} name={r.return_no} back="/sales/returns" related={[{ id: 'items', label: 'Items returned' }]}>
-      <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0"><thead><tr><th>{term('item')}</th><th>Roll</th><th>Back on</th><th className="text-end">Qty</th><th className="text-end">Credit</th></tr></thead><tbody>
-        {d.items.map((l: any) => <tr key={l.id}><td>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null}</td><td>{l.batch_no ?? ''}</td><td>{Number(l.restock) ? l.rack ?? 'No rack' : <Badge tone="secondary">Not put back</Badge>}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.line_total)}</td></tr>)}</tbody>
-        <tfoot><tr><th colSpan={4} className="text-end">Total credit (incl. tax)</th><th className="text-end">{money(r.total)}</th></tr></tfoot></table></div></div>
+      <DetailTable cols={cols} rows={d.items} rowKey={(l: any) => l.id}
+        defs={{
+          item: { cell: (l) => <>{lineName(l)}{l.product_name ? <div className="small text-muted">Item: {l.item_name}</div> : null}</> }, batch: { cell: (l) => l.batch_no ?? '' },
+          back: { cell: (l) => Number(l.restock) ? l.rack ?? 'No rack' : <Badge tone="secondary">Not put back</Badge> },
+          qty: { className: 'text-end', cell: (l) => <>{qty(l.qty)} {l.unit}</> }, credit: { className: 'text-end', cell: (l) => money(l.line_total) },
+        } as Record<string, DetailDef<any>>}
+        footer={<tr><th>Total credit (incl. tax)</th><th className="text-end">{money(r.total)}</th></tr>} />
     </RecordPage>
   );
 }

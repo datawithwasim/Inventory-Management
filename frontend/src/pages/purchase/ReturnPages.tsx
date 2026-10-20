@@ -8,6 +8,8 @@ import { Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import RecordPage from '../../components/RecordPage';
+import DetailTable, { useViewCols, type DetailDef } from '../../components/DetailTable';
+import { ItemCell } from '../../components/ItemCell';
 
 export function ReturnList() {
   const { can, term } = useSession();
@@ -94,14 +96,17 @@ function ReturnForm({ grn }: { grn: string }) {
 
 export function ReturnDetail() {
   const { id } = useParams(); const { term } = useSession();
+  const cols = useViewCols('purchase_return', { item: term('item'), batch: term('batch'), rack: term('rack'), qty: 'Qty', price: 'Price', value: 'Value' });
   const q = useQuery({ queryKey: ['return', id], queryFn: async () => (await get(`/purchase/returns/${id}`)).data });
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">Return not found.</div>;
   const r = d.r;
   return (
     <RecordPage entity="purchase_return" id={r.id} name={r.return_no} back="/purchase/returns" related={[{ id: 'items', label: 'Items returned' }]}>
-      <div className="card mb-3" id="items"><div className="table-responsive"><table className="table mb-0 align-middle"><thead><tr><th>{term('item')}</th><th>{term('batch')}</th><th>{term('rack')}</th><th className="text-end">Qty</th><th className="text-end">Price</th><th className="text-end">Value</th></tr></thead><tbody>
-        {d.items.map((l: any) => <tr key={l.id}><td>{l.item_name}{l.vname ? ` — ${l.vname}` : ''} <small className="text-muted">{l.sku}</small></td><td>{l.batch_no ?? '—'}</td><td>{l.rack ?? 'No rack'}</td><td className="text-end">{qty(l.qty)} {l.unit}</td><td className="text-end">{money(l.unit_price)}</td><td className="text-end">{money(l.line_total)}</td></tr>)}</tbody></table></div></div>
+      <DetailTable cols={cols} rows={d.items} rowKey={(l: any) => l.id} defs={{
+        item: { cell: (l) => <ItemCell l={l} /> }, batch: { cell: (l) => l.batch_no ?? '—' }, rack: { cell: (l) => l.rack ?? 'No rack' },
+        qty: { className: 'text-end', cell: (l) => <>{qty(l.qty)} {l.unit}</> }, price: { className: 'text-end', cell: (l) => money(l.unit_price) }, value: { className: 'text-end', cell: (l) => money(l.line_total) },
+      } as Record<string, DetailDef<any>>} />
     </RecordPage>
   );
 }

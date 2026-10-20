@@ -6,7 +6,7 @@ namespace Core;
 /**
  * The columns of the items table of a document, as data: which columns exist, their default names, which cannot be switched off,
  * and what the company chose (show / hide, own names, order, saved with the form layout). The React tables draw themselves from this.
- * Names may use {item} {batch} {rack} (the company's own words) and {rack_l} (the same in lower case).
+ * Names may use {item} {batch} {rack} {supplier} (the company's own words) and {rack_l} (the same in lower case).
  */
 final class LineGrids
 {
@@ -19,14 +19,27 @@ final class LineGrids
         'transfer' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'from_rack' => ['From {rack_l}'], 'to_rack' => ['To {rack_l}'], 'qty' => ['Qty to move', true]],
     ];
 
-    public static function has(string $entity): bool
+    /** The same, for the items table on the document's detail page (what was ordered / received / delivered). */
+    public const VIEWS = [
+        'purchase_order' => ['item' => ['{item}', true], 'their' => ['{supplier}\'s item'], 'ordered' => ['Ordered', true], 'received' => ['Received'], 'due' => ['Still due'], 'price' => ['Price'], 'tax' => ['Tax %'], 'total' => ['Total']],
+        'grn' => ['item' => ['{item}', true], 'their' => ['{supplier}\'s item'], 'po' => ['PO'], 'batch' => ['{batch}'], 'rack' => ['{rack}'], 'qty' => ['Qty', true], 'returned' => ['Returned'], 'price' => ['Price'], 'cost' => ['Stock cost']],
+        'bill' => ['item' => ['{item}', true], 'their' => ['{supplier}\'s item'], 'qty' => ['Qty', true], 'price' => ['Price'], 'tax' => ['Tax %'], 'amount' => ['Amount']],
+        'purchase_return' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'rack' => ['{rack}'], 'qty' => ['Qty', true], 'price' => ['Price'], 'value' => ['Value']],
+        'requisition' => ['item' => ['{item}', true], 'qty' => ['Qty', true], 'note' => ['Note']],
+        'sales_order' => ['item' => ['{item}', true], 'ordered' => ['Qty', true], 'delivered' => ['Delivered'], 'price' => ['Price'], 'disc' => ['Disc %'], 'tax' => ['Tax %'], 'total' => ['Total']],
+        'delivery' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'rack' => ['{rack}'], 'qty' => ['Qty', true], 'price' => ['Price'], 'total' => ['Total']],
+        'invoice' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'rack' => ['{rack}'], 'qty' => ['Qty', true], 'price' => ['Price'], 'total' => ['Total']],
+        'sales_return' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'back' => ['Back on'], 'qty' => ['Qty', true], 'credit' => ['Credit']],
+    ];
+
+    public static function has(string $entity, bool $view = false): bool
     {
-        return isset(self::GRIDS[$entity]);
+        return isset(($view ? self::VIEWS : self::GRIDS)[$entity]);
     }
 
     private static function name(string $def): string
     {
-        return strtr($def, ['{item}' => term('item'), '{batch}' => term('batch'), '{rack}' => term('rack'), '{rack_l}' => strtolower(term('rack'))]);
+        return strtr($def, ['{item}' => term('item'), '{batch}' => term('batch'), '{rack}' => term('rack'), '{rack_l}' => strtolower(term('rack')), '{supplier}' => term('supplier')]);
     }
 
     /**
@@ -34,9 +47,9 @@ final class LineGrids
      * `$saved` is what the form layout stored: ['order' => [keys], 'cols' => [key => ['show' => 0|1, 'label' => text]]];
      * `$legacy` the older {disc, tax} switches, used until the grid has been designed.
      */
-    public static function resolve(string $entity, ?array $saved, array $legacy = []): array
+    public static function resolve(string $entity, ?array $saved, array $legacy = [], bool $view = false): array
     {
-        $defs = self::GRIDS[$entity] ?? [];
+        $defs = ($view ? self::VIEWS : self::GRIDS)[$entity] ?? [];
         if (!$defs) return [];
         $order = [];
         foreach ((array)($saved['order'] ?? []) as $k) if (isset($defs[$k]) && !in_array($k, $order, true)) $order[] = $k;
@@ -54,9 +67,9 @@ final class LineGrids
     }
 
     /** What the designer posted ([{key, show, label}] in order), checked, as it is stored; null when nothing valid was sent. */
-    public static function clean(string $entity, mixed $in): ?array
+    public static function clean(string $entity, mixed $in, bool $view = false): ?array
     {
-        $defs = self::GRIDS[$entity] ?? [];
+        $defs = ($view ? self::VIEWS : self::GRIDS)[$entity] ?? [];
         if (!$defs || !is_array($in)) return null;
         $order = []; $cols = [];
         foreach ($in as $c) {

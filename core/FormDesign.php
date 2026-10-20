@@ -220,7 +220,7 @@ final class FormDesign
         }
         foreach ($relDef as $id => $d) if (!isset($rel[$id])) $rel[$id] = ['id' => $id, 'show' => true];
         $lines = ['disc' => !isset($saved['lines']['disc']) || !empty($saved['lines']['disc']), 'tax' => !isset($saved['lines']['tax']) || !empty($saved['lines']['tax'])];
-        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'grid' => LineGrids::resolve($entity, $saved['grid'] ?? null, $lines), 'cf' => $cfByKey, 'summary' => $summary, 'related' => array_values($rel)];
+        return self::$res[$entity] = ['customised' => $saved !== null, 'style' => $style, 'sections' => $sections, 'unused' => $unused, 'props' => $props, 'order' => $order, 'lines' => $lines, 'grid' => LineGrids::resolve($entity, $saved['grid'] ?? null, $lines), 'viewgrid' => LineGrids::resolve($entity, $saved['viewgrid'] ?? null, [], true), 'cf' => $cfByKey, 'summary' => $summary, 'related' => array_values($rel)];
     }
 
     // ---------------------------------------------------------------- rendering helpers
@@ -337,7 +337,7 @@ final class FormDesign
             }
         }
         return ['entity' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity] ?? $entity, 'style' => $r['style'], 'sections' => $r['sections'], 'fields' => $fields, 'summary' => $r['summary'], 'related' => $r['related'],
-            'lines' => $r['lines'], 'grid' => $r['grid'], 'customised' => $r['customised'], 'detail' => in_array($entity, self::DETAIL, true), 'canDesign' => Auth::can('settings.edit')];
+            'lines' => $r['lines'], 'grid' => $r['grid'], 'viewgrid' => $r['viewgrid'], 'customised' => $r['customised'], 'detail' => in_array($entity, self::DETAIL, true), 'canDesign' => Auth::can('settings.edit')];
     }
 
     // ---------------------------------------------------------------- designer model & save
@@ -394,6 +394,7 @@ final class FormDesign
                 if (!$layout) $secs = [['id' => 's1', 'title' => '', 'cols' => 0, 'fields' => array_keys(array_filter($fields, fn($f) => $f['show']))]];
                 $out[] = ['key' => $entity, 'title' => FormFields::ENTITY_LABELS[$entity], 'group' => $group, 'layout' => $layout, 'customFields' => isset(CustomFields::ENTITIES[$entity]),
                     'lineForm' => in_array($entity, self::LINE_FORMS, true), 'detail' => in_array($entity, self::DETAIL, true), 'summary' => $r['summary'], 'customised' => $r['customised'], 'style' => $r['style'], 'lines' => $r['lines'], 'grid' => $r['grid'], 'gridForm' => LineGrids::has($entity), 'gridDefault' => array_keys(LineGrids::GRIDS[$entity] ?? []),
+                    'viewgrid' => $r['viewgrid'], 'viewgridForm' => LineGrids::has($entity, true), 'viewgridDefault' => array_keys(LineGrids::VIEWS[$entity] ?? []),
                     'sections' => $secs, 'unused' => $r['unused'], 'stdOrder' => self::stdKeys($entity), 'relatedDefault' => array_keys(isset(self::RELATED[$entity]) ? self::RELATED[$entity] + ['notes' => 1] : []), 'related' => array_map(fn($x) => $x + ['label' => (self::RELATED[$entity] + ['notes' => ['Notes', true]])[$x['id']][0], 'lock' => !(self::RELATED[$entity] + ['notes' => ['Notes', true]])[$x['id']][1]], $r['related']), 'sysOrder' => self::sysKeys($entity), 'summaryDefault' => self::SUMMARY_DEFAULT[$entity] ?? [], 'fields' => $fields];
             }
         }
@@ -513,6 +514,8 @@ final class FormDesign
             if ($grid) foreach (['disc', 'tax'] as $sw) if (isset($grid['cols'][$sw])) $lines[$sw] = $grid['cols'][$sw]['show'];
             $cfg[$entity] = ['style' => ($in['style'] ?? 'top') === 'left' ? 'left' : 'top', 'sections' => $sections, 'props' => $props, 'lines' => $lines, 'sys' => 1];
             if ($grid) $cfg[$entity]['grid'] = $grid;
+            $viewgrid = LineGrids::clean($entity, $in['viewgrid'] ?? null, true) ?? ($cfg[$entity]['viewgrid'] ?? null);
+            if ($viewgrid) $cfg[$entity]['viewgrid'] = $viewgrid;
             if ($sum !== null) $cfg[$entity]['summary'] = $sum;
             if (array_key_exists('related', $in)) {
                 $relOk = (self::RELATED[$entity] ?? []) + (isset(self::RELATED[$entity]) ? ['notes' => ['Notes', true]] : []);
