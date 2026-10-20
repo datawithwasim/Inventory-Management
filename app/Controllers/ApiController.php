@@ -90,6 +90,17 @@ final class ApiController extends Controller
         Api::send(['ok' => true, 'options' => $rows]);
     }
 
+    /** Search a kind of record for a lookup field: ?q=text for matches, ?id=5 for one (to show a saved value's name). */
+    public function lookupFind(string $source): void
+    {
+        if (!\Core\Lookups::valid($source)) $this->notFound();
+        if (isset($_GET['id'])) {
+            $one = \Core\Lookups::one($source, (int)$_GET['id']);
+            Api::send(['ok' => true, 'rows' => $one ? [$one] : []]);
+        }
+        Api::send(['ok' => true, 'rows' => \Core\Lookups::find($source, (string)($_GET['q'] ?? ''), 20)]);
+    }
+
     /** A record's designed page as data (summary strip, sections), its timeline and notes. */
     public function record(string $entity, string $id): void
     {

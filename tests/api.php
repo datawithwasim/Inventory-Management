@@ -115,7 +115,7 @@ $vals = [];
 foreach (array_merge($r['json']['record']['summary'] ?? [], ...array_column($r['json']['record']['sections'] ?? [], 'items')) as $it) $vals[$it['label']] = $it;
 check('the supplier item record page has its record-only facts (current rate after discount) and a link to our item', ($vals['Current rate']['text'] ?? '') !== '' && str_contains($vals['Current rate']['text'], '108') && str_contains((string)($vals['Our item']['href'] ?? ''), 'items/'));
 $r = $a->call('GET', '/schema/supplier_item');
-check('the supplier item schema types our-item as a searchable item picker', ($r['json']['schema']['fields']['variant_id']['type'] ?? '') === 'variant' && ($r['json']['schema']['fields']['supplier_id']['source'] ?? '') === 'suppliers');
+check('the supplier item schema types our-item as a searchable item picker', ($r['json']['schema']['fields']['variant_id']['type'] ?? '') === 'lookup' && ($r['json']['schema']['fields']['variant_id']['source'] ?? '') === 'item' && ($r['json']['schema']['fields']['supplier_id']['source'] ?? '') === 'supplier');
 $r = $a->call('GET', '/columns/supplier_items');
 check('column choices come for a list', $r['status'] === 200 && isset($r['json']['options']['our_item']) && is_array($r['json']['visible']));
 
@@ -937,6 +937,41 @@ $r = $c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload
 check('a new field added in the designer is saved (JSON answer, no redirect crash)', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]) === 1);
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
 DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
+
+echo "Lookup fields\n";
+$bl = new J($base); $bl->session(); $bl->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bl->session();
+$r = $c->call('GET', '/lookup/find/supplier?q=Api');
+check('a lookup searches records by what is typed', $r['status'] === 200 && in_array('Api Mills', array_column($r['json']['rows'] ?? [], 'label'), true));
+$r = $c->call('GET', "/lookup/find/supplier?id=$sid");
+check('a saved value is resolved to its name by id', ($r['json']['rows'][0]['label'] ?? '') === 'Api Mills');
+check('an unknown kind of record is a 404 and another company\'s record is never found', $c->call('GET', '/lookup/find/passwords')['status'] === 404 && ($bl->call('GET', "/lookup/find/supplier?id=$sid")['json']['rows'] ?? []) === []);
+$m2 = $c->call('GET', '/settings/formdesign')['json']['data'] ?? [];
+check('the designer offers the Lookup type and the kinds of record it can point to', isset($m2['types']['lookup']) && isset($m2['lookups']['item'], $m2['lookups']['supplier'], $m2['lookups']['rack']));
+$cust2 = null; foreach ($m2['model'] ?? [] as $f) if ($f['key'] === 'customer') $cust2 = $f;
+$payload = [$cust2['key'] => ['style' => $cust2['style'], 'lines' => $cust2['lines'] ?? [], 'deleted' => [],
+    'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => array_merge($sec['fields'], ['cf:newL'])], array_slice($cust2['sections'], 0, 1)),
+    'fields' => ['cf:newL' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Reference supplier', 'type' => 'lookup', 'options' => 'supplier', 'inList' => true, 'unique' => false, 'isNew' => true]]]];
+$c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'customer', 'close' => '', 'return' => '']);
+$lf = DB::one("SELECT id, type, options FROM custom_fields WHERE tenant_id = ? AND label = 'Reference supplier'", [$tA]);
+check('a Lookup field is created with its kind of record', $lf && $lf['type'] === 'lookup' && $lf['options'] === 'supplier');
+$sch = $c->call('GET', '/schema/customer')['json']['schema']['fields'] ?? [];
+check('the customer form carries it as a lookup with its source', ($sch['cf:' . $lf['id']]['type'] ?? '') === 'lookup' && ($sch['cf:' . $lf['id']]['source'] ?? '') === 'supplier');
+$r = $c->call('POST', '/customers', ['name' => 'Lookup Buyer', 'cf' => [$lf['id'] => (string)$sid]]);
+$cL = (int)DB::val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [$tA]);
+check('a customer saves with the record it points to', $r['status'] === 200 && $cL > 0 && DB::val('SELECT value FROM custom_field_values WHERE entity_id = ? AND field_id = ?', [$cL, $lf['id']]) === (string)$sid);
+$r = $c->call('POST', '/customers', ['name' => 'Lookup Bad', 'cf' => [$lf['id'] => '99999999']]);
+check('a record that does not exist is refused', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND name = 'Lookup Bad'", [$tA]) === 0);
+$sidB = (int)DB::val('SELECT id FROM suppliers WHERE tenant_id <> ? LIMIT 1', [$tA]);
+if ($sidB) { $r = $c->call('POST', '/customers', ['name' => 'Lookup Bad', 'cf' => [$lf['id'] => (string)$sidB]]); check('another company\'s record cannot be chosen', $r['status'] === 422); }
+$rec = json_encode($c->call('GET', "/record/customer/$cL")['json']);
+check('the record page shows the name and links to it', str_contains($rec, 'Api Mills') && str_contains($rec, 'suppliers\\/' . $sid));
+$lst = $c->call('GET', '/customers?q=Lookup')['json']['data'] ?? [];
+check('the customers list shows the name, not the number', ($lst['rows'][0]['cf'][$lf['id']] ?? '') === 'Api Mills');
+$sch2 = $c->call('GET', '/schema/sales_order')['json']['schema']['fields'] ?? [];
+$sch3 = $c->call('GET', '/schema/supplier_item')['json']['schema']['fields'] ?? [];
+check('the supplier / customer pickers on the standard forms are searchable lookups from the same registry', ($sch2['customer_id']['type'] ?? '') === 'lookup' && ($sch2['customer_id']['source'] ?? '') === 'customer' && ($sch3['supplier_id']['source'] ?? '') === 'supplier' && ($sch3['variant_id']['source'] ?? '') === 'item' && ($sch2['warehouse_id']['type'] ?? '') === 'select');
+DB::run('DELETE FROM custom_field_values WHERE field_id = ?', [$lf['id']]); DB::run('DELETE FROM custom_fields WHERE id = ?', [$lf['id']]);
+DB::run("DELETE FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [$tA]);
 
 echo "Goods receipt: rolls against a bill\n";
 $r = $c->call('POST', '/items', ['name' => 'Roll Test Fabric', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'RTF-1', 'cost_price' => '100', 'sale_price' => '150']], 'cf' => (object)[]]);

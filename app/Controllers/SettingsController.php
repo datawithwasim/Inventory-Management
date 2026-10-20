@@ -60,7 +60,7 @@ final class SettingsController extends Controller
         if (!SettingsNav::valid($tab) && $tab !== 'formdesign') $this->notFound();
         if ($tab === 'formdesign') {
             $return = self::safeReturn((string)($_GET['return'] ?? ''));
-            $this->view('app/settings/formdesign', ['title' => 'Page layout', 'model' => FormDesign::model(), 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES,
+            $this->view('app/settings/formdesign', ['title' => 'Page layout', 'model' => FormDesign::model(), 'widths' => FormDesign::WIDTHS, 'types' => CustomFields::TYPES, 'lookups' => \Core\Lookups::labels(),
                 'start' => (string)($_GET['form'] ?? ''), 'colsOpts' => FormDesign::COLS, 'return' => $return, 'backHref' => $return !== '' ? $return : url('settings/company')], 'layouts/designer');
             return;
         }

@@ -11,7 +11,7 @@ import { routerPath } from '../../lib/routes';
 const CHOICE: Record<string, 1> = { dropdown: 1, radio: 1, multiselect: 1 };
 const UNIQ: Record<string, 1> = { text: 1, email: 1, phone: 1, url: 1, number: 1, decimal: 1, dropdown: 1, date: 1 };
 const ICONS: Record<string, string> = { text: 'input-cursor-text', textarea: 'text-paragraph', email: 'envelope', phone: 'telephone', url: 'link-45deg', number: '123', decimal: 'hash',
-  currency: 'currency-rupee', percent: 'percent', date: 'calendar-date', datetime: 'calendar-event', dropdown: 'list-ul', radio: 'ui-radios', multiselect: 'ui-checks', checkbox: 'check2-square' };
+  currency: 'currency-rupee', percent: 'percent', date: 'calendar-date', datetime: 'calendar-event', dropdown: 'list-ul', radio: 'ui-radios', multiselect: 'ui-checks', checkbox: 'check2-square', lookup: 'search' };
 
 type Fld = any; type Form = any;
 type Drag = { kind: 'tile' | 'unused'; key: string } | { kind: 'new'; type: string } | null;
@@ -31,11 +31,11 @@ export default function FormDesigner() {
   const res = useQuery({ queryKey: ['formdesign', version], gcTime: 0, staleTime: 0, queryFn: async () => (await get('/settings/formdesign')).data });
   useEffect(() => { document.body.classList.add('dz-page'); return () => document.body.classList.remove('dz-page'); }, []);
   if (res.isLoading || !res.data) return <Spinner />;
-  return <Inner key={version} model={res.data.model} types={res.data.types} widths={res.data.widths} start={start} back={safeBack(sp.get('return'))}
+  return <Inner key={version} model={res.data.model} types={res.data.types} lookups={res.data.lookups ?? {}} widths={res.data.widths} start={start} back={safeBack(sp.get('return'))}
     reload={(formKey: string) => { setStart(formKey); setVersion((v) => v + 1); }} />;
 }
 
-function Inner({ model, types, widths, start, back, reload }: { model: Form[]; types: Record<string, string>; widths: Record<string, string>; start: string; back: string; reload: (k: string) => void }) {
+function Inner({ model, types, lookups, widths, start, back, reload }: { model: Form[]; types: Record<string, string>; lookups: Record<string, string>; widths: Record<string, string>; start: string; back: string; reload: (k: string) => void }) {
   const nav = useNavigate();
   const initial = useRef<string>('');
   const initialByKey = useRef<Record<string, string>>({});
@@ -127,7 +127,7 @@ function Inner({ model, types, widths, start, back, reload }: { model: Form[]; t
       else if (dr.kind === 'unused') { k = dr.key; f.fields[k].show = true; }
       else {
         k = 'cf:new' + (++newSeq.current);
-        f.fields[k] = { key: k, label: types[nt] || 'New field', kind: ICONS[nt] || 'input-cursor-text', optional: true, custom: true, isNew: true, type: nt, options: CHOICE[nt] ? 'Option 1\nOption 2' : '', show: true, req: false, inList: false, w: '', help: '', span: 4 };
+        f.fields[k] = { key: k, label: types[nt] || 'New field', kind: ICONS[nt] || 'input-cursor-text', optional: true, custom: true, isNew: true, type: nt, options: CHOICE[nt] ? 'Option 1\nOption 2' : nt === 'lookup' ? 'item' : '', show: true, req: false, inList: false, w: '', help: '', span: 4 };
       }
       insertAt(f, si, ref, after, k); picked = k;
     });
@@ -371,9 +371,13 @@ function Inner({ model, types, widths, start, back, reload }: { model: Form[]; t
               <input id="pLabel" className="dz-in" maxLength={80} placeholder={x.custom ? 'Field name' : x.label} value={x.custom ? x.label : x.custom_label}
                 onChange={(e) => setProp((y) => { if (y.custom) y.label = e.target.value; else y.custom_label = e.target.value === y.label ? '' : e.target.value; }, 'label')} />
               {x.custom && <div><label className="dz-lbl" htmlFor="pType">Field type</label>
-                <select id="pType" className="dz-in" value={x.type || 'text'} disabled={!x.isNew} onChange={(e) => setProp((y) => { y.type = e.target.value; y.kind = ICONS[e.target.value] || y.kind; if (CHOICE[y.type] && !y.options) y.options = 'Option 1\nOption 2'; if (y.type === 'checkbox') y.req = false; })}>
+                <select id="pType" className="dz-in" value={x.type || 'text'} disabled={!x.isNew} onChange={(e) => setProp((y) => { y.type = e.target.value; y.kind = ICONS[e.target.value] || y.kind; if (CHOICE[y.type] && !y.options) y.options = 'Option 1\nOption 2'; if (y.type === 'lookup' && !lookups[y.options || '']) y.options = 'item'; if (y.type === 'checkbox') y.req = false; })}>
                   {Object.entries(types).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
                 <div className="dz-note">{x.isNew ? '' : 'The type of a saved field cannot be changed. Delete it and add a new one if needed.'}</div></div>}
+              {x.custom && x.type === 'lookup' && <div><label className="dz-lbl" htmlFor="pSource">Pick from</label>
+                <select id="pSource" className="dz-in" value={x.options || 'item'} disabled={!x.isNew} onChange={(e) => setProp((y) => { y.options = e.target.value; }, 'options')}>
+                  {Object.entries(lookups).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                <div className="dz-note">The person filling the form searches these records and picks one. {x.isNew ? '' : 'It cannot be changed after saving.'}</div></div>}
               {x.custom && CHOICE[x.type] && <div><label className="dz-lbl" htmlFor="pOptions">Choices <span className="opacity-75">(one per line)</span></label>
                 <textarea id="pOptions" className="dz-in" rows={5} value={x.options || ''} onChange={(e) => setProp((y) => { y.options = e.target.value; }, 'options')} /></div>}
               {!x.sys && <>

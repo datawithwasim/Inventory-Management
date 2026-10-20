@@ -11,7 +11,7 @@ final class CustomFields
 {
     public const ENTITIES = ['item' => 'Items', 'customer' => 'Customers', 'supplier' => 'Suppliers', 'sales_order' => 'Sales orders', 'purchase_order' => 'Purchase orders', 'supplier_item' => 'Supplier items'];
     public const TYPES = ['text' => 'Single line', 'textarea' => 'Multi-line', 'email' => 'Email', 'phone' => 'Phone', 'url' => 'URL', 'number' => 'Number', 'decimal' => 'Decimal',
-        'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'datetime' => 'Date & time', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'multiselect' => 'Multi-select (tick several)', 'checkbox' => 'Yes / No'];
+        'currency' => 'Currency', 'percent' => 'Percent', 'date' => 'Date', 'datetime' => 'Date & time', 'dropdown' => 'Pick list (dropdown)', 'radio' => 'Radio buttons', 'multiselect' => 'Multi-select (tick several)', 'checkbox' => 'Yes / No', 'lookup' => 'Lookup (pick a record)'];
     /** Types where a duplicate value can be refused ("Unique"). */
     public const UNIQUE_TYPES = ['text', 'email', 'phone', 'url', 'number', 'decimal', 'dropdown', 'date'];
     /** Types that need a list of choices. */
@@ -26,7 +26,10 @@ final class CustomFields
     public static function fields(string $entity, bool $onlyActive = true): array
     {
         $rows = DB::all('SELECT * FROM custom_fields WHERE tenant_id = ? AND entity = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id', [self::tid(), $entity]);
-        foreach ($rows as &$r) $r['choices'] = in_array($r['type'], self::CHOICE_TYPES, true) ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$r['options'])))) : [];
+        foreach ($rows as &$r) {
+            $r['choices'] = in_array($r['type'], self::CHOICE_TYPES, true) ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$r['options'])))) : [];
+            $r['source'] = $r['type'] === 'lookup' ? (string)$r['options'] : '';
+        }
         return $rows;
     }
 
@@ -81,6 +84,8 @@ final class CustomFields
             } elseif ($f['type'] === 'datetime') {
                 $d = \DateTime::createFromFormat('Y-m-d\TH:i', $v) ?: \DateTime::createFromFormat('Y-m-d H:i', $v);
                 if (!$d) $errors[] = "$label must be a valid date and time."; else $v = $d->format('Y-m-d H:i');
+            } elseif ($f['type'] === 'lookup') {
+                if (!ctype_digit($v) || \Core\Lookups::one($f['source'], (int)$v) === null) $errors[] = "$label: choose a record from the list.";
             } elseif ($f['type'] === 'multiselect') {
                 // already filtered to the listed options
             } elseif (in_array($f['type'], self::CHOICE_TYPES, true)) {
@@ -123,6 +128,7 @@ final class CustomFields
             'datetime' => fdate(substr($value, 0, 10)) . ' ' . substr($value, 11, 5),
             'multiselect' => implode(', ', (array)(json_decode($value, true) ?: [])),
             'currency' => money($value),
+            'lookup' => \Core\Lookups::label((string)($f['source'] ?? $f['options'] ?? ''), (int)$value),
             'percent' => rtrim(rtrim(number_format((float)$value, 2, '.', ''), '0'), '.') . '%',
             default => $value,
         };
@@ -142,6 +148,9 @@ final class CustomFields
         foreach (DB::all("SELECT entity_id, field_id, value FROM custom_field_values WHERE tenant_id = ? AND entity_id IN ($in) AND field_id IN ($fin)",
             [self::tid(), ...$ids, ...array_map(fn($f) => (int)$f['id'], $fields)]) as $v) $map[$v['entity_id']][$v['field_id']] = $v['value'];
         foreach ($rows as &$r) $r['cf'] = $map[$r['id']] ?? [];
+        // a lookup is stored as an id; the list shows the name
+        foreach ($fields as $f) if ($f['type'] === 'lookup') foreach ($rows as &$r) if (isset($r['cf'][$f['id']])) $r['cf'][$f['id']] = self::display($f, (string)$r['cf'][$f['id']]);
+        unset($r);
         return $fields;
     }
 
@@ -169,6 +178,12 @@ final class CustomFields
                 $o = '<div class="d-flex flex-wrap gap-3 pt-1">';
                 foreach ($f['choices'] as $i => $c) $o .= '<div class="form-check"><input class="form-check-input" type="checkbox" name="' . $name . '[]" id="' . $name . $i . '" value="' . $e($c) . '"' . (in_array($c, $sel, true) ? ' checked' : '') . '><label class="form-check-label" for="' . $name . $i . '">' . $e($c) . '</label></div>';
                 return $o . '</div>';
+            case 'lookup':
+                $o = '<select name="' . $name . '" class="form-select"' . $req . '><option value="">—</option>';
+                $seen = false;
+                foreach (\Core\Lookups::find($f['source'], '', 200) as $r) { $seen = $seen || (string)$r['id'] === $val; $o .= '<option value="' . (int)$r['id'] . '"' . ((string)$r['id'] === $val ? ' selected' : '') . '>' . $e($r['label']) . '</option>'; }
+                if (!$seen && $val !== '' && ($cur = \Core\Lookups::label($f['source'], (int)$val)) !== '') $o .= '<option value="' . (int)$val . '" selected>' . $e($cur) . '</option>';
+                return $o . '</select>';
             case 'datetime': $t = 'datetime-local'; $x = ''; $val = str_replace(' ', 'T', $val); break;
             case 'date': $t = 'date'; $x = ''; break;
             case 'number': $t = 'number'; $x = ' step="1"'; break;

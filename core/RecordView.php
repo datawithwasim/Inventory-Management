@@ -220,6 +220,12 @@ final class RecordView
         }
         $text = self::value($entity, $k, $row, $cfValues);
         $href = null;
+        if ($text !== '' && str_starts_with($k, 'cf:')) {
+            // a lookup field links to the record it points to
+            foreach (CustomFields::fields($entity, false) as $f) {
+                if ((int)$f['id'] === (int)substr($k, 3) && $f['type'] === 'lookup' && ($path = \Core\Lookups::path($f['source'], (int)($cfValues[$f['id']] ?? 0)))) $href = url($path);
+            }
+        }
         if ($text !== '' && isset(self::LINKS[$k]) && (int)($row[$k] ?? 0) > 0) $href = url(self::LINKS[$k] . '/' . (int)$row[$k]);
         if ($text !== '' && $k === 'variant_id' && $entity === 'supplier_item' && !empty($row['item_id'])) $href = url('items/' . (int)$row['item_id']);
         return ['key' => $k, 'label' => $label, 'text' => $text, 'href' => $href];

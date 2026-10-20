@@ -287,10 +287,12 @@ final class FormDesign
     // ---------------------------------------------------------------- input metadata (for the React forms)
 
     /** key => option source, for fields that pick from a list. */
-    private const PICK = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'all_warehouses', 'group_id' => 'customer_groups',
+    private const PICK = ['warehouse_id' => 'warehouses', 'to_warehouse_id' => 'all_warehouses', 'group_id' => 'customer_groups',
         'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'item_type' => 'item_types', 'supplier_type' => 'supplier_types'];
+    /** key => lookup source: big lists (thousands of suppliers or customers) are searched, not scrolled; the same registry the custom "Lookup" field uses. */
+    private const LOOKUP = ['supplier_id' => 'supplier', 'customer_id' => 'customer'];
     /** Overrides of the guess below: entity => key => input type. */
-    private const INPUT = ['supplier_item' => ['variant_id' => 'variant'], 'customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
+    private const INPUT = ['supplier_item' => ['variant_id' => 'lookup:item'], 'customer' => ['credit_days' => 'number'], 'supplier' => ['payment_terms_days' => 'number', 'lead_time_days' => 'number', 'credit_limit' => 'money']];
 
     /** entity => key => option source, where the same key picks from a different list on one form. */
     private const PICK_FOR = ['adjustment' => ['reason' => 'stock_reasons']];
@@ -298,7 +300,11 @@ final class FormDesign
     /** How one standard field is typed on a form: text | textarea | email | phone | date | number | money | select (with `source`). */
     public static function inputMeta(string $entity, string $key): array
     {
-        if (isset(self::INPUT[$entity][$key])) return ['type' => self::INPUT[$entity][$key]];
+        if (isset(self::INPUT[$entity][$key])) {
+            $t = self::INPUT[$entity][$key];
+            return str_starts_with($t, 'lookup:') ? ['type' => 'lookup', 'source' => substr($t, 7)] : ['type' => $t];
+        }
+        if (isset(self::LOOKUP[$key])) return ['type' => 'lookup', 'source' => self::LOOKUP[$key]];
         if (isset(self::PICK_FOR[$entity][$key])) return ['type' => 'select', 'source' => self::PICK_FOR[$entity][$key]];
         if (isset(self::PICK[$key])) return ['type' => 'select', 'source' => self::PICK[$key]];
         return ['type' => match (true) {
@@ -322,7 +328,7 @@ final class FormDesign
                 if (isset($fields[$k])) continue;
                 if (isset($r['cf'][$k])) {
                     $c = $r['cf'][$k];
-                    $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: $c['label'], 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'], 'choices' => $c['choices'], 'required' => (bool)$c['is_required'], 'help' => $r['props'][$k]['help'], 'w' => $r['props'][$k]['w']];
+                    $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: $c['label'], 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'], 'choices' => $c['choices'], 'source' => $c['source'], 'required' => (bool)$c['is_required'], 'help' => $r['props'][$k]['help'], 'w' => $r['props'][$k]['w']];
                 } elseif (str_starts_with($k, 'sys:')) {
                     $fields[$k] = ['key' => $k, 'label' => $r['props'][$k]['label'] ?: self::sysLabel($entity, $k), 'sys' => true, 'type' => 'text', 'required' => false, 'help' => '', 'w' => ''];
                 } else {
@@ -352,7 +358,7 @@ final class FormDesign
     private static function typeIcon(string $type): string
     {
         return ['text' => 'input-cursor-text', 'textarea' => 'text-paragraph', 'email' => 'envelope', 'phone' => 'telephone', 'url' => 'link-45deg', 'number' => '123', 'decimal' => 'hash',
-            'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square'][$type] ?? 'input-cursor-text';
+            'currency' => 'currency-rupee', 'percent' => 'percent', 'date' => 'calendar-date', 'datetime' => 'calendar-event', 'dropdown' => 'list-ul', 'radio' => 'ui-radios', 'multiselect' => 'ui-checks', 'checkbox' => 'check2-square', 'lookup' => 'search'][$type] ?? 'input-cursor-text';
     }
 
     /** Everything the visual designer needs, for every form. */
@@ -370,7 +376,7 @@ final class FormDesign
                     if (isset($r['cf'][$k])) {
                         $c = $r['cf'][$k];
                         $fields[$k] = ['key' => $k, 'label' => $c['label'], 'kind' => self::typeIcon($c['type']), 'optional' => true, 'custom' => true, 'cfId' => (int)$c['id'], 'type' => $c['type'],
-                            'options' => implode("\n", $c['choices']), 'show' => (bool)$c['is_active'], 'req' => (bool)$c['is_required'], 'unique' => (bool)$c['is_unique'], 'inList' => (bool)$c['show_in_list'],
+                            'options' => $c['type'] === 'lookup' ? $c['source'] : implode("\n", $c['choices']), 'show' => (bool)$c['is_active'], 'req' => (bool)$c['is_required'], 'unique' => (bool)$c['is_unique'], 'inList' => (bool)$c['show_in_list'],
                             'w' => $r['props'][$k]['w'], 'help' => $r['props'][$k]['help'], 'span' => 4];
                         continue;
                     }
@@ -460,6 +466,7 @@ final class FormDesign
                         $taken[] = mb_strtolower($label);
                         $opts = null;
                         if (in_array($type, CustomFields::CHOICE_TYPES, true)) $opts = self::cleanChoices((string)($f['options'] ?? ''), "Option 1\nOption 2");
+                        if ($type === 'lookup') $opts = \Core\Lookups::valid((string)($f['options'] ?? '')) ? (string)$f['options'] : 'item';
                         $id = DB::insert('custom_fields', ['tenant_id' => $t, 'entity' => $entity, 'label' => $label, 'type' => $type, 'options' => $opts,
                             'is_required' => !empty($f['req']) && $type !== 'checkbox' ? 1 : 0, 'show_in_list' => !empty($f['inList']) ? 1 : 0, 'sort_order' => 0, 'is_unique' => !empty($f['unique']) && in_array($type, CustomFields::UNIQUE_TYPES, true) ? 1 : 0,
                             'is_active' => !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0]);

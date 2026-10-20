@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode 
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../lib/api';
 import ItemSearch from './ItemSearch';
+import LookupInput from './LookupInput';
 
 export type Field = {
   key: string; label: string; type: string; required: boolean; help?: string; w?: string; custom?: boolean; sys?: boolean; cfId?: number; choices?: string[]; source?: string;
@@ -39,6 +40,9 @@ function Input({ field, value, onChange, label, onPatch, locked }: { field: Fiel
     case 'decimal': case 'currency': case 'money': return <input type="number" step="0.01" {...common} />;
     case 'percent': return <input type="number" step="0.01" min="0" max="100" {...common} />;
     case 'select': return <Select field={field} value={v} onChange={onChange} disabled={locked} />;
+    case 'lookup': return field.source === 'item' && !field.custom
+      ? <ItemSearch value={v} label={label ?? ''} disabled={locked} onPick={(p) => onPatch?.({ [field.key]: p ? String(p.id) : '', [field.key + ':label']: p ? p.label : '' })} />
+      : <LookupInput source={field.source ?? ''} value={v} disabled={locked} required={field.required} onChange={(id) => onChange(id)} />;
     case 'variant': return <ItemSearch value={v} label={label ?? ''} disabled={locked} onPick={(p) => onPatch?.({ [field.key]: p ? String(p.id) : '', [field.key + ':label']: p ? p.label : '' })} />;
     case 'dropdown': return <select className="form-select" value={v} required={field.required} onChange={(e) => onChange(e.target.value)}><option value="">—</option>{(field.choices ?? []).map((c) => <option key={c}>{c}</option>)}</select>;
     case 'radio': return <div>{(field.choices ?? []).map((c) => <div className="form-check form-check-inline" key={c}><input className="form-check-input" type="radio" checked={v === c} onChange={() => onChange(c)} id={`${field.key}-${c}`} /><label className="form-check-label" htmlFor={`${field.key}-${c}`}>{c}</label></div>)}</div>;
