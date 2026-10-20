@@ -7,11 +7,17 @@ import { fdate } from '../lib/format';
 import { useSession } from '../lib/session';
 import { Dropdown, Messages, Spinner } from './ui';
 
-type Item = { key: string; label: string; text: string; href: string | null };
+type Item = { key: string; label: string; text: string; href: string | null; links?: { text: string; href: string }[] };
 type RecordData = { summary: Item[]; sections: { title: string; cols: number; items: Item[] }[] };
+
+function One({ text, href }: { text: string; href: string }) {
+  const to = localPath(href);
+  return isReact(to) ? <Link to={to}>{text}</Link> : <a href={href}>{text}</a>;
+}
 
 function Value({ it }: { it: Item }) {
   if (!it.text) return <i className="text-muted">—</i>;
+  if (it.links) return <>{it.links.map((l, k) => <span key={l.href}>{k > 0 && ', '}<One text={l.text} href={l.href} /></span>)}</>;
   if (!it.href) return <>{it.text}</>;
   const to = localPath(it.href);
   return isReact(to) ? <Link to={to}>{it.text}</Link> : <a href={it.href}>{it.text}</a>;

@@ -183,6 +183,7 @@ $router->post('/purchase/orders/{id}/delete', $A . 'PurchaseOrderController@dest
 $router->get('/purchase/orders/{id}/receive', $A . 'GrnController@createFromPo', ['auth', 'perm:purchase.create']);
 
 $router->get('/purchase/grns', $A . 'GrnController@index', ['auth', 'perm:purchase.view']);
+$router->get('/purchase/grns/open-pos', $A . 'GrnController@openPos', ['auth', 'perm:purchase.create']);
 $router->get('/purchase/grns/create', $A . 'GrnController@create', ['auth', 'perm:purchase.create']);
 $router->post('/purchase/grns', $A . 'GrnController@store', ['auth', 'perm:purchase.create']);
 $router->get('/purchase/grns/{id}', $A . 'GrnController@show', ['auth', 'perm:purchase.view']);

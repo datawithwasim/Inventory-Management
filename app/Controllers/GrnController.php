@@ -39,7 +39,8 @@ final class GrnController extends PurchaseBase
         [$page, $pages, $limit] = $this->pageOf('grns g', $where, $params);
         $rows = DB::all(
             "SELECT g.*, s.name AS supplier, w.name AS warehouse, p.po_no, b.id AS bill_id,
-                    (SELECT COUNT(*) FROM grn_items i WHERE i.grn_id = g.id) AS line_count
+                    (SELECT COUNT(*) FROM grn_items i WHERE i.grn_id = g.id) AS line_count,
+                    (SELECT GROUP_CONCAT(CONCAT(gp.po_id, ':', q.po_no) ORDER BY gp.po_id SEPARATOR ',') FROM grn_pos gp JOIN purchase_orders q ON q.id = gp.po_id WHERE gp.grn_id = g.id) AS po_list
              FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id
              LEFT JOIN purchase_orders p ON p.id = g.po_id LEFT JOIN purchase_bills b ON b.grn_id = g.id AND b.tenant_id = g.tenant_id
              WHERE $where ORDER BY g.id DESC $limit", $params);
@@ -72,34 +73,64 @@ final class GrnController extends PurchaseBase
         return $po;
     }
 
+    /** The lines of a purchase order that are still due, in the shape the receiving form expects. */
+    private function dueLines(array $po): array
+    {
+        $lines = [];
+        foreach (DB::all(
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, u.short_name AS unit, u.allow_decimal
+             FROM purchase_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
+             WHERE l.tenant_id = ? AND l.po_id = ? ORDER BY l.id', [$this->tid(), $po['id']]) as $l) {
+            $left = round((float)$l['qty_ordered'] - (float)$l['qty_received'], 3);
+            if ($left <= 0) continue;
+            $lines[] = ['po_item_id' => $l['id'], 'po_id' => (int)$po['id'], 'po_no' => $po['po_no'], 'variant_id' => $l['variant_id'], 'label' => $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')',
+                'tb' => (int)$l['track_batch'], 'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'], 'qty' => $left, 'left' => $left,
+                'unit_price' => $l['unit_price'], 'tax_rate' => $l['tax_rate'], 'location_id' => 0, 'lot_no' => ''];
+        }
+        return $lines;
+    }
+
     public function createFromPo(string $id): void
     {
         $po = $this->openPo($id);
-        $lines = $this->oldLines();
-        if (!$lines) {
-            foreach (DB::all(
-                'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, u.short_name AS unit, u.allow_decimal
-                 FROM purchase_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-                 WHERE l.tenant_id = ? AND l.po_id = ? ORDER BY l.id', [$this->tid(), $po['id']]) as $l) {
-                $left = round((float)$l['qty_ordered'] - (float)$l['qty_received'], 3);
-                if ($left <= 0) continue;
-                $lines[] = ['po_item_id' => $l['id'], 'variant_id' => $l['variant_id'], 'label' => $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')',
-                    'tb' => (int)$l['track_batch'], 'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'], 'qty' => $left, 'left' => $left,
-                    'unit_price' => $l['unit_price'], 'tax_rate' => $l['tax_rate'], 'location_id' => 0, 'lot_no' => ''];
-            }
-        }
+        $lines = $this->oldLines() ?: $this->dueLines($po);
         $this->form(['title' => 'Receive goods · ' . $po['po_no'], 'po' => $po, 'oldLines' => $lines]);
+    }
+
+    /** Purchase orders of one supplier that still have goods due, with those lines (so several can be received on one supplier invoice). */
+    public function openPos(): void
+    {
+        $supplier = (int)($_GET['supplier'] ?? 0);
+        $out = [];
+        foreach (DB::all(
+            "SELECT p.id, p.po_no, p.order_date, p.status, p.warehouse_id, w.name AS warehouse FROM purchase_orders p JOIN warehouses w ON w.id = p.warehouse_id
+             WHERE p.tenant_id = ? AND p.supplier_id = ? AND p.status IN ('approved','partial')" . \Core\Scope::sql('p.warehouse_id') . ' ORDER BY p.id', [$this->tid(), $supplier]) as $p) {
+            $lines = $this->dueLines($p);
+            if ($lines) $out[] = $p + ['lines' => $lines];
+        }
+        header('Content-Type: application/json');
+        echo json_encode(['pos' => $out]);
+        exit;
     }
 
     public function store(): void
     {
         $d = $this->input();
-        $poId = (int)($d['po_id'] ?? 0);
-        $back = $poId ? "purchase/orders/$poId/receive" : 'purchase/grns/create';
+        // the purchase orders this receipt covers: one (from the order page) or several of the same supplier (one supplier invoice for all)
+        $poIds = array_values(array_unique(array_filter(array_map('intval', is_array($d['po_ids'] ?? null) ? $d['po_ids'] : [($d['po_id'] ?? 0)]))));
+        $back = count($poIds) === 1 ? "purchase/orders/{$poIds[0]}/receive" : 'purchase/grns/create';
         $this->enforceFields('grn', $back);
-        $po = $poId ? $this->openPo((string)$poId) : null;
+        $pos = [];
+        foreach ($poIds as $pid) $pos[$pid] = $this->openPo((string)$pid);
+        $po = $pos ? reset($pos) : null;
         $supplier = $po ? Purchase::supplier((int)$po['supplier_id']) : $this->activeSupplier($d['supplier_id'] ?? 0, $back);
+        foreach ($pos as $p) {
+            if ((int)$p['supplier_id'] !== (int)$supplier['id']) $this->bounce('All the purchase orders on one receipt must be of the same ' . strtolower(term('supplier')) . '.', $back);
+        }
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
+        if (count($pos) > 1) foreach ($pos as $p) {
+            if ((int)$p['warehouse_id'] !== (int)$wh['id']) $this->bounce($p['po_no'] . ' is for a different warehouse than the one you are receiving into.', $back);
+        }
         $date = $this->date($d['received_date'] ?? '', 'Received date', $back);
         $ref = $this->text($d['supplier_ref'] ?? '', 60, 'Supplier challan / invoice no.', $back);
         $extra = $this->money($d['extra_cost'] ?? '', 'Extra cost', $back);
@@ -107,15 +138,15 @@ final class GrnController extends PurchaseBase
         $note = $this->text($d['note'] ?? '', 255, 'Note', $back);
 
         $poItems = [];
-        if ($po) {
-            foreach (DB::all('SELECT * FROM purchase_order_items WHERE tenant_id = ? AND po_id = ?', [$this->tid(), $po['id']]) as $pi) $poItems[$pi['id']] = $pi;
+        if ($pos) {
+            foreach (DB::all('SELECT * FROM purchase_order_items WHERE tenant_id = ? AND po_id IN (' . implode(',', array_keys($pos)) . ')', [$this->tid()]) as $pi) $poItems[$pi['id']] = $pi;
         }
         $lines = [];
         $perPoItem = [];
         foreach ($this->postedLines($back, 'lines', 500) as $n => $l) {
             $prefix = 'Line ' . ($n + 1);
-            if ($po) {
-                $pi = $poItems[(int)($l['po_item_id'] ?? 0)] ?? $this->bounce("$prefix: this line is not on the purchase order.", $back);
+            if ((int)($l['po_item_id'] ?? 0) > 0) {
+                $pi = $poItems[(int)$l['po_item_id']] ?? $this->bounce("$prefix: this line is not on the purchase orders being received.", $back);
                 $v = Stock::variant((int)$pi['variant_id']);
                 $price = (float)$pi['unit_price'];
                 $tax = (float)$pi['tax_rate'];
@@ -145,7 +176,7 @@ final class GrnController extends PurchaseBase
         }
 
         try {
-            $grnId = DB::transaction(function () use ($po, $supplier, $wh, $date, $ref, $extra, $extraNote, $note, $lines, $poItems) {
+            $grnId = DB::transaction(function () use ($pos, $po, $supplier, $wh, $date, $ref, $extra, $extraNote, $note, $lines, $poItems) {
                 $t = $this->tid();
                 $grnNo = Numbering::next($t, 'GRN');
                 $grnId = DB::insert('grns', ['tenant_id' => $t, 'grn_no' => $grnNo, 'po_id' => $po['id'] ?? null, 'supplier_id' => $supplier['id'],
@@ -171,9 +202,10 @@ final class GrnController extends PurchaseBase
                         DB::run('UPDATE purchase_order_items SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$l['qty'], $t, $l['po_item']['id']]);
                     }
                 }
-                if ($po) {
-                    $open = (int)DB::val('SELECT COUNT(*) FROM purchase_order_items WHERE tenant_id = ? AND po_id = ? AND qty_received < qty_ordered - 0.0005', [$t, $po['id']]);
-                    DB::run('UPDATE purchase_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$open ? 'partial' : 'received', $t, $po['id']]);
+                foreach ($pos as $pid => $p) {
+                    DB::run('INSERT INTO grn_pos (grn_id, po_id, tenant_id) VALUES (?, ?, ?)', [$grnId, $pid, $t]);
+                    $open = (int)DB::val('SELECT COUNT(*) FROM purchase_order_items WHERE tenant_id = ? AND po_id = ? AND qty_received < qty_ordered - 0.0005', [$t, $pid]);
+                    DB::run('UPDATE purchase_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$open ? 'partial' : 'received', $t, $pid]);
                 }
                 return $grnId;
             });
@@ -189,11 +221,13 @@ final class GrnController extends PurchaseBase
     {
         $g = $this->load($id);
         $items = DB::all(
-            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no, r.code AS rack' . Purchase::theirCols('SELECT supplier_id FROM grns WHERE id = l.grn_id') . '
+            'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit, b.batch_no, r.code AS rack, po.po_no, po.id AS line_po_id' . Purchase::theirCols('SELECT supplier_id FROM grns WHERE id = l.grn_id') . '
              FROM grn_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations r ON r.id = l.location_id AND l.location_id > 0
+             LEFT JOIN purchase_order_items poi ON poi.id = l.po_item_id LEFT JOIN purchase_orders po ON po.id = poi.po_id
              WHERE l.tenant_id = ? AND l.grn_id = ? ORDER BY l.id', [$this->tid(), $g['id']]);
         $returns = DB::all('SELECT id, return_no, return_date, total FROM purchase_returns WHERE tenant_id = ? AND grn_id = ? ORDER BY id', [$this->tid(), $g['id']]);
-        $this->view('app/purchase/grn_show', ['title' => $g['grn_no'], 'g' => $g, 'items' => $items, 'returns' => $returns]);
+        $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.tenant_id = ? AND gp.grn_id = ? ORDER BY p.id', [$this->tid(), $g['id']]);
+        $this->view('app/purchase/grn_show', ['title' => $g['grn_no'], 'g' => $g, 'items' => $items, 'returns' => $returns, 'pos' => $pos]);
     }
 }

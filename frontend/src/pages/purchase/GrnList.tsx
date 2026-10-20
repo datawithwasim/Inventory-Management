@@ -16,7 +16,7 @@ export default function GrnList() {
         </form>)}
       columns={[
         { head: 'GRN', cell: (r) => <Link to={`/purchase/grns/${r.id}`}>{r.grn_no}</Link> }, { head: 'Date', cell: (r) => fdate(r.received_date) }, { head: term('supplier'), cell: (r) => r.supplier }, { head: term('warehouse'), cell: (r) => r.warehouse },
-        { head: 'PO', cell: (r) => r.po_id ? <Link to={`/purchase/orders/${r.po_id}`}>{r.po_no}</Link> : '—' }, { head: 'Lines', cell: (r) => r.line_count },
+        { head: 'PO', cell: (r) => r.po_list ? String(r.po_list).split(',').map((x: string, k: number) => { const [pid, ...no] = x.split(':'); return <span key={pid}>{k > 0 && ', '}<Link to={`/purchase/orders/${pid}`}>{no.join(':')}</Link></span>; }) : '—' }, { head: 'Lines', cell: (r) => r.line_count },
         { head: 'Bill', cell: (r) => r.bill_id ? <Link to={`/purchase/bills/${r.bill_id}`}>View bill</Link> : <span className="text-muted">not billed</span> },
       ]} />
   );

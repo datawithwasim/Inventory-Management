@@ -184,7 +184,7 @@ final class PurchaseOrderController extends PurchaseBase
         $this->view('app/purchase/po_show', [
             'title' => $po['po_no'], 'po' => $po, 'items' => $items, 'remaining' => $remaining, 'approval' => Settings::bool('po_approval'),
             'cfFields' => CustomFields::fields('purchase_order'), 'cfValues' => CustomFields::values('purchase_order', (int)$po['id']),
-            'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND po_id = ? ORDER BY id', [$t, $po['id']]),
+            'grns' => DB::all('SELECT g.id, g.grn_no, g.received_date FROM grn_pos gp JOIN grns g ON g.id = gp.grn_id WHERE gp.tenant_id = ? AND gp.po_id = ? ORDER BY g.id', [$t, $po['id']]),
         ]);
     }
 
@@ -244,7 +244,7 @@ final class PurchaseOrderController extends PurchaseBase
     public function cancel(string $id): void
     {
         $po = $this->load($id);
-        if (DB::val('SELECT 1 FROM grns WHERE tenant_id = ? AND po_id = ? LIMIT 1', [$this->tid(), $po['id']])) {
+        if (DB::val('SELECT 1 FROM grn_pos WHERE tenant_id = ? AND po_id = ? LIMIT 1', [$this->tid(), $po['id']])) {
             flash('danger', 'Goods were already received against this order. Close it instead.');
             redirect("purchase/orders/{$po['id']}");
         }

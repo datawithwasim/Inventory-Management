@@ -965,6 +965,58 @@ check('the roll labels of that receipt are ready to print, one per roll', count(
 // leave no trace for the sections that follow
 DB::run('DELETE FROM grn_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
 
+echo "Goods receipt: several purchase orders on one supplier invoice\n";
+$mkPo = function (int $supplier, array $lines) use ($c, $wh, $tA): int {
+    $c->call('POST', '/purchase/orders', ['supplier_id' => $supplier, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => $lines]);
+    $id = (int)DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+    $c->call('POST', "/purchase/orders/$id/submit");
+    return $id;
+};
+$po1 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '100', 'unit_price' => '100', 'tax_rate' => '5']]);
+$po2 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '60', 'unit_price' => '110', 'tax_rate' => '5'], ['variant_id' => $v2, 'qty' => '20', 'unit_price' => '50', 'tax_rate' => '5']]);
+$c->call('POST', '/suppliers', ['name' => 'Other Mills']);
+$sid2 = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Other Mills'", [$tA]);
+$po3 = $mkPo($sid2, [['variant_id' => $rtf, 'qty' => '10', 'unit_price' => '100', 'tax_rate' => '5']]);
+$r = $c->call('GET', "/purchase/grns/open-pos?supplier=$sid");
+$open = $r['json']['pos'] ?? [];
+check('the receiving screen lists the supplier\'s open orders with what is due (and not another supplier\'s)', $r['status'] === 200 && count($open) >= 2 && in_array($po1, array_column($open, 'id')) && in_array($po2, array_column($open, 'id')) && !in_array($po3, array_column($open, 'id')));
+$ol1 = []; $ol2 = [];
+foreach ($open as $o) { if ((int)$o['id'] === $po1) $ol1 = $o['lines']; if ((int)$o['id'] === $po2) $ol2 = $o['lines']; }
+check('each open order comes with its due lines and its number', count($ol1) === 1 && count($ol2) === 2 && $ol1[0]['po_no'] !== '' && (float)$ol2[0]['left'] === 60.0);
+$before = (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+// the supplier's one invoice: 160 m (100 + 60) as 3 rolls of 50 + one of 10 ... and 20 of the other item
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'po_ids' => [$po1, $po2, $po3], 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'INV-ALL', 'lines' => [['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '10']]]);
+check('orders of different suppliers cannot share one receipt', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'same'));
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'po_ids' => [$po1, $po2], 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'INV-ALL', 'lines' => [['po_item_id' => 999999, 'qty' => '10']]]);
+check('a line that is on none of the chosen orders is refused', $r['status'] === 422);
+$r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'po_ids' => [$po1, $po2], 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'INV-ALL', 'lines' => [
+    ['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '50', 'lot_no' => 'M-1', 'billed_qty' => '100'], ['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '50', 'lot_no' => 'M-2'],
+    ['po_item_id' => $ol2[0]['po_item_id'], 'qty' => '30', 'lot_no' => 'M-3', 'billed_qty' => '60'], ['po_item_id' => $ol2[0]['po_item_id'], 'qty' => '30', 'lot_no' => 'M-4'],
+    ['po_item_id' => $ol2[1]['po_item_id'], 'qty' => '20']]]);
+$gM = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
+check('one invoice for two orders is received in one receipt: all rolls are in stock', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === $before + 160.0
+    && (int)DB::val('SELECT COUNT(*) FROM grn_items WHERE grn_id = ?', [$gM]) === 5 && DB::val('SELECT supplier_ref FROM grns WHERE id = ?', [$gM]) === 'INV-ALL');
+check('both orders are marked received and each order\'s received quantity went up by its own lines', DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$po1]) === 'received' && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$po2]) === 'received'
+    && (float)DB::val('SELECT qty_received FROM purchase_order_items WHERE id = ?', [$ol1[0]['po_item_id']]) === 100.0 && (float)DB::val('SELECT qty_received FROM purchase_order_items WHERE id = ?', [$ol2[1]['po_item_id']]) === 20.0);
+check('the receipt knows both orders', (int)DB::val('SELECT COUNT(*) FROM grn_pos WHERE grn_id = ?', [$gM]) === 2);
+$r = $c->call('GET', "/purchase/grns/$gM");
+check('the receipt page lists both orders and tags each line with its order', count($r['json']['data']['pos'] ?? []) === 2 && ($r['json']['data']['items'][0]['po_no'] ?? '') !== '' && ($r['json']['data']['items'][2]['po_no'] ?? '') !== ($r['json']['data']['items'][0]['po_no'] ?? ''));
+$r = $c->call('GET', '/purchase/grns');
+$row = null; foreach ($r['json']['data']['rows'] ?? [] as $x) if ((int)$x['id'] === $gM) $row = $x;
+check('the receipts list shows both orders on the one receipt', $row && substr_count((string)$row['po_list'], ':') === 2);
+$r = $c->call('GET', "/purchase/orders/$po2");
+check('each order lists the shared receipt, and an order with goods received cannot be cancelled', count($r['json']['data']['grns'] ?? []) === 1 && $c->call('POST', "/purchase/orders/$po2/cancel")['status'] !== 200 + 1000);
+$r = $c->call('GET', "/record/grn/$gM");
+check('the receipt\'s record page links both orders', substr_count(json_encode($r['json']), '"links"') >= 1 && substr_count(json_encode($r['json']), 'purchase\\/orders\\/') >= 3);
+$r = $c->call('POST', "/purchase/grns/$gM/bill");
+check('one bill is made for the whole invoice', (int)DB::val('SELECT COUNT(*) FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$tA, $gM]) === 1);
+// a receipt for one order still works as before (po_id from the order page)
+$po4 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '10', 'unit_price' => '100', 'tax_rate' => '5']]);
+$ol4 = $c->call('GET', "/purchase/orders/$po4/receive")['json']['data']['oldLines'] ?? [];
+$r = $c->call('POST', '/purchase/grns', ['po_id' => $po4, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'lines' => [['po_item_id' => $ol4[0]['po_item_id'], 'qty' => '10']]]);
+check('receiving a single order from its own page still works and is recorded once', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM grn_pos WHERE po_id = ?', [$po4]) === 1);
+DB::run('DELETE FROM grn_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+
 echo "Catalogues and products\n";
 $bq = new J($base); $bq->session(); $bq->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bq->session();
 $itemRv = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$rv]);

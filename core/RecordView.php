@@ -150,10 +150,10 @@ final class RecordView
             $approver = $row['approved_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['approved_by']]) : '';
             $facts = ['created_by' => ['Created by', e($creator ?: '—')], 'approved_by' => ['Approved by', $approver ? e($approver) . ' on ' . e(substr((string)$row['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(money($row['total']))]];
         } elseif ($entity === 'grn') {
-            $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
+            $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.tenant_id = ? AND gp.grn_id = ? ORDER BY p.id', [$t, $row['id']]);
             $bill = DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $row['id']]);
             $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
-                'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : ''], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
+                'po' => [count($pos) > 1 ? 'Purchase orders' : 'Purchase order', implode(', ', array_map(fn($p) => $link('purchase/orders', (int)$p['id'], $p['po_no']), $pos))], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
                 'received_by' => ['Received by', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
         } elseif ($entity === 'bill') {
             $grn = $row['grn_id'] ? DB::one('SELECT id, grn_no FROM grns WHERE tenant_id = ? AND id = ?', [$t, $row['grn_id']]) : null;
@@ -211,7 +211,12 @@ final class RecordView
         if (str_starts_with($k, 'sys:')) {
             $html = (string)($facts[substr($k, 4)][1] ?? '');
             $href = preg_match('/href="([^"]+)"/', $html, $m) ? html_entity_decode($m[1]) : null;
-            return ['key' => $k, 'label' => $label, 'text' => trim(html_entity_decode(strip_tags($html))), 'href' => $href];
+            $out = ['key' => $k, 'label' => $label, 'text' => trim(html_entity_decode(strip_tags($html))), 'href' => $href];
+            // a value with several links (a receipt covering several purchase orders): one entry per link
+            if (preg_match_all('/<a href="([^"]+)">(.*?)<\/a>/s', $html, $all, PREG_SET_ORDER) && count($all) > 1) {
+                $out['links'] = array_map(fn($m) => ['text' => html_entity_decode(strip_tags($m[2])), 'href' => html_entity_decode($m[1])], $all);
+            }
+            return $out;
         }
         $text = self::value($entity, $k, $row, $cfValues);
         $href = null;
