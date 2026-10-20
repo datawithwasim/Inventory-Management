@@ -20,6 +20,18 @@ abstract class Controller
         $this->view('app/settings/_frame', ['title' => $data['title'] ?? 'Settings', 'tab' => $tab, 'inner' => $inner]);
     }
 
+    /** The company's own (custom) fields posted with a form, checked; a refused value goes back to the form with the reason. @return array<int,string> field id => value */
+    protected function customFieldValues(string $entity, string $back, ?int $id = null): array
+    {
+        [$cf, $errors] = \App\Models\CustomFields::validate($entity, $this->input(), $id);
+        if ($errors) {
+            foreach ($errors as $m) flash('danger', $m);
+            with_old($_POST);
+            redirect($back);
+        }
+        return $cf;
+    }
+
     /** Refuses the form if a field the company made mandatory is empty. */
     protected function enforceFields(string $entity, string $back): void
     {

@@ -5,7 +5,7 @@ import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, PageHead, Spinner } from '../../components/ui';
-import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
+import { SchemaForm, seedCustom, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import RecordPage from '../../components/RecordPage';
 
@@ -87,6 +87,7 @@ export function WarehouseForm() {
     if (!schema.data || !src.data?.data || values) return;
     const row = src.data.data.row ?? {}; const v: Record<string, any> = {};
     Object.keys(schema.data.fields).forEach((k) => (v[k] = row[k] ?? ''));
+    seedCustom(schema.data, v, src.data.data.cfValues);
     setValues(v); setActive(row.is_active === undefined ? true : !!Number(row.is_active));
   }, [schema.data, src.data, values, nav]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;

@@ -94,6 +94,16 @@ export function useFormState(initial: Record<string, any> | null) {
   return { values, setValues, ready: seeded };
 }
 
+/** Puts the saved values of the company's own fields (by field id) into a form's values when an existing record is edited. */
+export function seedCustom(schema: Schema, values: Record<string, any>, cf: Record<string, string> | undefined) {
+  for (const [k, f] of Object.entries(schema.fields)) {
+    if (!f.custom || !f.cfId) continue;
+    const raw = cf?.[f.cfId] ?? '';
+    values[k] = f.type === 'multiselect' ? (raw ? JSON.parse(raw) : []) : raw;
+  }
+  return values;
+}
+
 /** Standard field keys → posted names; custom fields travel as cf[<id>]. */
 export function toPayload(schema: Schema, values: Record<string, any>): Record<string, any> {
   const out: Record<string, any> = { cf: {} };

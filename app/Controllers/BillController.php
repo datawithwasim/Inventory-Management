@@ -93,7 +93,7 @@ final class BillController extends PurchaseBase
 
     public function edit(string $id): void
     {
-        $this->view('app/purchase/bill_form', ['title' => 'Edit bill', 'b' => $this->load($id)]);
+        $this->view('app/purchase/bill_form', ['title' => 'Edit bill', 'b' => $this->load($id), 'cfValues' => \App\Models\CustomFields::values('bill', (int)$id)]);
     }
 
     public function update(string $id): void
@@ -101,6 +101,7 @@ final class BillController extends PurchaseBase
         $b = $this->load($id);
         $back = "purchase/bills/{$b['id']}/edit";
         $this->enforceFields('bill', $back);
+        $cf = $this->customFieldValues('bill', $back, (int)$b['id']);
         $d = $this->input();
         $billDate = $this->date($d['bill_date'] ?? '', 'Bill date', $back);
         $dueDate = $this->date($d['due_date'] ?? '', 'Due date', $back, false);
@@ -111,6 +112,7 @@ final class BillController extends PurchaseBase
         DB::run('UPDATE purchase_bills SET supplier_bill_no = ?, bill_date = ?, due_date = ?, other_charges = ?, total = ?, notes = ? WHERE tenant_id = ? AND id = ?',
             [$this->text($d['supplier_bill_no'] ?? '', 60, 'Supplier bill no.', $back), $billDate, $dueDate, $other, $total,
              $this->text($d['notes'] ?? '', 255, 'Notes', $back), $this->tid(), $b['id']]);
+        \App\Models\CustomFields::save('bill', (int)$b['id'], $cf);
         Audit::log('bill_update', 'purchase_bill', (int)$b['id']);
         flash('success', 'Bill updated.');
         redirect("purchase/bills/{$b['id']}");

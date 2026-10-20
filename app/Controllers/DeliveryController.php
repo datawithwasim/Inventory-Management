@@ -108,6 +108,7 @@ final class DeliveryController extends SalesBase
         $orderId = (int)($d['order_id'] ?? 0);
         $back = $orderId ? "sales/orders/$orderId/deliver" : 'sales/deliveries/create';
         $this->enforceFields('delivery', $back);
+        $cf = $this->customFieldValues('delivery', $back);
         $order = $orderId ? $this->openOrder((string)$orderId) : null;
         $customer = $order ? Sales::customer((int)$order['customer_id']) : $this->activeCustomer($d['customer_id'] ?? 0, $back);
         $wh = $order ? Stock::warehouse((int)$order['warehouse_id']) : $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
@@ -151,6 +152,7 @@ final class DeliveryController extends SalesBase
                 'customer_id' => $customer['id'], 'customer_name' => $customer['name'], 'warehouse_id' => $wh['id'], 'delivery_date' => $date, 'ship_to' => $shipTo,
                 'note' => $note, 'order_id' => $order['id'] ?? null, 'source' => $order ? 'order' : 'direct',
             ], $lines);
+            \App\Models\CustomFields::save('delivery', $deliveryId, $cf);
             $invoiceId = !empty($d['make_invoice']) ? Sales::createInvoice($deliveryId, $date) : null;
         } catch (StockException $e) {
             $this->bounce($e->getMessage(), $back);

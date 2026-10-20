@@ -71,6 +71,7 @@ final class PurchaseReturnController extends PurchaseBase
         $grnId = (int)($d['grn_id'] ?? 0);
         $back = "purchase/returns/create?grn=$grnId";
         $this->enforceFields('purchase_return', $back);
+        $cf = $this->customFieldValues('purchase_return', $back);
         $g = DB::one('SELECT * FROM grns WHERE tenant_id = ? AND id = ?', [$t, $grnId]) ?? $this->notFound();
         $date = $this->date($d['return_date'] ?? '', 'Return date', $back);
         $reason = $this->text($d['reason'] ?? '', 150, 'Reason', $back);
@@ -92,11 +93,12 @@ final class PurchaseReturnController extends PurchaseBase
         if (!$lines) $this->bounce('Enter the quantity to return on at least one line.', $back);
 
         try {
-            $retId = DB::transaction(function () use ($t, $g, $date, $reason, $lines) {
+            $retId = DB::transaction(function () use ($t, $g, $date, $reason, $lines, $cf) {
                 $bill = DB::one('SELECT id FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $g['id']]);
                 $no = Numbering::next($t, 'PRT');
                 $retId = DB::insert('purchase_returns', ['tenant_id' => $t, 'return_no' => $no, 'grn_id' => $g['id'], 'supplier_id' => $g['supplier_id'],
                     'warehouse_id' => $g['warehouse_id'], 'bill_id' => $bill['id'] ?? null, 'return_date' => $date, 'reason' => $reason, 'created_by' => Auth::user()['id']]);
+                \App\Models\CustomFields::save('purchase_return', $retId, $cf);
                 $total = 0.0;
                 foreach ($lines as $l) {
                     $it = $l['it'];

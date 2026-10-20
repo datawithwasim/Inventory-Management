@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
 import { money } from '../../lib/format';
 import { Messages, PageHead, Spinner } from '../../components/ui';
-import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
+import { SchemaForm, seedCustom, toPayload, useSchema } from '../../components/RecordForm';
 
 /** Edit a bill's own details (supplier's bill no., dates, other charges, notes). */
 export default function BillForm() {
@@ -17,6 +17,7 @@ export default function BillForm() {
     if (!schema.data || !src.data || values) return;
     const b = src.data.b; const v: Record<string, any> = {};
     for (const k of Object.keys(schema.data.fields)) v[k] = b[k] ?? '';
+    seedCustom(schema.data, v, src.data.cfValues);
     if (Number(v.other_charges) === 0) v.other_charges = '';
     setValues(v);
   }, [schema.data, src.data, values]);

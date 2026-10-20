@@ -76,13 +76,14 @@ final class InvoiceController extends SalesBase
 
     public function edit(string $id): void
     {
-        $this->view('app/sales/invoice_form', ['title' => 'Edit invoice', 'i' => $this->load($id)]);
+        $this->view('app/sales/invoice_form', ['title' => 'Edit invoice', 'i' => $this->load($id), 'cfValues' => \App\Models\CustomFields::values('invoice', (int)$id)]);
     }
 
     public function update(string $id): void
     {
         $i = $this->load($id);
         $back = "sales/invoices/{$i['id']}/edit";
+        $cf = $this->customFieldValues('invoice', $back, (int)$i['id']);
         $d = $this->input();
         $date = $this->date($d['invoice_date'] ?? '', 'Invoice date', $back);
         $dueDate = $this->date($d['due_date'] ?? '', 'Due date', $back, false);
@@ -93,6 +94,7 @@ final class InvoiceController extends SalesBase
         if ($total + 0.004 < (float)$i['paid_amount']) $this->bounce('The total cannot be less than what is already paid.', $back);
         DB::run('UPDATE sales_invoices SET invoice_date = ?, due_date = ?, delivery_charge = ?, installation_charge = ?, total = ?, notes = ? WHERE tenant_id = ? AND id = ?',
             [$date, $dueDate, $delivery, $install, $total, $this->text($d['notes'] ?? '', 255, 'Notes', $back), $this->tid(), $i['id']]);
+        \App\Models\CustomFields::save('invoice', (int)$i['id'], $cf);
         Audit::log('invoice_update', 'sales_invoice', (int)$i['id']);
         flash('success', 'Invoice updated.');
         redirect("sales/invoices/{$i['id']}");

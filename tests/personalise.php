@@ -192,7 +192,7 @@ $model = json_decode(preg_match('#<script type="application/json" id="dzData">(.
 $forms = $model['model'] ?? [];
 $byKey = fn($k) => array_values(array_filter($forms, fn($m) => $m['key'] === $k))[0] ?? null;
 check('designer is a full-screen page (no Settings frame) with palette, canvas and 16 field types', str_contains($h, 'id="dz"') && str_contains($h, 'id="dzTypes"') && !str_contains($h, 'settings-nav') && substr_count($h, 'class="dz-type"') === 16 && count($forms) === 18);
-check('every form has sections, fields, unused list; customer has 10 standard fields', ($c = $byKey('customer')) && count($c['sections']) >= 1 && count($c['fields']) >= 10 && $c['customFields'] === true && $byKey('grn')['customFields'] === false);
+check('every form has sections, fields, unused list; customer has 10 standard fields', ($c = $byKey('customer')) && count($c['sections']) >= 1 && count($c['fields']) >= 10 && $c['customFields'] === true && $byKey('location')['customFields'] === false && $byKey('grn')['customFields'] === true);
 check('only the two documents carry a line-items table', array_column(array_filter($forms, fn($m) => $m['lineForm']), 'key') === ['sales_order', 'purchase_order']);
 check('the old "Form fields" address leads to the designer', ($r = $a->get('/settings/formfields'))['status'] === 302 && str_contains((string)$r['location'], 'settings/formdesign'));
 check('default forms carry no design attributes', !str_contains($body('/customers/create'), 'data-help') && !preg_match('/<div class="col-md-4 mb-3" style="order/', $body('/customers/create')) && !str_contains($body('/customers/create'), 'ff-left') && !str_contains($body('/customers/create'), 'ff-section'));
@@ -290,9 +290,9 @@ $cnt = (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tA])
 $a->post('/sales/orders', $so9, '/sales/orders/create');
 check('a sales order still saves with the designed form', (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tA]) === $cnt + 1);
 // forms without custom fields: layout only
-$p = ['grn' => $state()['grn']];
-$p['grn']['fields']['cf:new1'] = ['isNew' => true, 'name' => 'hack', 'type' => 'text', 'show' => true];
-$p['grn']['sections'][0]['fields'][] = 'cf:new1';
+$p = ['location' => $state()['location']];
+$p['location']['fields']['cf:new1'] = ['isNew' => true, 'name' => 'hack', 'type' => 'text', 'show' => true];
+$p['location']['sections'][0]['fields'][] = 'cf:new1';
 $savePayload($p);
 check('forms that do not support custom fields cannot get new ones through the designer', !$val("SELECT 1 FROM custom_fields WHERE tenant_id = ? AND label = 'hack'", [$tA]));
 $p = ['grn' => $state()['grn']];

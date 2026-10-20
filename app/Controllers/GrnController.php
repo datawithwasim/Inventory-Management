@@ -120,6 +120,7 @@ final class GrnController extends PurchaseBase
         $poIds = array_values(array_unique(array_filter(array_map('intval', is_array($d['po_ids'] ?? null) ? $d['po_ids'] : [($d['po_id'] ?? 0)]))));
         $back = count($poIds) === 1 ? "purchase/orders/{$poIds[0]}/receive" : 'purchase/grns/create';
         $this->enforceFields('grn', $back);
+        $cf = $this->customFieldValues('grn', $back);
         $pos = [];
         foreach ($poIds as $pid) $pos[$pid] = $this->openPo((string)$pid);
         $po = $pos ? reset($pos) : null;
@@ -176,7 +177,7 @@ final class GrnController extends PurchaseBase
         }
 
         try {
-            $grnId = DB::transaction(function () use ($pos, $po, $supplier, $wh, $date, $ref, $extra, $extraNote, $note, $lines, $poItems) {
+            $grnId = DB::transaction(function () use ($pos, $po, $supplier, $wh, $date, $ref, $extra, $extraNote, $note, $lines, $poItems, $cf) {
                 $t = $this->tid();
                 $grnNo = Numbering::next($t, 'GRN');
                 $grnId = DB::insert('grns', ['tenant_id' => $t, 'grn_no' => $grnNo, 'po_id' => $po['id'] ?? null, 'supplier_id' => $supplier['id'],
@@ -202,6 +203,7 @@ final class GrnController extends PurchaseBase
                         DB::run('UPDATE purchase_order_items SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$l['qty'], $t, $l['po_item']['id']]);
                     }
                 }
+                \App\Models\CustomFields::save('grn', $grnId, $cf);
                 foreach ($pos as $pid => $p) {
                     DB::run('INSERT INTO grn_pos (grn_id, po_id, tenant_id) VALUES (?, ?, ?)', [$grnId, $pid, $t]);
                     $open = (int)DB::val('SELECT COUNT(*) FROM purchase_order_items WHERE tenant_id = ? AND po_id = ? AND qty_received < qty_ordered - 0.0005', [$t, $pid]);

@@ -88,8 +88,10 @@ final class WarehouseController extends Controller
         $this->headOfficeOnly();
         if ($this->limitReached()) redirect('warehouses');
         $data = $this->fields('warehouses/create', null);
+        $cf = $this->customFieldValues('warehouse', 'warehouses/create');
         $data['is_active'] = 1;
         $id = DB::insert('warehouses', ['tenant_id' => Auth::tenantId()] + $data);
+        \App\Models\CustomFields::save('warehouse', $id, $cf);
         Audit::log('warehouse_create', 'warehouse', $id, $data['name']);
         flash('success', 'Warehouse added.');
         redirect('warehouses');
@@ -97,13 +99,14 @@ final class WarehouseController extends Controller
 
     public function edit(string $id): void
     {
-        $this->view('app/warehouses/form', ['title' => 'Edit warehouse', 'row' => $this->load($id)]);
+        $this->view('app/warehouses/form', ['title' => 'Edit warehouse', 'row' => $this->load($id), 'cfValues' => \App\Models\CustomFields::values('warehouse', (int)$id)]);
     }
 
     public function update(string $id): void
     {
         $row = $this->load($id);
         $data = $this->fields("warehouses/$id/edit", (int)$row['id']);
+        $cf = $this->customFieldValues('warehouse', "warehouses/$id/edit", (int)$row['id']);
         if ($row['is_default'] || Scope::restricted()) $data['is_active'] = (int)$row['is_active'];
         if (!$data['is_active'] && $this->peopleAt((int)$row['id'])) {
             flash('danger', 'People work at this warehouse. Move them to another warehouse before making it inactive.');
@@ -112,6 +115,7 @@ final class WarehouseController extends Controller
         }
         DB::run('UPDATE warehouses SET name=?, code=?, address=?, is_active=? WHERE tenant_id = ? AND id = ?',
             [...array_values($data), Auth::tenantId(), $row['id']]);
+        \App\Models\CustomFields::save('warehouse', (int)$row['id'], $cf);
         Audit::log('warehouse_update', 'warehouse', (int)$row['id']);
         flash('success', 'Warehouse updated.');
         redirect('warehouses');

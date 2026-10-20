@@ -26,17 +26,19 @@ final class StocktakeController extends StockDocController
     public function store(): void
     {
         $back = 'stock/takes/create';
+        $cf = $this->customFieldValues('stocktake', $back);
         $d = $this->input();
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
         $note = trim((string)($d['note'] ?? '')) ?: null;
         if ($note !== null && mb_strlen($note) > 255) $this->bounce('Note is too long.', $back);
 
-        $docId = DB::transaction(function () use ($wh, $note) {
+        $docId = DB::transaction(function () use ($wh, $note, $cf) {
             $t = $this->tid();
             $docId = DB::insert('stock_docs', [
                 'tenant_id' => $t, 'type' => 'stocktake', 'doc_no' => Numbering::next($t, 'STK'),
                 'warehouse_id' => $wh['id'], 'note' => $note, 'status' => 'draft', 'created_by' => Auth::user()['id'],
             ]);
+            \App\Models\CustomFields::save('stocktake', $docId, $cf);
             $snap = DB::all(
                 'SELECT s.variant_id, s.batch_id, s.location_id, s.qty FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id
                  JOIN items i ON i.id = v.item_id

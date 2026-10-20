@@ -98,6 +98,24 @@ check('an unknown pick list or schema is a 404 JSON', $a->call('GET', '/options/
 $r = $a->call('POST', "/records/customer/$cid/notes", ['body' => 'Called today']);
 check('adding a note works through the API', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM record_notes WHERE tenant_id = ? AND entity = ? AND entity_id = ?', [$tA, 'customer', $cid]) === 1);
 
+echo "Custom fields on more forms\n";
+$ents = ['grn', 'bill', 'delivery', 'invoice', 'purchase_return', 'sales_return', 'requisition', 'adjustment', 'transfer', 'stocktake', 'warehouse'];
+$mm = $a->call('GET', '/settings/formdesign')['json']['data']['model'] ?? [];
+$payload = []; $can = 0;
+foreach ($mm as $f) {
+    if (!in_array($f['key'], $ents, true)) continue;
+    if (!empty($f['customFields'])) $can++;
+    $secs = array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => $sec['fields']], $f['sections']);
+    $secs[0]['fields'][] = 'cf:newR';
+    $payload[$f['key']] = ['style' => $f['style'], 'lines' => $f['lines'] ?? [], 'deleted' => [], 'sections' => $secs,
+        'fields' => ['cf:newR' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Ref code', 'type' => 'text', 'options' => '', 'inList' => false, 'unique' => false, 'isNew' => true]]];
+}
+check('goods receipts, bills, deliveries, invoices, returns, requisitions, stock documents and warehouses all accept the company\'s own fields', $can === count($ents));
+$a->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'grn', 'close' => '', 'return' => '']);
+$CF = [];
+foreach ($ents as $e) $CF[$e] = (int)DB::val("SELECT id FROM custom_fields WHERE tenant_id = ? AND entity = ? AND label = 'Ref code'", [$tA, $e]);
+check('a field was created on each of them', count(array_filter($CF)) === count($ents));
+
 echo "Suppliers and supplier items through the API\n";
 $r = $a->call('POST', '/suppliers', ['name' => 'Api Mills', 'payment_terms_days' => '15', 'contacts' => [['name' => 'Ravi', 'phone' => '555 1234', 'role' => 'Sales', 'email' => '']]]);
 $sid = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Api Mills'", [$tA]);
@@ -159,7 +177,7 @@ check('confirming moves it to approved (no approval needed on this company)', DB
 $r = $a->call('GET', "/purchase/orders/$poId/receive");
 $ol = $r['json']['data']['oldLines'] ?? [];
 check('the receive form data lists the open lines with what is still due', count($ol) === 1 && (float)$ol[0]['left'] === 10.0 && isset($r['json']['data']['racks']));
-$r = $a->call('POST', '/purchase/grns', ['po_id' => $poId, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'CH-1', 'lines' => [['po_item_id' => $ol[0]['po_item_id'], 'qty' => '10', 'location_id' => '0', 'lot_no' => '']]]);
+$r = $a->call('POST', '/purchase/grns', ['cf' => [$CF['grn'] => 'cf-grn'], 'po_id' => $poId, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'CH-1', 'lines' => [['po_item_id' => $ol[0]['po_item_id'], 'qty' => '10', 'location_id' => '0', 'lot_no' => '']]]);
 $grnId = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
 check('goods are received against the PO: stock goes up and the PO is received', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $v2]) === 10.0 && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$poId]) === 'received');
 $r = $a->call('POST', "/purchase/grns/$grnId/bill");
@@ -174,11 +192,11 @@ check('the bill page data has items, payments and the payment state', ($r['json'
 $r = $a->call('GET', "/purchase/returns/create?grn=$grnId");
 $gi = $r['json']['data']['items'][0] ?? null;
 check('the return form data lists what can go back and where it sits', $gi && (float)$gi['returnable'] === 10.0 && isset($gi['placements']));
-$r = $a->call('POST', '/purchase/returns', ['grn_id' => $grnId, 'return_date' => date('Y-m-d'), 'reason' => 'Damaged', 'lines' => [(string)$gi['id'] => ['qty' => '4', 'location_id' => '0']]]);
+$r = $a->call('POST', '/purchase/returns', ['cf' => [$CF['purchase_return'] => 'cf-purchase_return'], 'grn_id' => $grnId, 'return_date' => date('Y-m-d'), 'reason' => 'Damaged', 'lines' => [(string)$gi['id'] => ['qty' => '4', 'location_id' => '0']]]);
 check('a return takes stock out and credits the bill', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $v2]) === 6.0 && (float)DB::val('SELECT returned_amount FROM purchase_bills WHERE id = ?', [$billId]) === 420.0);
 $r = $a->call('POST', '/purchase/returns', ['grn_id' => $grnId, 'return_date' => date('Y-m-d'), 'lines' => [(string)$gi['id'] => ['qty' => '99']]]);
 check('returning more than was received is refused', $r['status'] === 422);
-$r = $a->call('POST', '/purchase/requisitions', ['note' => 'Need silk', 'lines' => [['variant_id' => $v2, 'qty' => '20', 'note' => 'urgent']]]);
+$r = $a->call('POST', '/purchase/requisitions', ['cf' => [$CF['requisition'] => 'cf-requisition'], 'note' => 'Need silk', 'lines' => [['variant_id' => $v2, 'qty' => '20', 'note' => 'urgent']]]);
 $reqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
 check('a requisition saves and turns into a draft PO', $r['status'] === 200 && $reqId > 0);
 $r = $a->call('POST', "/purchase/requisitions/$reqId/convert", ['supplier_id' => $sid, 'warehouse_id' => $wh]);
@@ -231,7 +249,7 @@ $a->call('POST', "/purchase/requisitions/$rqId2/convert", ['supplier_id' => $sid
 check('a supplier with no rate falls back to the item\'s default cost', (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [(int)DB::val('SELECT po_id FROM purchase_requisitions WHERE id = ?', [$rqId2])]) === 100.0);
 
 echo "Warehouses, racks and stock through the API\n";
-$r = $a->call('POST', '/warehouses', ['name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4']);
+$r = $a->call('POST', '/warehouses', ['cf' => [$CF['warehouse'] => 'cf-warehouse'], 'name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4']);
 $wh2 = (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA]);
 check('a warehouse saves from JSON (code upper-cased)', $r['status'] === 200 && $wh2 > 0 && DB::val('SELECT code FROM warehouses WHERE id = ?', [$wh2]) === 'APG');
 $r = $a->call('POST', '/warehouses', ['name' => 'Api Godown', 'code' => 'X']);
@@ -258,7 +276,7 @@ check('the stock item search returns roll flags and the unit', ($r['json'][0]['t
 $r = $a->call('GET', '/stock/adjustments/create');
 check('the adjustment form data has warehouses, reasons and racks per warehouse', count($r['json']['data']['warehouses']) >= 2 && isset($r['json']['data']['reasons']['opening']) && isset($r['json']['data']['racks'][$wh]));
 check('the reasons are also a pick list and the schema types reason as one', count($a->call('GET', '/options/stock_reasons')['json']['options']) === 6 && ($a->call('GET', '/schema/adjustment')['json']['schema']['fields']['reason']['source'] ?? '') === 'stock_reasons');
-$r = $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'note' => 'API opening', 'lines' => [['variant_id' => $rv, 'batch_id' => 'new', 'lot_no' => 'L7', 'location_id' => $rack1, 'qty' => '50', 'unit_cost' => '']]]);
+$r = $a->call('POST', '/stock/adjustments', ['cf' => [$CF['adjustment'] => 'cf-adjustment'], 'warehouse_id' => $wh, 'reason' => 'opening', 'note' => 'API opening', 'lines' => [['variant_id' => $rv, 'batch_id' => 'new', 'lot_no' => 'L7', 'location_id' => $rack1, 'qty' => '50', 'unit_cost' => '']]]);
 $adjId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment'", [$tA]);
 $bid2 = (int)DB::val('SELECT id FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv]);
 check('an opening adjustment creates a roll on the rack', $r['status'] === 200 && $adjId > 0 && $bid2 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND location_id = ?', [$tA, $bid2, $rack1]) === 50.0);
@@ -276,7 +294,7 @@ $rec = $a->call('GET', "/record/adjustment/$adjId");
 check('the adjustment record page shows the reason as a label and who/when as facts', str_contains(json_encode($rec['json']), 'Opening stock') && str_contains(json_encode($rec['json']), '"By"'));
 
 $bal = fn(int $w, int $loc = -1) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?' . ($loc >= 0 ? ' AND location_id = ' . $loc : ''), [$tA, $bid2, $w]);
-$r = $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'transport' => 'Shree Travels', 'vehicle_no' => 'MH12AB1234', 'lr_no' => 'LR-77', 'expected_date' => date('Y-m-d', strtotime('+2 days')),
+$r = $a->call('POST', '/stock/transfers', ['cf' => [$CF['transfer'] => 'cf-transfer'], 'warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'transport' => 'Shree Travels', 'vehicle_no' => 'MH12AB1234', 'lr_no' => 'LR-77', 'expected_date' => date('Y-m-d', strtotime('+2 days')),
     'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack2, 'qty' => '20']]]);
 $trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
 check('a transfer between warehouses is a dispatch: it leaves the sender and is NOT yet in the other warehouse', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'in_transit' && $bal($wh) === 30.0 && $bal($wh2) === 0.0);
@@ -323,7 +341,7 @@ check('the roll page has where it is and its history', count($r['json']['data'][
 $r = $a->call('GET', '/stock/ledger?type=transfer_out');
 check('the ledger filters by movement type', $r['status'] === 200 && count($r['json']['data']['rows']) >= 1 && isset($r['json']['data']['types']['transfer_out']));
 
-$r = $a->call('POST', '/stock/takes', ['warehouse_id' => $wh2, 'note' => 'API count']);
+$r = $a->call('POST', '/stock/takes', ['cf' => [$CF['stocktake'] => 'cf-stocktake'], 'warehouse_id' => $wh2, 'note' => 'API count']);
 $takeId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake'", [$tA]);
 $r = $a->call('GET', "/stock/takes/$takeId");
 $tl = $r['json']['data']['lines'] ?? [];
@@ -383,7 +401,7 @@ $r = $a->call('GET', "/sales/orders/$soId/deliver");
 $dl = $r['json']['data']['oldLines'] ?? [];
 $byV = []; foreach ($dl as $l) $byV[(int)$l['variant_id']] = $l;
 check('the delivery form suggests the roll and rack for each line', count($dl) >= 2 && (int)$byV[$rv]['batch_id'] === $bid2 && (int)$byV[$rv]['location_id'] === $rack1 && (float)$byV[$rv]['left'] === 10.0 && !empty($byV[$rv]['order_item_id']));
-$r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
+$r = $a->call('POST', '/sales/deliveries', ['cf' => [$CF['delivery'] => 'cf-delivery'], 'order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
     ['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '4', 'batch_id' => $bid2, 'location_id' => $rack1],
     ['order_item_id' => $byV[$v2]['order_item_id'], 'variant_id' => $v2, 'qty' => '0', 'batch_id' => '0', 'location_id' => '0']]]);
 $dlv1 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
@@ -427,7 +445,7 @@ $r = $a->call('GET', "/sales/returns/create?invoice=$inv1");
 $ri = $r['json']['data']['items'][0] ?? null;
 check('the sales return form data lists what can come back and the racks', $ri && (float)$ri['returnable'] === 4.0 && isset($r['json']['data']['racks'][$wh]));
 check('the invoice pick list answers without an invoice chosen', count($a->call('GET', '/sales/returns/create')['json']['data']['rows']) >= 2);
-$r = $a->call('POST', '/sales/returns', ['invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'reason' => 'Wrong shade', 'lines' => [(string)$ri['id'] => ['qty' => '2', 'location_id' => $rack1, 'restock' => 1]]]);
+$r = $a->call('POST', '/sales/returns', ['cf' => [$CF['sales_return'] => 'cf-sales_return'], 'invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'reason' => 'Wrong shade', 'lines' => [(string)$ri['id'] => ['qty' => '2', 'location_id' => $rack1, 'restock' => 1]]]);
 $srId = (int)DB::val('SELECT MAX(id) FROM sales_returns WHERE tenant_id = ?', [$tA]);
 check('a return puts the goods back on the rack and credits the invoice', $r['status'] === 200 && $srId > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 22.0 && (float)DB::val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv1]) > 0);
 $r = $a->call('POST', '/sales/returns', ['invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'lines' => [(string)$ri['id'] => ['qty' => '50', 'location_id' => '0', 'restock' => 1]]]);
@@ -937,6 +955,29 @@ $r = $c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload
 check('a new field added in the designer is saved (JSON answer, no redirect crash)', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]) === 1);
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
 DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
+
+echo "Custom fields: saved on each form\n";
+$cfv = fn(string $e, int $id) => (string)DB::val('SELECT value FROM custom_field_values WHERE tenant_id = ? AND field_id = ? AND entity_id = ?', [$tA, $CF[$e], $id]);
+$maxId = fn(string $table, string $extra = '') => (int)DB::val("SELECT MAX(id) FROM $table WHERE tenant_id = ? $extra", [$tA]);
+check('a goods receipt keeps its field', $cfv('grn', $grnId) === 'cf-grn');
+check('a purchase return keeps its field', $cfv('purchase_return', $maxId('purchase_returns')) === 'cf-purchase_return');
+check('a requisition keeps its field', $cfv('requisition', (int)DB::val('SELECT id FROM purchase_requisitions WHERE tenant_id = ? AND note = ?', [$tA, 'Need silk'])) === 'cf-requisition');
+check('a warehouse keeps its field', $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA])) === 'cf-warehouse');
+check('an adjustment keeps its field', $cfv('adjustment', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment' AND note = 'API opening'", [$tA])) === 'cf-adjustment');
+check('a transfer keeps its field', $cfv('transfer', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND lr_no = 'LR-77'", [$tA])) === 'cf-transfer');
+check('a stock-take keeps its field', $cfv('stocktake', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake' AND note = 'API count'", [$tA])) === 'cf-stocktake');
+check('a delivery keeps its field', $cfv('delivery', (int)DB::val('SELECT MIN(id) FROM deliveries WHERE tenant_id = ? AND order_id = ?', [$tA, $soId])) === 'cf-delivery');
+check('a sales return keeps its field', $cfv('sales_return', $maxId('sales_returns')) === 'cf-sales_return');
+$r = $c->call('GET', "/purchase/bills/$billId/edit");
+check('the bill edit form carries the saved values of the company\'s fields (empty so far)', $r['status'] === 200 && array_key_exists('cfValues', $r['json']['data'] ?? []));
+$r = $c->call('POST', "/purchase/bills/$billId", ['supplier_bill_no' => 'SB-1', 'bill_date' => date('Y-m-d'), 'due_date' => '', 'other_charges' => '', 'notes' => '', 'cf' => [$CF['bill'] => 'cf-bill']]);
+check('a bill takes its field when it is edited', $r['status'] === 200 && $cfv('bill', $billId) === 'cf-bill' && ($c->call('GET', "/purchase/bills/$billId/edit")['json']['data']['cfValues'][$CF['bill']] ?? '') === 'cf-bill');
+$r = $c->call('POST', "/sales/invoices/$inv1", ['invoice_date' => date('Y-m-d'), 'due_date' => '', 'delivery_charge' => '', 'installation_charge' => '', 'notes' => '', 'cf' => [$CF['invoice'] => 'cf-invoice']]);
+check('an invoice takes its field when it is edited', $r['status'] === 200 && $cfv('invoice', $inv1) === 'cf-invoice');
+$r = $c->call('POST', '/warehouses/' . (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA]), ['name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4', 'is_active' => 1, 'cf' => [$CF['warehouse'] => 'cf-wh-2']]);
+check('a warehouse takes a changed value', $r['status'] === 200 && $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA])) === 'cf-wh-2');
+$rec = json_encode($c->call('GET', "/record/grn/$grnId")['json']);
+check('the receipt\'s record page shows the field and its value', str_contains($rec, 'Ref code') && str_contains($rec, 'cf-grn'));
 
 echo "Lookup fields\n";
 $bl = new J($base); $bl->session(); $bl->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bl->session();

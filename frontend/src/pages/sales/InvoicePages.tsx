@@ -6,7 +6,7 @@ import { fdate, money } from '../../lib/format';
 import { owed, payState } from '../../lib/docs';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
-import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
+import { SchemaForm, seedCustom, toPayload, useSchema } from '../../components/RecordForm';
 import DocList from '../../components/DocList';
 import Filters from '../../components/Filters';
 import RecordPage from '../../components/RecordPage';
@@ -98,6 +98,7 @@ export function InvoiceForm() {
     if (!schema.data || !src.data || values) return;
     const inv = src.data.i; const v: Record<string, any> = {};
     Object.keys(schema.data.fields).forEach((k) => (v[k] = inv[k] ?? ''));
+    seedCustom(schema.data, v, src.data.cfValues);
     setValues(v);
   }, [schema.data, src.data, values]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;

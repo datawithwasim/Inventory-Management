@@ -82,6 +82,7 @@ final class TransferController extends StockDocController
     {
         $back = 'stock/transfers/create';
         $this->enforceFields('transfer', $back);
+        $cf = $this->customFieldValues('transfer', $back);
         $d = $this->input();
         $from = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back, 'source warehouse');
         $to = $this->activeWarehouse($d['to_warehouse_id'] ?? 0, $back, 'destination warehouse', false);
@@ -101,7 +102,7 @@ final class TransferController extends StockDocController
         $lines = $this->postedLines($back);
 
         try {
-            $docId = DB::transaction(function () use ($from, $to, $note, $lines, $sameWh, $transport, $vehicle, $lr, $expected) {
+            $docId = DB::transaction(function () use ($from, $to, $note, $lines, $sameWh, $transport, $vehicle, $lr, $expected, $cf) {
                 $t = $this->tid();
                 $now = date('Y-m-d H:i:s');
                 $docId = DB::insert('stock_docs', [
@@ -110,6 +111,7 @@ final class TransferController extends StockDocController
                     'created_by' => Auth::user()['id'], 'posted_at' => $now, 'dispatched_at' => $sameWh ? null : $now,
                     'expected_date' => $expected, 'transport' => $sameWh ? null : $transport, 'vehicle_no' => $sameWh ? null : $vehicle, 'lr_no' => $sameWh ? null : $lr,
                 ]);
+                \App\Models\CustomFields::save('transfer', $docId, $cf);
                 $seen = [];
                 foreach ($lines as $n => $l) {
                     try {

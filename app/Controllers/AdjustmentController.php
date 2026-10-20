@@ -34,6 +34,7 @@ final class AdjustmentController extends StockDocController
     {
         $back = 'stock/adjustments/create';
         $this->enforceFields('adjustment', $back);
+        $cf = $this->customFieldValues('adjustment', $back);
         $d = $this->input();
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
         $reason = (string)($d['reason'] ?? '');
@@ -43,13 +44,14 @@ final class AdjustmentController extends StockDocController
         $lines = $this->postedLines($back);
 
         try {
-            $docId = DB::transaction(function () use ($wh, $reason, $note, $lines) {
+            $docId = DB::transaction(function () use ($wh, $reason, $note, $lines, $cf) {
                 $t = $this->tid();
                 $docId = DB::insert('stock_docs', [
                     'tenant_id' => $t, 'type' => 'adjustment', 'doc_no' => Numbering::next($t, 'ADJ'),
                     'warehouse_id' => $wh['id'], 'reason' => $reason, 'note' => $note, 'status' => 'posted',
                     'created_by' => \Core\Auth::user()['id'], 'posted_at' => date('Y-m-d H:i:s'),
                 ]);
+                \App\Models\CustomFields::save('adjustment', $docId, $cf);
                 foreach ($lines as $n => $l) {
                     try {
                         $this->postLine($docId, $wh, $reason, $note, $l);

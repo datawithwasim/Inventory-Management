@@ -72,6 +72,7 @@ final class RequisitionController extends PurchaseBase
     {
         $back = 'purchase/requisitions/create';
         $this->enforceFields('requisition', $back);
+        $cf = $this->customFieldValues('requisition', $back);
         $d = $this->input();
         $note = $this->text($d['note'] ?? '', 255, 'Note', $back);
         $lines = [];
@@ -83,10 +84,11 @@ final class RequisitionController extends PurchaseBase
             $seen[$v['id']] = 1;
             $lines[] = ['variant_id' => (int)$v['id'], 'qty' => $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back), 'note' => $this->text($l['note'] ?? '', 150, "$prefix note", $back)];
         }
-        $id = DB::transaction(function () use ($note, $lines) {
+        $id = DB::transaction(function () use ($note, $lines, $cf) {
             $t = $this->tid();
             $id = DB::insert('purchase_requisitions', ['tenant_id' => $t, 'req_no' => Numbering::next($t, 'REQ'), 'note' => $note, 'created_by' => Auth::user()['id']]);
             foreach ($lines as $l) DB::insert('purchase_requisition_items', ['tenant_id' => $t, 'requisition_id' => $id] + $l);
+            \App\Models\CustomFields::save('requisition', $id, $cf);
             return $id;
         });
         Audit::log('requisition_create', 'requisition', $id);

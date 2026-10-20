@@ -58,6 +58,7 @@ final class SalesReturnController extends SalesBase
         $invId = (int)($d['invoice_id'] ?? 0);
         $back = "sales/returns/create?invoice=$invId";
         $this->enforceFields('sales_return', $back);
+        $cf = $this->customFieldValues('sales_return', $back);
         $i = DB::one('SELECT i.*, d.warehouse_id, d.delivery_no FROM sales_invoices i JOIN deliveries d ON d.id = i.delivery_id WHERE i.tenant_id = ? AND i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$t, $invId]) ?? $this->notFound();
         $date = $this->date($d['return_date'] ?? '', 'Return date', $back);
         $reason = $this->text($d['reason'] ?? '', 150, 'Reason', $back);
@@ -79,10 +80,11 @@ final class SalesReturnController extends SalesBase
         if (!$lines) $this->bounce('Enter the quantity to return on at least one line.', $back);
 
         try {
-            $retId = DB::transaction(function () use ($t, $i, $date, $reason, $lines) {
+            $retId = DB::transaction(function () use ($t, $i, $date, $reason, $lines, $cf) {
                 $no = Numbering::next($t, 'SR');
                 $retId = DB::insert('sales_returns', ['tenant_id' => $t, 'return_no' => $no, 'invoice_id' => $i['id'], 'delivery_id' => $i['delivery_id'], 'customer_id' => $i['customer_id'],
                     'warehouse_id' => $i['warehouse_id'], 'return_date' => $date, 'reason' => $reason, 'created_by' => Auth::user()['id']]);
+                \App\Models\CustomFields::save('sales_return', $retId, $cf);
                 $total = 0.0;
                 foreach ($lines as $l) {
                     $it = $l['it'];
