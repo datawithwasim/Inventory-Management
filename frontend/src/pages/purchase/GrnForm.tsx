@@ -120,7 +120,7 @@ export default function GrnForm() {
       <PageHead title={title}
         extra={schema.data.canDesign ? <Link className="page-layout-link" to={`/settings/formdesign?form=grn&return=${encodeURIComponent(location.pathname)}`}><i className="bi bi-layout-text-window-reverse" /> Edit page layout</Link> : null}>
         <button type="button" className="btn btn-outline-secondary" onClick={() => nav(po ? `/purchase/orders/${po.id}` : '/purchase/grns')}>Cancel</button>
-        <button className="btn btn-success" disabled={saving}>{saving ? 'Saving…' : `Receive into stock${live.length ? ` · ${live.length} ${live.length === 1 ? 'item' : 'items'}, ${rollTotal} ${rollTotal === 1 ? 'line' : 'lines'}` : ''}`}</button>
+        <button className="btn btn-success" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </PageHead>
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body">
