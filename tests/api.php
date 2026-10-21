@@ -1217,6 +1217,36 @@ check('search finds products', in_array('Products', array_column($r['json']['gro
 DB::run('UPDATE delivery_items SET product_id = NULL WHERE tenant_id = ?', [$tA]); DB::run('UPDATE sales_order_items SET product_id = NULL WHERE tenant_id = ?', [$tA]);
 DB::run('DELETE FROM products WHERE tenant_id = ?', [$tA]); DB::run('DELETE FROM catalogues WHERE tenant_id = ?', [$tA]);
 
+echo "Gutt numbers: known by a number first, named later\n";
+$r = $c->call('POST', '/catalogues', ['code' => 'G-245']);
+$cg = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-245'", [$tA]);
+$row = DB::one('SELECT name, code, named FROM catalogues WHERE id = ?', [$cg]);
+check('a catalogue can start as just a gutt number: it is called by the number and marked "name pending"', $r['status'] === 200 && $row['name'] === 'G-245' && (int)$row['named'] === 0);
+check('the same gutt number twice, or neither number nor name, is refused', $c->call('POST', '/catalogues', ['code' => 'G-245'])['status'] === 422 && $c->call('POST', '/catalogues', ['notes' => 'x'])['status'] === 422);
+$r = $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '450']);
+$pg1 = (int)DB::val("SELECT id FROM products WHERE tenant_id = ? AND catalogue_id = ? AND code = '1'", [$tA, $cg]);
+$prow = DB::one('SELECT name, named FROM products WHERE id = ?', [$pg1]);
+check('a design can start as just a gutt number: it is called "catalogue-number" until named', $r['status'] === 200 && $prow['name'] === 'G-245-1' && (int)$prow['named'] === 0);
+check('the same gutt number twice in one catalogue is refused, in another catalogue it is fine', $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '1'])['status'] === 422
+    && $c->call('POST', '/catalogues', ['code' => 'G-246'])['status'] === 200 && $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-246'", [$tA]), 'variant_id' => $rv, 'price' => '1'])['status'] === 200);
+$r = $c->call('POST', "/catalogues/$cg", ['code' => 'G-245', 'name' => 'MAHARANI', 'is_active' => 1]);
+$row = DB::one('SELECT name, code, named FROM catalogues WHERE id = ?', [$cg]);
+check('naming it later keeps the gutt number and clears "name pending"', $r['status'] === 200 && $row['name'] === 'MAHARANI' && $row['code'] === 'G-245' && (int)$row['named'] === 1);
+$r = $c->call('POST', "/products/$pg1", ['code' => '1', 'name' => 'MAHARANI Rose', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '450', 'is_active' => 1]);
+check('a design is named later the same way', $r['status'] === 200 && DB::val('SELECT name FROM products WHERE id = ?', [$pg1]) === 'MAHARANI Rose' && (int)DB::val('SELECT named FROM products WHERE id = ?', [$pg1]) === 1);
+$r = $c->call('POST', "/products/$pg1", ['code' => '1', 'name' => 'MAHARANI Rose', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '460', 'is_active' => 1]);
+check('saving a named design again keeps it named', (int)DB::val('SELECT named FROM products WHERE id = ?', [$pg1]) === 1);
+$r = $c->call('GET', '/catalogues?q=G-245');
+check('catalogues are found by gutt number', count($r['json']['data']['rows'] ?? []) === 1 && ($r['json']['data']['rows'][0]['code'] ?? '') === 'G-245');
+$r = $c->call('GET', '/products?q=MAHARANI');
+check('products are found by name, and by gutt number inside the catalogue', ($r['json']['data']['total'] ?? 0) >= 1 && ($c->call('GET', '/lookup/find/product?q=1')['json']['rows'][0]['sub'] ?? '') !== '');
+$csv = function (string $text) { $f = tempnam(sys_get_temp_dir(), 'pg'); file_put_contents($f, $text); return new CURLFile($f, 'text/csv', 'p.csv'); };
+$r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Item Name,Gutt No,Price\nG-300,$itemRv,5,200\nG-300,$itemRv,6,\n")]);
+$cn = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND name = 'G-300'", [$tA]);
+check('a sheet with only gutt numbers imports: the designs are called catalogue-number and are marked "name pending"', $cn > 0 && (int)DB::val('SELECT COUNT(*) FROM products WHERE catalogue_id = ? AND named = 0', [$cn]) === 2 && DB::val('SELECT name FROM products WHERE catalogue_id = ? AND code = ?', [$cn, '5']) === 'G-300-5');
+DB::run('DELETE FROM products WHERE tenant_id = ? AND (catalogue_id = ? OR catalogue_id = ?)', [$tA, $cg, $cn]);
+DB::run("DELETE FROM products WHERE tenant_id = ? AND catalogue_id IN (SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-246')", [$tA, $tA]); DB::run("DELETE FROM catalogues WHERE tenant_id = ? AND code = 'G-246'", [$tA]);
+
 echo "Print templates\n";
 $r = $c->call('GET', '/settings/templates/design?doc=invoice');
 $cfg = $r['json']['data']['cfg'] ?? [];

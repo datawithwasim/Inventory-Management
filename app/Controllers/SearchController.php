@@ -26,7 +26,7 @@ final class SearchController extends Controller
             if (can('products.view')) {
                 $add('Products', array_map(fn($r) => ['l' => $r['name'], 's' => $r['catalogue'] ?? 'No catalogue', 'i' => 'grid', 'u' => url('products/' . $r['id'] . '/edit')], DB::all(
                     'SELECT p.id, p.name, c.name AS catalogue FROM products p LEFT JOIN catalogues c ON c.id = p.catalogue_id
-                     WHERE p.tenant_id = ? AND (p.name LIKE ? OR c.name LIKE ?) ORDER BY LENGTH(p.name), p.name LIMIT 6', [$t, $like, $like])));
+                     WHERE p.tenant_id = ? AND (p.name LIKE ? OR p.code LIKE ? OR c.name LIKE ?) ORDER BY LENGTH(p.name), p.name LIMIT 6', [$t, $like, $like, $like])));
             }
             if (can('stock.view')) {
                 $add(term('rolls'), array_map(fn($r) => ['l' => $r['batch_no'] . ' · ' . $r['name'], 's' => 'Roll', 'i' => 'layers', 'u' => url('stock/batches/' . $r['id'])], DB::all(

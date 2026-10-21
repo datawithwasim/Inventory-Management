@@ -15,7 +15,7 @@ use Core\Scope;
 final class ProductController extends SalesBase
 {
     private const MAX_ROWS = 5000;
-    private const SEL = 'SELECT p.*, c.name AS catalogue, v.sku, i.name AS item_name, i.id AS item_id,
+    private const SEL = 'SELECT p.*, c.name AS catalogue, c.code AS catalogue_code, v.sku, i.name AS item_name, i.id AS item_id,
             (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s WHERE s.tenant_id = p.tenant_id AND s.variant_id = p.variant_id%WH%) AS stock, u.short_name AS unit
         FROM products p LEFT JOIN catalogues c ON c.id = p.catalogue_id JOIN item_variants v ON v.id = p.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id';
 
@@ -32,7 +32,7 @@ final class ProductController extends SalesBase
 
     private function catalogues(bool $onlyActive = false): array
     {
-        return DB::all('SELECT id, name, is_active FROM catalogues WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
+        return DB::all('SELECT id, name, code, named, is_active FROM catalogues WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
     }
 
     public function index(): void
@@ -43,7 +43,7 @@ final class ProductController extends SalesBase
         $where = 'p.tenant_id = ?'; $p = [$this->tid()];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
-            $where .= ' AND (p.name LIKE ? OR c.name LIKE ? OR i.name LIKE ? OR v.sku LIKE ?)'; array_push($p, $like, $like, $like, $like);
+            $where .= ' AND (p.name LIKE ? OR p.code LIKE ? OR c.name LIKE ? OR c.code LIKE ? OR i.name LIKE ? OR v.sku LIKE ?)'; array_push($p, $like, $like, $like, $like, $like, $like);
         }
         if ($cat === 'none') $where .= ' AND p.catalogue_id IS NULL';
         elseif ((int)$cat > 0) { $where .= ' AND p.catalogue_id = ?'; $p[] = (int)$cat; }
@@ -73,18 +73,31 @@ final class ProductController extends SalesBase
         return $v ? ['id' => (int)$v['id'], 'label' => Stock::label($v), 'sale_price' => (float)$v['sale_price']] : null;
     }
 
-    private function fields(string $back, ?int $exceptId): array
+    /**
+     * A design starts as a gutt number; its name can come later. Without a name it is called "<catalogue>-<number>" until it is named.
+     * The number is unique inside its catalogue, the name among all the company's products.
+     */
+    private function fields(string $back, ?int $exceptId, ?array $row = null): array
     {
         $d = $this->input();
         $t = $this->tid();
+        $code = trim((string)($d['code'] ?? ''));
         $name = trim((string)($d['name'] ?? ''));
-        if ($name === '' || mb_strlen($name) > 150) $this->bounce('Product name is required (max 150 characters).', $back);
-        if (DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND name = ? AND id <> ?', [$t, $name, $exceptId ?? 0])) $this->bounce('A product with that name already exists.', $back);
+        if ($code === '' && $name === '') $this->bounce('Give the design a gutt number, or a name.', $back);
+        if (mb_strlen($code) > 40) $this->bounce('The gutt number is too long (max 40 characters).', $back);
         $cat = (int)($d['catalogue_id'] ?? 0);
-        if ($cat && !DB::val('SELECT 1 FROM catalogues WHERE tenant_id = ? AND id = ?', [$t, $cat])) $this->bounce('Choose a valid catalogue, or leave it empty.', $back);
+        $catRow = $cat ? DB::one('SELECT id, name FROM catalogues WHERE tenant_id = ? AND id = ?', [$t, $cat]) : null;
+        if ($cat && !$catRow) $this->bounce('Choose a valid catalogue, or leave it empty.', $back);
+        $generated = $code !== '' ? ($catRow ? $catRow['name'] . '-' : '') . $code : '';
+        $named = $name !== '' && $name !== $generated ? 1 : 0;
+        if ($name === '') $name = $generated;
+        if ($row !== null && $named === 0 && $name === $row['name'] && (int)$row['named'] === 1) $named = 1;
+        if (mb_strlen($name) > 150) $this->bounce('Product name is too long (max 150 characters).', $back);
+        if (DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND name = ? AND id <> ?', [$t, $name, $exceptId ?? 0])) $this->bounce('A product with that name already exists.', $back);
+        if ($code !== '' && DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND code = ? AND catalogue_id <=> ? AND id <> ?', [$t, $code, $cat ?: null, $exceptId ?? 0])) $this->bounce('That gutt number is already used in this catalogue.', $back);
         $v = Stock::variant((int)($d['variant_id'] ?? 0));
         if (!$v) $this->bounce('Search and choose the item this product is sold from.', $back);
-        return ['name' => $name, 'catalogue_id' => $cat ?: null, 'variant_id' => (int)$v['id'], 'price' => $this->money($d['price'] ?? '', 'Price', $back),
+        return ['name' => $name, 'code' => $code !== '' ? $code : null, 'named' => $named, 'catalogue_id' => $cat ?: null, 'variant_id' => (int)$v['id'], 'price' => $this->money($d['price'] ?? '', 'Price', $back),
             'is_active' => array_key_exists('is_active', $d) && empty($d['is_active']) ? 0 : 1];
     }
 
@@ -100,9 +113,9 @@ final class ProductController extends SalesBase
     public function update(string $id): void
     {
         $r = $this->load($id);
-        $data = $this->fields("products/{$r['id']}/edit", (int)$r['id']);
-        DB::run('UPDATE products SET name = ?, catalogue_id = ?, variant_id = ?, price = ?, is_active = ? WHERE tenant_id = ? AND id = ?',
-            [$data['name'], $data['catalogue_id'], $data['variant_id'], $data['price'], $data['is_active'], $this->tid(), $r['id']]);
+        $data = $this->fields("products/{$r['id']}/edit", (int)$r['id'], $r);
+        DB::run('UPDATE products SET name = ?, code = ?, named = ?, catalogue_id = ?, variant_id = ?, price = ?, is_active = ? WHERE tenant_id = ? AND id = ?',
+            [$data['name'], $data['code'], $data['named'], $data['catalogue_id'], $data['variant_id'], $data['price'], $data['is_active'], $this->tid(), $r['id']]);
         Audit::log('product_update', 'product', (int)$r['id']);
         flash('success', 'Product updated.');
         redirect($data['catalogue_id'] ? 'catalogues/' . $data['catalogue_id'] : 'products');
@@ -136,14 +149,14 @@ final class ProductController extends SalesBase
 
     public function template(): void
     {
-        $this->csvOut('products-template.csv', [['Catalogue Name', 'Product Name', 'Item Name', 'Price'], ['CARAVAN', 'CARAVAN-1', 'NUC-212589', '450'], ['CARAVAN', 'CARAVAN-2', 'NUC-212572', '450'], ['', 'Plain Cotton Bedsheet', 'BS-K-BL', '1199']]);
+        $this->csvOut('products-template.csv', [['Catalogue Name', 'Product Name', 'Item Name', 'Price', 'Gutt No'], ['CARAVAN', 'CARAVAN-1', 'NUC-212589', '450', ''], ['CARAVAN', '', 'NUC-212572', '450', '2'], ['', 'Plain Cotton Bedsheet', 'BS-K-BL', '1199', '']]);
     }
 
     public function export(): void
     {
         $rows = DB::all($this->sel() . ' WHERE p.tenant_id = ? ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', [$this->tid()]);
-        $out = [['Catalogue Name', 'Product Name', 'Item Name', 'Price', 'Active']];
-        foreach ($rows as $r) $out[] = [$r['catalogue'] ?? '', $r['name'], $r['item_name'], $r['price'] + 0, $r['is_active'] ? 'yes' : 'no'];
+        $out = [['Catalogue Name', 'Product Name', 'Item Name', 'Price', 'Active', 'Gutt No']];
+        foreach ($rows as $r) $out[] = [$r['catalogue'] ?? '', $r['name'], $r['item_name'], $r['price'] + 0, $r['is_active'] ? 'yes' : 'no', $r['code'] ?? ''];
         $this->csvOut('products-' . date('Y-m-d') . '.csv', $out);
     }
 
@@ -161,15 +174,15 @@ final class ProductController extends SalesBase
         $norm = fn($x) => preg_replace('/\s+/', '_', strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string)$x))));
         $head = array_map($norm, $head);
         $col = fn(array $names) => (function () use ($head, $names) { foreach ($names as $n) { $i = array_search($n, $head, true); if ($i !== false) return $i; } return null; })();
-        $cC = $col(['catalogue_name', 'catalogue']); $cP = $col(['product_name', 'product']); $cI = $col(['item_name', 'item']); $cPr = $col(['price', 'sale_price']);
-        if ($cP === null || $cI === null) $fail('The first row must have the columns "Product Name" and "Item Name" (and "Catalogue Name", "Price" if you have them).');
+        $cC = $col(['catalogue_name', 'catalogue']); $cP = $col(['product_name', 'product']); $cI = $col(['item_name', 'item']); $cPr = $col(['price', 'sale_price']); $cG = $col(['gutt_no', 'gutt_number', 'gutt', 'code']);
+        if (($cP === null && $cG === null) || $cI === null) $fail('The first row must have the columns "Item Name" and "Product Name" or "Gutt No" (and "Catalogue Name", "Price" if you have them).');
         $t = $this->tid();
         $rows = []; $line = 1;
         while (($r = fgetcsv($h, 0, ',', '"', '\\')) !== false) {
             $line++;
             if (!array_filter($r, fn($x) => trim((string)$x) !== '')) continue;
             if (count($rows) >= self::MAX_ROWS) $fail('Too many rows (max ' . self::MAX_ROWS . ').');
-            $rows[] = ['line' => $line, 'cat' => $cC === null ? '' : trim((string)($r[$cC] ?? '')), 'name' => trim((string)($r[$cP] ?? '')), 'item' => trim((string)($r[$cI] ?? '')), 'price' => $cPr === null ? '' : trim((string)($r[$cPr] ?? ''))];
+            $rows[] = ['line' => $line, 'cat' => $cC === null ? '' : trim((string)($r[$cC] ?? '')), 'name' => $cP === null ? '' : trim((string)($r[$cP] ?? '')), 'gutt' => $cG === null ? '' : trim((string)($r[$cG] ?? '')), 'item' => trim((string)($r[$cI] ?? '')), 'price' => $cPr === null ? '' : trim((string)($r[$cPr] ?? ''))];
         }
         fclose($h);
         if (!$rows) $fail('The file has no data rows.');
@@ -182,7 +195,10 @@ final class ProductController extends SalesBase
         $errors = []; $seen = []; $plan = [];
         foreach ($rows as $r) {
             $L = $r['line'];
-            if ($r['name'] === '' || mb_strlen($r['name']) > 150) { $errors[] = "Row $L: product name is empty or too long."; continue; }
+            // a design known only by its gutt number is called "<catalogue>-<number>" until it is named
+            if ($r['name'] === '' && $r['gutt'] !== '') $r['name'] = ($r['cat'] !== '' ? $r['cat'] . '-' : '') . $r['gutt'];
+            if ($r['name'] === '' || mb_strlen($r['name']) > 150) { $errors[] = "Row $L: product name (or gutt number) is empty or too long."; continue; }
+            if (mb_strlen($r['gutt']) > 40) { $errors[] = "Row $L: gutt number is too long."; continue; }
             if (isset($seen[mb_strtolower($r['name'])])) { $errors[] = "Row $L: product \"{$r['name']}\" is listed twice in this file."; continue; }
             $seen[mb_strtolower($r['name'])] = 1;
             if (mb_strlen($r['cat']) > 120) { $errors[] = "Row $L: catalogue name is too long."; continue; }
@@ -208,11 +224,11 @@ final class ProductController extends SalesBase
                 }
                 $k = mb_strtolower($r['name']);
                 if (isset($existing[$k])) {
-                    DB::run('UPDATE products SET catalogue_id = ?, variant_id = ?' . ($r['price'] !== '' ? ', price = ?' : '') . ' WHERE tenant_id = ? AND id = ?',
-                        array_merge([$cid, $r['variant']], $r['price'] !== '' ? [round((float)$r['price'], 2)] : [], [$t, $existing[$k]]));
+                    DB::run('UPDATE products SET catalogue_id = ?, variant_id = ?' . ($r['price'] !== '' ? ', price = ?' : '') . ($r['gutt'] !== '' ? ', code = ?' : '') . ' WHERE tenant_id = ? AND id = ?',
+                        array_merge([$cid, $r['variant']], $r['price'] !== '' ? [round((float)$r['price'], 2)] : [], $r['gutt'] !== '' ? [$r['gutt']] : [], [$t, $existing[$k]]));
                     $u++;
                 } else {
-                    DB::insert('products', ['tenant_id' => $t, 'catalogue_id' => $cid, 'variant_id' => $r['variant'], 'name' => $r['name'], 'price' => $r['price'] !== '' ? round((float)$r['price'], 2) : $r['fallback']]);
+                    DB::insert('products', ['tenant_id' => $t, 'catalogue_id' => $cid, 'variant_id' => $r['variant'], 'name' => $r['name'], 'code' => $r['gutt'] !== '' ? $r['gutt'] : null, 'named' => $r['gutt'] !== '' && $r['name'] === ($r['cat'] !== '' ? $r['cat'] . '-' : '') . $r['gutt'] ? 0 : 1, 'price' => $r['price'] !== '' ? round((float)$r['price'], 2) : $r['fallback']]);
                     $a++;
                 }
             }

@@ -18,7 +18,7 @@ final class CatalogueController extends SalesBase
     {
         $q = trim((string)($_GET['q'] ?? ''));
         $where = 'c.tenant_id = ?'; $p = [$this->tid()];
-        if ($q !== '') { $where .= ' AND c.name LIKE ?'; $p[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
+        if ($q !== '') { $where .= ' AND (c.name LIKE ? OR c.code LIKE ?)'; $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; array_push($p, $like, $like); }
         $this->view('app/catalogues/index', ['title' => 'Catalogues', 'q' => $q, 'rows' => DB::all(
             "SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.catalogue_id = c.id) AS products, (SELECT COUNT(*) FROM products p WHERE p.catalogue_id = c.id AND p.is_active = 1) AS active_products
              FROM catalogues c WHERE $where ORDER BY c.name", $p),
@@ -44,13 +44,22 @@ final class CatalogueController extends SalesBase
         $this->view('app/catalogues/form', ['title' => 'Edit ' . $c['name'], 'row' => $c]);
     }
 
-    private function fields(string $back, ?int $exceptId): array
+    /** A catalogue starts as a gutt number; the name can come later. Name and number are each unique among the company's catalogues. */
+    private function fields(string $back, ?int $exceptId, ?array $row = null): array
     {
         $d = $this->input();
+        $code = trim((string)($d['code'] ?? ''));
         $name = trim((string)($d['name'] ?? ''));
-        if ($name === '' || mb_strlen($name) > 120) $this->bounce('Catalogue name is required (max 120 characters).', $back);
+        if ($code === '' && $name === '') $this->bounce('Give the catalogue a gutt number, or a name.', $back);
+        if (mb_strlen($code) > 40) $this->bounce('The gutt number is too long (max 40 characters).', $back);
+        if (mb_strlen($name) > 120) $this->bounce('Catalogue name is too long (max 120 characters).', $back);
+        // no name yet: the catalogue is called by its number until it is named
+        $named = $name !== '' && $name !== $code ? 1 : 0;
+        if ($name === '') $name = $code;
+        if ($row !== null && $named === 0 && $name === $row['name'] && (int)$row['named'] === 1) $named = 1;   // an untouched real name stays a real name
+        if ($code !== '' && DB::val('SELECT 1 FROM catalogues WHERE tenant_id = ? AND code = ? AND id <> ?', [$this->tid(), $code, $exceptId ?? 0])) $this->bounce('A catalogue with that gutt number already exists.', $back);
         if (DB::val('SELECT 1 FROM catalogues WHERE tenant_id = ? AND name = ? AND id <> ?', [$this->tid(), $name, $exceptId ?? 0])) $this->bounce('A catalogue with that name already exists.', $back);
-        return ['name' => $name, 'notes' => $this->text($d['notes'] ?? '', 255, 'Notes', $back), 'is_active' => array_key_exists('is_active', $d) && empty($d['is_active']) ? 0 : 1];
+        return ['name' => $name, 'code' => $code !== '' ? $code : null, 'named' => $named, 'notes' => $this->text($d['notes'] ?? '', 255, 'Notes', $back), 'is_active' => array_key_exists('is_active', $d) && empty($d['is_active']) ? 0 : 1];
     }
 
     public function store(): void
@@ -58,15 +67,15 @@ final class CatalogueController extends SalesBase
         $data = $this->fields('catalogues/create', null);
         $id = DB::insert('catalogues', ['tenant_id' => $this->tid()] + $data);
         Audit::log('catalogue_create', 'catalogue', $id, $data['name']);
-        flash('success', 'Catalogue created. Add its products now, or import them from a CSV file.');
+        flash('success', 'Catalogue created. Add its designs now, or import them from a CSV file.');
         redirect("catalogues/$id");
     }
 
     public function update(string $id): void
     {
         $c = $this->load($id);
-        $data = $this->fields("catalogues/{$c['id']}/edit", (int)$c['id']);
-        DB::run('UPDATE catalogues SET name = ?, notes = ?, is_active = ? WHERE tenant_id = ? AND id = ?', [$data['name'], $data['notes'], $data['is_active'], $this->tid(), $c['id']]);
+        $data = $this->fields("catalogues/{$c['id']}/edit", (int)$c['id'], $c);
+        DB::run('UPDATE catalogues SET name = ?, code = ?, named = ?, notes = ?, is_active = ? WHERE tenant_id = ? AND id = ?', [$data['name'], $data['code'], $data['named'], $data['notes'], $data['is_active'], $this->tid(), $c['id']]);
         Audit::log('catalogue_update', 'catalogue', (int)$c['id']);
         flash('success', 'Catalogue updated.');
         redirect("catalogues/{$c['id']}");
