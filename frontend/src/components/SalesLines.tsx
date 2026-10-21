@@ -7,8 +7,8 @@ export type SLine = { variant_id: string; product_id: string; label: string; uni
 export const blankSLine = (): SLine => ({ variant_id: '', product_id: '', label: '', unit: '', dec: true, qty: '', unit_price: '', discount_pct: '', tax_rate: '', hint: '' });
 
 /** The items table of a sales order, drawn from its column design: item search (with this customer's price), qty, price, discount, tax and live totals. */
-export default function SalesLines({ lines, setLines, customer, warehouse, charges, grid, term }: {
-  lines: SLine[]; setLines: (l: SLine[]) => void; customer: string; warehouse: string; charges: number; grid?: GridCol[]; term: (k: string, p?: boolean) => string;
+export default function SalesLines({ lines, setLines, customer, warehouse, charges, grid, term, free = false }: {
+  lines: SLine[]; setLines: (l: SLine[]) => void; customer: string; warehouse: string; charges: number; grid?: GridCol[]; term: (k: string, p?: boolean) => string; free?: boolean;
 }) {
   const set = (i: number, patch: Partial<SLine>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const calc = (l: SLine) => saleLine(Number(l.qty) || 0, Number(l.unit_price) || 0, Number(l.discount_pct) || 0, Number(l.tax_rate) || 0);
@@ -21,7 +21,7 @@ export default function SalesLines({ lines, setLines, customer, warehouse, charg
         onPick={(p) => {
           if (!p) { set(i, { variant_id: '', product_id: '', label: '', hint: '' }); return; }
           const v = p.row;
-          set(i, { variant_id: String(v.id), product_id: String(v.product_id ?? ''), label: p.label, unit: v.unit, dec: !!Number(v.allow_decimal), unit_price: String(v.price ?? ''), discount_pct: Number(v.discount) ? String(v.discount) : '', tax_rate: Number(v.tax_rate) ? String(Number(v.tax_rate)) : '',
+          set(i, { variant_id: String(v.id), product_id: String(v.product_id ?? ''), label: p.label, unit: v.unit, dec: !!Number(v.allow_decimal), unit_price: free ? '0' : String(v.price ?? ''), discount_pct: !free && Number(v.discount) ? String(v.discount) : '', tax_rate: !free && Number(v.tax_rate) ? String(Number(v.tax_rate)) : '',
             hint: v.available != null ? `Free stock: ${fq(v.available)} ${v.unit}${Number(v.is_bundle) ? ' (sets)' : ''}` : '' });
         }} />
       {l.hint && <div className="small text-muted mt-1">{l.hint}</div>}</>) },

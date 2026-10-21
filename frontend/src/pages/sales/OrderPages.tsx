@@ -29,7 +29,7 @@ export function OrderList() {
           <div className="col-md-2"><input name="q" className="form-control" placeholder="Order no." defaultValue={sp.get('q') ?? ''} /></div>
         </Filters>)}
       columns={[
-        { head: 'Order', cell: (r) => <Link to={`/sales/orders/${r.id}`}>{r.order_no}</Link> }, { head: 'Date', cell: (r) => fdate(r.order_date) }, { head: term('customer'), cell: (r) => r.customer },
+        { head: 'Order', cell: (r) => <><Link to={`/sales/orders/${r.id}`}>{r.order_no}</Link>{r.launch_no ? <> <span className="badge text-bg-light border" title="Fabric for a catalogue launch"><i className="bi bi-rocket-takeoff" /> {r.launch_no}</span></> : null}</> }, { head: 'Date', cell: (r) => fdate(r.order_date) }, { head: term('customer'), cell: (r) => r.customer },
         { head: 'Ship from', cell: (r) => r.warehouse }, { head: 'Deliver by', cell: (r) => fdate(r.expected_date) }, { head: 'Total', className: 'text-end', cell: (r) => money(r.total) }, { head: 'Status', cell: (r) => <SoBadge status={r.status} /> },
       ]} />
   );
@@ -40,7 +40,8 @@ export function OrderForm() {
   const { id } = useParams(); const [sp] = useSearchParams(); const nav = useNavigate(); const qc = useQueryClient();
   const { term } = useSession();
   const schema = useSchema('sales_order');
-  const src = useQuery({ queryKey: ['so-form', id ?? 'new'], gcTime: 0, queryFn: async () => (await get(id ? `/sales/orders/${id}/edit` : '/sales/orders/create')) as any });
+  const launchId = sp.get('launch') ?? '';
+  const src = useQuery({ queryKey: ['so-form', id ?? 'new', launchId], gcTime: 0, queryFn: async () => (await get(id ? `/sales/orders/${id}/edit` : `/sales/orders/create${launchId ? `?launch=${launchId}` : ''}`)) as any });
   const [values, setValues] = useState<Record<string, any> | null>(null); const [lines, setLines] = useState<SLine[]>([blankSLine()]); const [backorder, setBackorder] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]); const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -51,16 +52,18 @@ export function OrderForm() {
     for (const [k, f] of Object.entries(schema.data.fields)) {
       if (f.custom && f.cfId) { const raw = cf[f.cfId] ?? ''; v[k] = f.type === 'multiselect' ? (raw ? JSON.parse(raw) : []) : raw; } else v[k] = o[k] ?? '';
     }
-    if (!id) { v.order_date = new Date().toISOString().slice(0, 10); v.warehouse_id = String(d.warehouses?.[0]?.id ?? ''); v.customer_id = sp.get('customer') ?? String(d.customers?.[0]?.id ?? ''); v.delivery_charge = ''; v.installation_charge = ''; }
+    if (!id) { v.order_date = new Date().toISOString().slice(0, 10); v.warehouse_id = String(d.warehouses?.[0]?.id ?? ''); v.customer_id = sp.get('customer') ?? String(d.customers?.[0]?.id ?? ''); v.delivery_charge = ''; v.installation_charge = '';
+      // a fabric order for a catalogue launch: addressed to the catalogue department, sent where the catalogue team said
+      if (d.launch) { v.customer_id = String(d.launch.customer_id); v.warehouse_id = String(d.launch.warehouse_id); v.ship_to = d.launch.ship_to ?? ''; v.notes = `Fabric for catalogue launch ${d.launch.launch_no} (${d.launch.catalogue})`; } }
     setValues(v); setBackorder(!!Number(o.allow_backorder ?? 0));
     const old: any[] = d.oldLines ?? [];
     if (old.length) setLines(old.map((l) => ({ variant_id: String(l.variant_id), product_id: String(l.product_id ?? ''), label: l.label, unit: l.unit ?? '', dec: l.dec !== 0, qty: String(Number(l.qty)), unit_price: String(l.unit_price ?? ''), discount_pct: Number(l.discount_pct) ? String(Number(l.discount_pct)) : '', tax_rate: Number(l.tax_rate) ? String(Number(l.tax_rate)) : '', hint: '' })));
   }, [schema.data, src.data, values, id, sp, nav]);
   if (schema.isLoading || src.isLoading || !values || !schema.data) return <Spinner />;
-  const o = src.data.data.o;
+  const o = src.data.data.o; const launch = src.data.data.launch;
   const save = async () => {
     setSaving(true); setMsgs([]);
-    const body = { ...toPayload(schema.data!, values), allow_backorder: backorder ? 1 : '', lines: lines.filter((l) => l.variant_id).map((l) => ({ variant_id: l.variant_id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
+    const body = { ...toPayload(schema.data!, values), allow_backorder: backorder ? 1 : '', launch_id: launch ? launch.id : '', lines: lines.filter((l) => l.variant_id).map((l) => ({ variant_id: l.variant_id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: l.tax_rate })) };
     const r = await post(id ? `/sales/orders/${id}` : '/sales/orders', body);
     setSaving(false);
     if (!r.ok) { setMsgs(r.messages ?? []); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
@@ -74,13 +77,14 @@ export function OrderForm() {
         <button className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save draft'}</button>
       </PageHead>
       <Messages items={msgs} />
+      {launch && <div className="alert alert-info"><i className="bi bi-rocket-takeoff" /> Fabric order for catalogue launch <b>{launch.launch_no}</b> ({launch.catalogue}). The warehouse will deliver it from here, to the delivery address below. Fabric is not sold: the prices are 0.</div>}
       <div className="card mb-3"><div className="card-body">
         <SchemaForm schema={schema.data} values={values} onChange={setValues} />
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="bo" checked={backorder} onChange={(e) => setBackorder(e.target.checked)} /><label className="form-check-label" htmlFor="bo">Take the order even if stock is short <small className="text-muted d-block">(made-to-order / back-order)</small></label></div>
         <p className="text-muted small mb-0">Confirming the order <strong>reserves</strong> the stock, so it cannot be sold to someone else before this {term('customer').toLowerCase()}'s delivery.</p>
       </div></div>
       <SalesLines lines={lines} setLines={setLines} customer={String(values.customer_id ?? '')} warehouse={String(values.warehouse_id ?? '')} charges={(Number(values.delivery_charge) || 0) + (Number(values.installation_charge) || 0)}
-        grid={schema.data.grid} term={term} />
+        grid={schema.data.grid} term={term} free={!!launch} />
     </form>
   );
 }
@@ -113,7 +117,7 @@ export function OrderDetail() {
   };
   return (
     <RecordPage entity="sales_order" id={o.id} name={o.order_no} back="/sales/orders"
-      badges={<><SoBadge status={st} />{Number(o.allow_backorder) ? <> <span className="badge text-bg-light border">back-order allowed</span></> : null}</>}
+      badges={<><SoBadge status={st} />{Number(o.allow_backorder) ? <> <span className="badge text-bg-light border">back-order allowed</span></> : null}{d.launch ? <> <Link className="badge text-bg-light border text-decoration-none" to={`/launches/${d.launch.id}`}><i className="bi bi-rocket-takeoff" /> Fabric for launch {d.launch.launch_no}</Link></> : null}</>}
       actions={<>
         {st === 'draft' && can('sales.edit') && <Link className="btn btn-sm btn-outline-primary" to={`/sales/orders/${o.id}/edit`}>Edit</Link>}
         {st === 'draft' && can('sales.create') && <button className="btn btn-sm btn-primary" onClick={() => run(`/sales/orders/${id}/confirm`)}>Confirm &amp; reserve stock</button>}

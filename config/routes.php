@@ -144,13 +144,8 @@ $router->post('/launches', $A . 'LaunchController@store', ['auth', 'perm:product
 $router->get('/launches/{id}', $A . 'LaunchController@show', ['auth']);
 $router->get('/launches/{id}/edit', $A . 'LaunchController@edit', ['auth', 'perm:products.edit']);
 $router->post('/launches/{id}', $A . 'LaunchController@update', ['auth', 'perm:products.edit']);
-$router->post('/launches/{id}/order', $A . 'LaunchController@order', ['auth', 'perm:products.edit']);
 $router->post('/launches/{id}/cancel', $A . 'LaunchController@cancel', ['auth', 'perm:products.edit']);
 $router->post('/launches/{id}/close', $A . 'LaunchController@close', ['auth', 'perm:products.edit']);
-$router->get('/launches/{id}/dispatch', $A . 'LaunchController@dispatchForm', ['auth', 'perm:stock.transfer']);
-$router->post('/launches/{id}/dispatch', $A . 'LaunchController@dispatch', ['auth', 'perm:stock.transfer']);
-$router->get('/launches/{id}/return', $A . 'LaunchController@returnForm', ['auth', 'perm:stock.transfer']);
-$router->post('/launches/{id}/return', $A . 'LaunchController@giveBack', ['auth', 'perm:stock.transfer']);
 $router->get('/launches/{id}/receive', $A . 'LaunchController@receiveForm', ['auth', 'perm:stock.receive']);
 $router->post('/launches/{id}/receive', $A . 'LaunchController@receive', ['auth', 'perm:stock.receive']);
 $router->get('/products', $A . 'ProductController@index', ['auth', 'perm:products.view']);

@@ -44,20 +44,29 @@ final class SalesOrderController extends SalesBase
         if ($customer) { $where .= ' AND o.customer_id = ?'; $params[] = $customer; }
         if ($q !== '') { $where .= ' AND o.order_no LIKE ?'; $params[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
         [$page, $pages, $limit] = $this->pageOf('sales_orders o', $where, $params);
-        $rows = DB::all("SELECT o.*, c.name AS customer, w.name AS warehouse FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id WHERE $where ORDER BY o.id DESC $limit", $params);
+        $rows = DB::all("SELECT o.*, c.name AS customer, w.name AS warehouse, (SELECT launch_no FROM catalogue_launches x WHERE x.id = o.launch_id) AS launch_no FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id WHERE $where ORDER BY o.id DESC $limit", $params);
         $this->view('app/sales/order_index', ['title' => 'Sales orders', 'rows' => $rows, 'status' => $status, 'customer' => $customer, 'q' => $q,
             'customers' => $this->customers(false), 'page' => $page, 'pages' => $pages]);
     }
 
-    private function form(string $title, ?array $o, array $lines): void
+    /** The catalogue launch a new fabric order is for (?launch=): where the fabric goes and who asks for it. */
+    private function launchFor(int $id): ?array
     {
-        $this->view('app/sales/order_form', ['title' => $title, 'o' => $o, 'customers' => $this->customers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines, 'mode' => 'order',
+        if ($id <= 0) return null;
+        $l = DB::one("SELECT l.id, l.launch_no, l.ship_to, l.note, l.warehouse_id, l.status, c.name AS catalogue FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id
+                      WHERE l.tenant_id = ? AND l.id = ? AND l.status IN ('draft','ordered','partial','dispatched')", [$this->tid(), $id]);
+        return $l ? $l + ['customer_id' => \App\Controllers\LaunchController::internalCustomer()] : null;
+    }
+
+    private function form(string $title, ?array $o, array $lines, ?array $launch = null): void
+    {
+        $this->view('app/sales/order_form', ['title' => $title, 'o' => $o, 'launch' => $launch, 'customers' => $this->customers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines, 'mode' => 'order',
             'cfFields' => CustomFields::fields('sales_order'), 'cfValues' => CustomFields::formValues('sales_order', $o ? (int)$o['id'] : null)]);
     }
 
     public function create(): void
     {
-        $this->form('New sales order', null, $this->oldLines());
+        $this->form('New sales order', null, $this->oldLines(), $this->launchFor((int)($_GET['launch'] ?? 0)));
     }
 
     private function header(string $back): array
@@ -89,6 +98,9 @@ final class SalesOrderController extends SalesBase
         $back = 'sales/orders/create';
         $this->enforceFields('sales_order', $back);
         $head = $this->header($back);
+        $launch = $this->launchFor((int)($this->input()['launch_id'] ?? 0));
+        if ((int)($this->input()['launch_id'] ?? 0) > 0 && !$launch) $this->bounce('That catalogue launch can no longer take a fabric order.', $back);
+        if ($launch) $head['launch_id'] = (int)$launch['id'];
         $lines = $this->collectSaleLines($this->postedLines($back), $back);
         [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
@@ -100,6 +112,7 @@ final class SalesOrderController extends SalesBase
             return $id;
         });
         Audit::log('order_create', 'sales_order', $id);
+        \App\Controllers\LaunchController::refreshForOrder($id);
         flash('success', 'Sales order saved as a draft. Confirm it to reserve the stock.');
         redirect("sales/orders/$id");
     }
@@ -149,6 +162,7 @@ final class SalesOrderController extends SalesBase
         $remaining = array_sum(array_map(fn($l) => max(0, (float)$l['qty_ordered'] - (float)$l['qty_delivered']), $items));
         $this->view('app/sales/order_show', [
             'title' => $o['order_no'], 'o' => $o, 'items' => $items, 'remaining' => $remaining,
+            'launch' => $o['launch_id'] ? DB::one('SELECT l.id, l.launch_no, c.name AS catalogue FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id WHERE l.tenant_id = ? AND l.id = ?', [$t, $o['launch_id']]) : null,
             'cfFields' => CustomFields::fields('sales_order'), 'cfValues' => CustomFields::values('sales_order', (int)$o['id']),
             'deliveries' => DB::all('SELECT d.id, d.delivery_no, d.delivery_date, i.id AS invoice_id, i.invoice_no FROM deliveries d LEFT JOIN sales_invoices i ON i.delivery_id = d.id WHERE d.tenant_id = ? AND d.order_id = ? ORDER BY d.id', [$t, $o['id']]),
             'advances' => DB::all('SELECT * FROM customer_payments WHERE tenant_id = ? AND order_id = ? AND invoice_id IS NULL ORDER BY id', [$t, $o['id']]),
@@ -176,6 +190,7 @@ final class SalesOrderController extends SalesBase
         }
         DB::run("UPDATE sales_orders SET status = 'confirmed', confirmed_at = NOW() WHERE tenant_id = ? AND id = ?", [$this->tid(), $o['id']]);
         Audit::log('order_confirm', 'sales_order', (int)$o['id'], $o['order_no']);
+        \App\Controllers\LaunchController::refreshForOrder((int)$o['id']);
         flash('success', 'Order confirmed. The stock is now reserved for this customer.');
         redirect($back);
     }
@@ -189,6 +204,7 @@ final class SalesOrderController extends SalesBase
         }
         DB::run('UPDATE sales_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$to, $this->tid(), $o['id']]);
         Audit::log('order_' . $to, 'sales_order', (int)$o['id'], $o['order_no']);
+        \App\Controllers\LaunchController::refreshForOrder((int)$o['id']);
         flash('success', $msg);
         redirect("sales/orders/{$o['id']}");
     }

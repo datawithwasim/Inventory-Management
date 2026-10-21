@@ -112,6 +112,7 @@ final class SalesReturnController extends SalesBase
             $this->bounce($e->getMessage(), $back);
         }
         Audit::log('sales_return', 'sales_return', $retId);
+        if (!empty($i['delivery_id'])) { $oid = (int)DB::val('SELECT order_id FROM deliveries WHERE tenant_id = ? AND id = ?', [$t, $i['delivery_id']]); if ($oid) \App\Controllers\LaunchController::refreshForOrder($oid); }
         flash('success', 'Return recorded. The customer is credited on the invoice.');
         redirect("sales/returns/$retId");
     }

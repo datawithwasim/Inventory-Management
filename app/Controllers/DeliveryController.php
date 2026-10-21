@@ -158,6 +158,7 @@ final class DeliveryController extends SalesBase
             $this->bounce($e->getMessage(), $back);
         }
         Audit::log('delivery_create', 'delivery', $deliveryId);
+        if ($order) \App\Controllers\LaunchController::refreshForOrder((int)$order['id']);
         flash('success', $invoiceId ? 'Goods delivered and invoice created.' : 'Goods delivered. Stock has been reduced.');
         redirect($invoiceId ? "sales/invoices/$invoiceId" : "sales/deliveries/$deliveryId");
     }

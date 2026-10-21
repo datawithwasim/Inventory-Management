@@ -526,10 +526,10 @@ final class Reports
 
         $defs['catalogue-launches'] = [
             'title' => 'Catalogue launch costs', 'group' => 'stock',
-            'desc' => 'For each catalogue launch in a period: the fabric dispatched and its cost, the extra cost (printing, binding), the books received and what one book cost.',
+            'desc' => 'For each catalogue launch in a period: the fabric delivered to it (from its sales orders) and its cost, the extra cost (printing, binding), the books received and what one book cost.',
             'filters' => ['from', 'to', 'status'],
             'select' => ['status' => ['' => 'Any status'] + \App\Controllers\LaunchController::STATUS],
-            'columns' => ['no' => $col('Launch'), 'catalogue' => $col('Catalogue'), 'gutt' => $col('Gutt no.'), 'status' => $col('Status'), 'fabric_qty' => $col('Fabric dispatched', 'qty', true), 'fabric_cost' => $col('Fabric cost', 'money', true),
+            'columns' => ['no' => $col('Launch'), 'catalogue' => $col('Catalogue'), 'gutt' => $col('Gutt no.'), 'status' => $col('Status'), 'fabric_qty' => $col('Fabric delivered', 'qty', true), 'fabric_cost' => $col('Fabric cost', 'money', true),
                 'extra' => $col('Extra cost', 'money', true), 'total' => $col('Total cost', 'money', true), 'books' => $col('Books received', 'int', true), 'per_book' => $col('Cost of one book', 'money')],
             'run' => function (array $f, int $limit) use ($t) {
                 $p = [$t, $f['from'] . ' 00:00:00', $f['to'] . ' 23:59:59'];
@@ -537,8 +537,8 @@ final class Reports
                 if ($f['status'] !== '') { $w .= ' AND l.status = ?'; $p[] = $f['status']; }
                 $rows = DB::all(
                     "SELECT l.launch_no AS no, c.name AS catalogue, c.code AS gutt, l.status,
-                            (SELECT COALESCE(SUM(x.qty_issued - x.qty_returned),0) FROM launch_fabric x WHERE x.launch_id = l.id) AS fabric_qty,
-                            (SELECT COALESCE(SUM(x.value_issued),0) FROM launch_fabric x WHERE x.launch_id = l.id) AS fabric_cost,
+                            (SELECT COALESCE(SUM(di.qty - di.qty_returned),0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o ON o.id = d.order_id WHERE o.launch_id = l.id AND di.parent_id IS NULL) AS fabric_qty,
+                            (SELECT COALESCE(SUM((di.qty - di.qty_returned) * di.unit_cost),0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o ON o.id = d.order_id WHERE o.launch_id = l.id AND di.parent_id IS NULL) AS fabric_cost,
                             l.extra_cost AS extra,
                             (SELECT COALESCE(SUM(s.qty_received),0) FROM launch_sizes s WHERE s.launch_id = l.id) AS books
                      FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id

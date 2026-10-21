@@ -1256,57 +1256,58 @@ $lstock = fn() => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balance
 $c->call('POST', '/catalogues', ['code' => 'G-LAUNCH']);
 $cl = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-LAUNCH'", [$tA]);
 check('there are two rolls of 50 m to launch with', count($lb) === 2 && $lstock() === 100.0);
-$r = $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'ship_to' => 'Print House, Surat', 'note' => 'Diwali book',
-    'fabric' => [['variant_id' => $lf, 'qty' => '60', 'note' => 'cut pieces']], 'sizes' => [['size_name' => 'Large', 'qty' => '100'], ['size_name' => 'Small', 'qty' => '200']]]);
+$r = $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'ship_to' => 'Print House, Surat', 'note' => 'Diwali book', 'sizes' => [['size_name' => 'Large', 'qty' => '100'], ['size_name' => 'Small', 'qty' => '200']]]);
 $L = (int)DB::val('SELECT MAX(id) FROM catalogue_launches WHERE tenant_id = ?', [$tA]);
 $lrow = DB::one('SELECT * FROM catalogue_launches WHERE id = ?', [$L]);
-check('a launch is saved as a draft with its fabric and its sizes', $r['status'] === 200 && $lrow['status'] === 'draft' && str_starts_with($lrow['launch_no'], 'CL-') && (int)DB::val('SELECT COUNT(*) FROM launch_fabric WHERE launch_id = ?', [$L]) === 1 && (int)DB::val('SELECT COUNT(*) FROM launch_sizes WHERE launch_id = ?', [$L]) === 2);
-check('a launch needs a catalogue and a warehouse; a size needs a name; the same size or fabric twice is refused', $c->call('POST', '/launches', ['warehouse_id' => $wh])['status'] === 422
+check('a launch is saved as a draft with its sizes (the fabric is asked for with a sales order)', $r['status'] === 200 && $lrow['status'] === 'draft' && str_starts_with($lrow['launch_no'], 'CL-') && (int)DB::val('SELECT COUNT(*) FROM launch_sizes WHERE launch_id = ?', [$L]) === 2);
+check('a launch needs a catalogue and a warehouse; a size needs a name; the same size twice is refused', $c->call('POST', '/launches', ['warehouse_id' => $wh])['status'] === 422
     && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => '', 'qty' => '5']]])['status'] === 422
-    && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => 'Large', 'qty' => '5'], ['size_name' => 'large', 'qty' => '5']]])['status'] === 422
-    && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'fabric' => [['variant_id' => $lf, 'qty' => '5'], ['variant_id' => $lf, 'qty' => '5']]])['status'] === 422);
+    && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => 'Large', 'qty' => '5'], ['size_name' => 'large', 'qty' => '5']]])['status'] === 422);
 $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh]);
 $Lempty = (int)DB::val('SELECT MAX(id) FROM catalogue_launches WHERE tenant_id = ?', [$tA]);
-check('an order with no fabric cannot be sent, a draft can be cancelled', $c->call('POST', "/launches/$Lempty/order")['status'] === 422 && $c->call('POST', "/launches/$Lempty/cancel")['status'] === 200 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$Lempty]) === 'cancelled');
-check('nothing can be dispatched before the order is sent', $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[0], 'location_id' => '0', 'qty' => '10']]])['status'] === 422);
-$c->call('POST', "/launches/$L/order");
-check('sending the order puts it with the warehouse', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered' && DB::val('SELECT ordered_at FROM catalogue_launches WHERE id = ?', [$L]) !== null);
-$dj = new J($base); $dj->session(); $dj->call('POST', '/login', ['email' => "dis-$sfx@test.local", 'password' => 'Password123']); $dj->session();
-$r = $dj->call('GET', '/launches?status=todo');
-$ids = array_column($r['json']['data']['rows'] ?? [], 'id');
-check('warehouse staff who dispatch (stock.transfer, no catalogue permission) find the fabric orders waiting for them, and open the launch', $r['status'] === 200 && in_array($L, array_map('intval', $ids), true) && $dj->call('GET', "/launches/$L")['status'] === 200 && $dj->call('GET', "/launches/$L/dispatch")['status'] === 200);
-check('the sidebar of that user has "Fabric orders" with the number waiting', str_contains(json_encode($dj->call('GET', '/session')['json']), 'Fabric orders ('));
-$c->call('POST', '/roles', ['name' => 'Viewer Only ' . $sfx, 'perms' => ['items.view']]);
-$rVo = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Viewer Only ' . $sfx]);
-$c->call('POST', '/users', ['name' => 'Viewer Only', 'email' => "vo-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rVo, 'warehouse_id' => '0']);
-$vj = new J($base); $vj->session(); $vj->call('POST', '/login', ['email' => "vo-$sfx@test.local", 'password' => 'Password123']); $vj->session();
-check('someone with no stock or catalogue permission cannot open launches', $vj->call('GET', '/launches')['status'] === 403 && $vj->call('GET', "/launches/$L")['status'] === 403);
-$r = $c->call('GET', "/launches/$L/dispatch");
-check('the warehouse sees the fabric to dispatch, with what is still due', $r['status'] === 200 && (float)$r['json']['data']['fabric'][0]['qty_ordered'] === 60.0 && isset($r['json']['data']['racks']));
+check('a launch with no fabric order yet can be cancelled', $c->call('POST', "/launches/$Lempty/cancel")['status'] === 200 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$Lempty]) === 'cancelled');
+// the fabric request is a sales order, like any order a warehouse receives
+$r = $c->call('GET', "/sales/orders/create?launch=$L");
+$ln = $r['json']['data']['launch'] ?? null;
+check('the sales order form for a launch comes addressed to the catalogue department with the place the fabric must go to', $ln && (int)$ln['id'] === $L && $ln['ship_to'] === 'Print House, Surat' && (int)$ln['customer_id'] > 0 && DB::val('SELECT name FROM customers WHERE id = ?', [$ln['customer_id']]) === 'Catalogue Department');
+$r = $c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'ship_to' => 'Print House, Surat', 'launch_id' => $L, 'lines' => [['variant_id' => $lf, 'qty' => '60', 'unit_price' => '0', 'discount_pct' => '', 'tax_rate' => '']]]);
+$so = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+check('the fabric order is saved as a sales order tied to the launch; while it is a draft the launch is still a draft', $r['status'] === 200 && (int)DB::val('SELECT launch_id FROM sales_orders WHERE id = ?', [$so]) === $L && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'draft');
+check('an order cannot be tied to a launch that does not exist, or to another company\'s', $c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'launch_id' => 99999999, 'lines' => [['variant_id' => $lf, 'qty' => '1', 'unit_price' => '0']]])['status'] === 422);
+$c->call('POST', "/sales/orders/$so/confirm");
+check('confirming the order sends it to the warehouse: the launch is "ordered"', DB::val('SELECT status FROM sales_orders WHERE id = ?', [$so]) === 'confirmed' && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered');
+$lst = $c->call('GET', '/sales/orders')['json']['data']['rows'] ?? [];
+$mine = array_values(array_filter($lst, fn($x) => (int)$x['id'] === $so))[0] ?? [];
+check('the warehouse finds it among its sales orders, marked as fabric for the launch', ($mine['launch_no'] ?? '') === $lrow['launch_no'] && $c->call('GET', "/sales/orders/$so")['json']['data']['launch']['launch_no'] === $lrow['launch_no']);
 check('another company cannot see the launch', $bl->call('GET', "/launches/$L")['status'] === 404);
-$r = $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[0], 'location_id' => '0', 'qty' => '40']]]);
-$fl = DB::one('SELECT * FROM launch_fabric WHERE launch_id = ?', [$L]);
-check('dispatching 40 m takes it out of stock, counts its cost into the launch and leaves the order partly done', $r['status'] === 200 && $lstock() === 60.0 && (float)$fl['qty_issued'] === 40.0 && (float)$fl['value_issued'] === 3200.0 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial');
-$doc = DB::one("SELECT * FROM stock_docs WHERE launch_id = ? AND type = 'launch_issue'", [$L]);
-check('the dispatch is a document of its own that remembers where the fabric was sent', $doc && str_starts_with($doc['doc_no'], 'LIS-') && str_contains((string)$doc['note'], 'Print House, Surat') && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_id = ? AND type = 'launch_issue'", [$doc['id']]) === 1);
-check('dispatching far more than is due is refused, so is fabric that is not on the launch, a roll without stock and a missing roll', $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[1], 'location_id' => '0', 'qty' => '40']]])['status'] === 422
-    && $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $v2, 'batch_id' => '0', 'location_id' => '0', 'qty' => '1']]])['status'] === 422
-    && $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => '', 'location_id' => '0', 'qty' => '5']]])['status'] === 422 && $lstock() === 60.0);
-$c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[1], 'location_id' => '0', 'qty' => '20']]]);
-check('when everything ordered has been dispatched the order is done', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'dispatched' && $lstock() === 40.0);
-$r = $c->call('GET', "/launches/$L/return");
-check('the return screen lists the rolls that are out', $r['status'] === 200 && count($r['json']['data']['rolls'] ?? []) === 2);
-check('only what went out on that roll can come back', $c->call('POST', "/launches/$L/return", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[0], 'location_id' => '0', 'qty' => '45']]])['status'] === 422 && $lstock() === 40.0);
-$r = $c->call('POST', "/launches/$L/return", ['note' => 'wrong shade', 'lines' => [['variant_id' => $lf, 'batch_id' => $lb[0], 'location_id' => '0', 'qty' => '10']]]);
-$fl = DB::one('SELECT * FROM launch_fabric WHERE launch_id = ?', [$L]);
-check('wrong fabric goes back into stock at the cost it went out at, and the order opens again for the right fabric', $r['status'] === 200 && $lstock() === 50.0 && (float)$fl['qty_returned'] === 10.0 && (float)$fl['value_issued'] === 4000.0 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial');
-$c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[1], 'location_id' => '0', 'qty' => '10']]]);
-check('dispatching the right fabric completes it again', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'dispatched' && (float)DB::val('SELECT value_issued FROM launch_fabric WHERE launch_id = ?', [$L]) === 4800.0);
-check('the order cannot be lowered below what has gone out, nor can dispatched fabric be taken off it', $c->call('POST', "/launches/$L", ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'fabric' => [['variant_id' => $lf, 'qty' => '10']], 'sizes' => [['size_name' => 'Large', 'qty' => '100'], ['size_name' => 'Small', 'qty' => '200']]])['status'] === 422
-    && $c->call('POST', "/launches/$L", ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => 'Large', 'qty' => '100']]])['status'] === 422);
-check('cancelling is refused once fabric has gone out', $c->call('POST', "/launches/$L/cancel")['status'] === 422);
+// the warehouse delivers it, roll by roll
+$items = $c->call('GET', "/sales/orders/$so")['json']['data']['items'];
+$oi = $items[0]['id'];
+$c->call('POST', '/sales/deliveries', ['order_id' => $so, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $oi, 'variant_id' => $lf, 'qty' => '40', 'batch_id' => $lb[0], 'location_id' => '0']]]);
+$d1 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
 $r = $c->call('GET', "/launches/$L");
-check('the launch page carries fabric, sizes, the documents with their lines and the cost so far', $r['status'] === 200 && count($r['json']['data']['docs']) === 4 && (float)$r['json']['data']['money']['fabric_value'] === 4800.0 && $r['json']['data']['can']['receive'] === true);
+$fab = $r['json']['data']['fabric'][0] ?? [];
+check('delivering 40 m from the sales order takes it out of stock, makes the launch "partly delivered" and counts the cost into the launch', $lstock() === 60.0 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial'
+    && (float)$fab['qty_ordered'] === 60.0 && (float)$fab['qty_issued'] === 40.0 && abs((float)$fab['value_issued'] - 3200.0) < 0.005);
+$c->call('POST', '/sales/deliveries', ['order_id' => $so, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $oi, 'variant_id' => $lf, 'qty' => '20', 'batch_id' => $lb[1], 'location_id' => '0']]]);
+check('when everything asked for has been delivered the launch is "fabric delivered"', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'dispatched' && $lstock() === 40.0);
+// wrong fabric: it comes back as an ordinary sales return of that delivery
+$c->call('POST', "/sales/deliveries/$d1/invoice");
+$inv = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $d1]);
+$ri2 = DB::one('SELECT id FROM delivery_items WHERE delivery_id = ?', [$d1]);
+$c->call('POST', '/sales/returns', ['invoice_id' => $inv, 'return_date' => date('Y-m-d'), 'reason' => 'wrong shade', 'lines' => [(string)$ri2['id'] => ['qty' => '10', 'location_id' => '0', 'restock' => 1]]]);
+$r = $c->call('GET', "/launches/$L");
+$fab = $r['json']['data']['fabric'][0] ?? [];
+check('wrong fabric sent back with a sales return goes into stock and is taken off the launch\'s cost (and still shows on it as "came back")', $lstock() === 50.0 && (float)$fab['qty_returned'] === 10.0 && abs((float)$fab['value_issued'] - 4000.0) < 0.005);
+// the right fabric is asked for with another sales order for the same launch
+$c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'ship_to' => 'Print House, Surat', 'launch_id' => $L, 'lines' => [['variant_id' => $lf, 'qty' => '10', 'unit_price' => '0']]]);
+$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$c->call('POST', "/sales/orders/$so2/confirm");
+check('a second fabric order for the same launch makes it "partly delivered" again', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered' || DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial');
+$oi2 = $c->call('GET', "/sales/orders/$so2")['json']['data']['items'][0]['id'];
+$c->call('POST', '/sales/deliveries', ['order_id' => $so2, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $oi2, 'variant_id' => $lf, 'qty' => '10', 'batch_id' => $lb[1], 'location_id' => '0']]]);
+$r = $c->call('GET', "/launches/$L");
+check('a launch with fabric orders cannot be cancelled', $c->call('POST', "/launches/$L/cancel")['status'] === 422);
 // the printed books arrive
 $sz = array_column(DB::all('SELECT id, size_name FROM launch_sizes WHERE launch_id = ? ORDER BY id', [$L]), 'id', 'size_name');
 check('books cannot be received without a count, or against a size that is not on the launch', $c->call('POST', "/launches/$L/receive", ['warehouse_id' => $wh, 'lines' => []])['status'] === 422
@@ -1324,12 +1325,19 @@ check('a later delivery of more copies only carries its own extra cost (the fabr
     && abs((float)DB::val('SELECT cost_price FROM item_variants WHERE id = ?', [$vL]) - 3.0) < 0.005);
 $r = $c->call('POST', '/stock/adjustments', ['warehouse_id' => $wh2, 'reason' => 'given_free', 'note' => 'To dealer Shah Furnishings', 'lines' => [['variant_id' => $vL, 'batch_id' => '', 'location_id' => '0', 'qty' => '-25']]]);
 check('catalogues are given free to showrooms and dealers with a stock adjustment (reason "Given free")', $r['status'] === 200 && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE variant_id = ? AND warehouse_id = ?', [$vL, $wh2]) === 75.0);
+$r = $c->call('GET', "/launches/$L");
+check('the launch page shows the books received', $r['status'] === 200 && count($r['json']['data']['docs']) === 2);
 check('the launch can be closed once its books are in', $c->call('POST', "/launches/$L/close")['status'] === 200 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'closed' && $c->call('POST', "/launches/$L/receive", ['warehouse_id' => $wh2, 'lines' => [['size_id' => $sz['Large'], 'qty' => '1']]])['status'] === 422);
 $r = $c->call('GET', '/launches?status=closed');
-check('the launch list shows it with fabric and copies', $r['status'] === 200 && ($r['json']['data']['rows'][0]['launch_no'] ?? '') === $lrow['launch_no'] && (int)$r['json']['data']['rows'][0]['copies_received'] === 280);
+check('the launch list shows it with fabric and copies', $r['status'] === 200 && ($r['json']['data']['rows'][0]['launch_no'] ?? '') === $lrow['launch_no'] && (int)$r['json']['data']['rows'][0]['copies_received'] === 280 && (float)$r['json']['data']['rows'][0]['fabric_ordered'] === 70.0);
 $rp = $c->call('GET', '/reports/catalogue-launches?from=' . date('Y-m-d', strtotime('-1 day')) . '&to=' . date('Y-m-d'))['json']['data']['rows'] ?? [];
 $rpr = array_values(array_filter($rp, fn($x) => $x['no'] === $lrow['launch_no']))[0] ?? [];
 check('the report of launch costs shows fabric, extra cost, books received and the cost of one book', $rpr && abs((float)$rpr['fabric_cost'] - 4800.0) < 0.005 && (int)$rpr['books'] === 280 && abs((float)$rpr['total'] - 6030.0) < 0.005 && abs((float)$rpr['per_book'] - 21.54) < 0.01 && $rpr['gutt'] === 'G-LAUNCH');
+$c->call('POST', '/roles', ['name' => 'Viewer Only ' . $sfx, 'perms' => ['items.view']]);
+$rVo = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Viewer Only ' . $sfx]);
+$c->call('POST', '/users', ['name' => 'Viewer Only', 'email' => "vo-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rVo, 'warehouse_id' => '0']);
+$vj = new J($base); $vj->session(); $vj->call('POST', '/login', ['email' => "vo-$sfx@test.local", 'password' => 'Password123']); $vj->session();
+check('someone with no catalogue, sales or stock-receiving permission cannot open launches', $vj->call('GET', '/launches')['status'] === 403 && $vj->call('GET', "/launches/$L")['status'] === 403);
 DB::run('DELETE FROM stock_balances WHERE tenant_id = ? AND variant_id IN (?, ?, ?)', [$tA, $lf, $vL, $vS]);
 
 echo "Print templates\n";
