@@ -14,7 +14,7 @@ final class AdjustmentController extends StockDocController
 {
     public const REASONS = [
         'opening' => 'Opening stock', 'damage' => 'Damaged', 'loss' => 'Lost / missing', 'found' => 'Found',
-        'correction' => 'Count correction', 'other' => 'Other',
+        'correction' => 'Count correction', 'given_free' => 'Given free (showroom / dealer)', 'other' => 'Other',
     ];
 
     public function index(): void

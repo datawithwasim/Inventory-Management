@@ -13,6 +13,7 @@ import RateList from './pages/purchase/RateList';
 import FormDesigner from './pages/settings/FormDesigner';
 import PrintDesigner from './pages/settings/PrintDesigner';
 import { CatalogueList, CatalogueDetail, CatalogueForm } from './pages/catalogues/Catalogues';
+import { LaunchList, LaunchForm, LaunchDetail, LaunchDispatch, LaunchReturn, LaunchReceive } from './pages/launches/Launches';
 import { ProductList, ProductForm } from './pages/products/Products';
 import { PoPrint, InvoicePrint, DeliveryPrint, VoucherPrint, ChallanPrint, ReportPrint, LabelPrint } from './pages/print/Print';
 import { useSearchParams } from 'react-router-dom';
@@ -104,6 +105,13 @@ export default function App() {
         <Route path="/catalogues/create" element={<CatalogueForm />} />
         <Route path="/catalogues/:id" element={<CatalogueDetail />} />
         <Route path="/catalogues/:id/edit" element={<CatalogueForm />} />
+        <Route path="/launches" element={<LaunchList />} />
+        <Route path="/launches/create" element={<LaunchForm />} />
+        <Route path="/launches/:id" element={<LaunchDetail />} />
+        <Route path="/launches/:id/edit" element={<LaunchForm />} />
+        <Route path="/launches/:id/dispatch" element={<LaunchDispatch />} />
+        <Route path="/launches/:id/return" element={<LaunchReturn />} />
+        <Route path="/launches/:id/receive" element={<LaunchReceive />} />
         <Route path="/products" element={<ProductList />} />
         <Route path="/products/create" element={<ProductForm />} />
         <Route path="/products/:id/edit" element={<ProductForm />} />

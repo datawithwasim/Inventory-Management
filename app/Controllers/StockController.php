@@ -13,7 +13,7 @@ final class StockController extends Controller
 {
     private const PER_PAGE = 50;
     public const TYPES = [
-        'opening' => 'Opening stock', 'adjustment' => 'Adjustment', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back',
+        'launch_issue' => 'Fabric for catalogue launch', 'launch_return' => 'Fabric back from launch', 'launch_receipt' => 'Catalogues received', 'opening' => 'Opening stock', 'adjustment' => 'Adjustment', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back',
         'stocktake' => 'Stock-take', 'purchase' => 'Purchase', 'purchase_return' => 'Purchase return', 'sale' => 'Sale', 'sales_return' => 'Sales return',
     ];
 

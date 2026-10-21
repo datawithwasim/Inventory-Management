@@ -15,7 +15,7 @@ final class Reports
 {
     public const GROUPS = ['stock' => 'Stock', 'sales' => 'Sales', 'purchase' => 'Purchase', 'party' => 'Customers & suppliers'];
     public const MOVES = ['opening' => 'Opening stock', 'purchase' => 'Purchase receipt', 'purchase_return' => 'Purchase return', 'sale' => 'Sale / delivery',
-        'sales_return' => 'Sales return', 'adjustment' => 'Adjustment', 'stocktake' => 'Stock count', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back'];
+        'sales_return' => 'Sales return', 'launch_issue' => 'Fabric for catalogue launch', 'launch_return' => 'Fabric back from launch', 'launch_receipt' => 'Catalogues received', 'adjustment' => 'Adjustment', 'stocktake' => 'Stock count', 'transfer_in' => 'Transfer in', 'transfer_out' => 'Transfer out', 'transfer_return' => 'Transfer sent back'];
 
     private static function t(): int
     {
@@ -522,6 +522,34 @@ final class Reports
                 'on_order' => $col('Already ordered / requested', 'qty'), 'suggest' => $col('Suggested order', 'qty'), 'unit' => $col('Unit'),
                 'supplier' => $col('Supplier (preferred, else last)'), 'cost' => $col('Cost', 'money')],
             'run' => fn(array $f, int $limit) => self::lowStock($f['category'], $limit),
+        ];
+
+        $defs['catalogue-launches'] = [
+            'title' => 'Catalogue launch costs', 'group' => 'stock',
+            'desc' => 'For each catalogue launch in a period: the fabric dispatched and its cost, the extra cost (printing, binding), the books received and what one book cost.',
+            'filters' => ['from', 'to', 'status'],
+            'select' => ['status' => ['' => 'Any status'] + \App\Controllers\LaunchController::STATUS],
+            'columns' => ['no' => $col('Launch'), 'catalogue' => $col('Catalogue'), 'gutt' => $col('Gutt no.'), 'status' => $col('Status'), 'fabric_qty' => $col('Fabric dispatched', 'qty', true), 'fabric_cost' => $col('Fabric cost', 'money', true),
+                'extra' => $col('Extra cost', 'money', true), 'total' => $col('Total cost', 'money', true), 'books' => $col('Books received', 'int', true), 'per_book' => $col('Cost of one book', 'money')],
+            'run' => function (array $f, int $limit) use ($t) {
+                $p = [$t, $f['from'] . ' 00:00:00', $f['to'] . ' 23:59:59'];
+                $w = '';
+                if ($f['status'] !== '') { $w .= ' AND l.status = ?'; $p[] = $f['status']; }
+                $rows = DB::all(
+                    "SELECT l.launch_no AS no, c.name AS catalogue, c.code AS gutt, l.status,
+                            (SELECT COALESCE(SUM(x.qty_issued - x.qty_returned),0) FROM launch_fabric x WHERE x.launch_id = l.id) AS fabric_qty,
+                            (SELECT COALESCE(SUM(x.value_issued),0) FROM launch_fabric x WHERE x.launch_id = l.id) AS fabric_cost,
+                            l.extra_cost AS extra,
+                            (SELECT COALESCE(SUM(s.qty_received),0) FROM launch_sizes s WHERE s.launch_id = l.id) AS books
+                     FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id
+                     WHERE l.tenant_id = ? AND l.created_at BETWEEN ? AND ?$w ORDER BY l.id DESC LIMIT " . (int)$limit, $p);
+                foreach ($rows as &$r) {
+                    $r['status'] = \App\Controllers\LaunchController::STATUS[$r['status']] ?? $r['status'];
+                    $r['total'] = round((float)$r['fabric_cost'] + (float)$r['extra'], 2);
+                    $r['per_book'] = (int)$r['books'] > 0 ? round($r['total'] / (int)$r['books'], 2) : null;
+                }
+                return $rows;
+            },
         ];
 
         $defs['adjustments'] = [

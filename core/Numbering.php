@@ -10,6 +10,7 @@ final class Numbering
     public const DOCS = [
         'SO' => 'Sales order', 'DLV' => 'Delivery', 'INV' => 'Sales invoice', 'SR' => 'Sales return',
         'REQ' => 'Purchase requisition', 'PO' => 'Purchase order', 'GRN' => 'Goods receipt', 'PB' => 'Purchase bill', 'PRT' => 'Purchase return',
+        'CL' => 'Catalogue launch', 'LIS' => 'Fabric dispatched for a launch', 'LRT' => 'Fabric returned from a launch', 'LRC' => 'Catalogues received',
         'ADJ' => 'Stock adjustment', 'TRF' => 'Stock transfer', 'STK' => 'Stock-take', 'SKU' => 'Auto-generated item SKU',
     ];
 
