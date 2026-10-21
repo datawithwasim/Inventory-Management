@@ -25,8 +25,21 @@ final class LaunchController extends StockDocController
 
     public const STATUS = ['draft' => 'Draft', 'ordered' => 'Ordered', 'partial' => 'Partly dispatched', 'dispatched' => 'Fabric dispatched', 'received' => 'Books received', 'closed' => 'Closed', 'cancelled' => 'Cancelled'];
 
+    /** The catalogue team (products.view) and the warehouse that dispatches / receives (stock.transfer, stock.receive) all look at launches. */
+    private function mayView(): void
+    {
+        if (!Auth::can('products.view') && !Auth::can('stock.transfer') && !Auth::can('stock.receive')) $this->forbidden();
+    }
+
+    /** Fabric orders waiting for the warehouse to dispatch (what the menu counts). */
+    public static function waiting(): int
+    {
+        return (int)DB::val("SELECT COUNT(*) FROM catalogue_launches WHERE tenant_id = ? AND status IN ('ordered','partial')" . Scope::sql('warehouse_id'), [(int)Auth::tenantId()]);
+    }
+
     private function load(string $id): array
     {
+        $this->mayView();
         return DB::one(
             'SELECT l.*, c.name AS catalogue, c.code AS catalogue_code, w.name AS warehouse, u.name AS user_name
              FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id JOIN warehouses w ON w.id = l.warehouse_id LEFT JOIN users u ON u.id = l.created_by
@@ -71,12 +84,14 @@ final class LaunchController extends StockDocController
 
     public function index(): void
     {
+        $this->mayView();
         $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $status = (string)($_GET['status'] ?? '');
         $where = 'l.tenant_id = ?' . Scope::sql('l.warehouse_id'); $p = [$t];
         if ($q !== '') { $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; $where .= ' AND (l.launch_no LIKE ? OR c.name LIKE ? OR c.code LIKE ?)'; array_push($p, $like, $like, $like); }
         if (isset(self::STATUS[$status])) { $where .= ' AND l.status = ?'; $p[] = $status; }
+        elseif ($status === 'todo') $where .= " AND l.status IN ('ordered','partial')";
         elseif ($status === 'open') $where .= " AND l.status IN ('draft','ordered','partial','dispatched','received')";
         $page = max(1, (int)($_GET['page'] ?? 1));
         $total = (int)DB::val("SELECT COUNT(*) FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id WHERE $where", $p);
@@ -88,7 +103,7 @@ final class LaunchController extends StockDocController
                     (SELECT COALESCE(SUM(s.qty_received),0) FROM launch_sizes s WHERE s.launch_id = l.id) AS copies_received
              FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id JOIN warehouses w ON w.id = l.warehouse_id
              WHERE $where ORDER BY l.id DESC LIMIT 30 OFFSET " . (($page - 1) * 30), $p);
-        $this->view('app/launches/index', ['title' => 'Catalogue launches', 'rows' => $rows, 'q' => $q, 'status' => $status, 'statuses' => self::STATUS, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30)), 'total' => $total]);
+        $this->view('app/launches/index', ['title' => 'Catalogue launches', 'rows' => $rows, 'q' => $q, 'status' => $status, 'statuses' => ['todo' => 'Waiting for dispatch'] + self::STATUS, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30)), 'total' => $total]);
     }
 
     /* ---------- create / edit ---------- */

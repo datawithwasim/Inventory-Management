@@ -13,6 +13,7 @@ return [
             ['label' => fn() => 'Transfers', 'icon' => 'arrow-left-right', 'path' => '/stock/transfers', 'perm' => ['stock.view'], 'module' => 'transfers'],
             ['label' => fn() => 'Stock-takes', 'icon' => 'clipboard-check', 'path' => '/stock/takes', 'perm' => ['stock.view'], 'module' => 'takes'],
             ['label' => fn() => 'Stock ledger', 'icon' => 'journal-text', 'path' => '/stock/ledger', 'perm' => ['stock.view']],
+            ['label' => fn() => 'Fabric orders' . (($n = \App\Controllers\LaunchController::waiting()) ? " ($n)" : ''), 'icon' => 'inboxes', 'path' => '/launches/waiting', 'href' => '/launches?status=todo', 'perm' => ['stock.transfer'], 'module' => 'catalogues', 'exact' => true],
             ['label' => fn() => 'Barcode labels', 'icon' => 'upc', 'path' => '/labels', 'perm' => ['labels.view'], 'module' => 'labels'],
             ['label' => fn() => term('warehouses'), 'icon' => 'building', 'path' => '/warehouses', 'perm' => ['warehouses.view']],
             ['label' => fn() => term('racks') . ' / locations', 'icon' => 'grid-3x3-gap', 'path' => '/locations', 'perm' => ['warehouses.view']],

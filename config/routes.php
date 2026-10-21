@@ -138,10 +138,10 @@ $router->get('/catalogues/{id}', $A . 'CatalogueController@show', ['auth', 'perm
 $router->get('/catalogues/{id}/edit', $A . 'CatalogueController@edit', ['auth', 'perm:products.edit']);
 $router->post('/catalogues/{id}', $A . 'CatalogueController@update', ['auth', 'perm:products.edit']);
 $router->post('/catalogues/{id}/delete', $A . 'CatalogueController@destroy', ['auth', 'perm:products.delete']);
-$router->get('/launches', $A . 'LaunchController@index', ['auth', 'perm:products.view']);
+$router->get('/launches', $A . 'LaunchController@index', ['auth']);
 $router->get('/launches/create', $A . 'LaunchController@create', ['auth', 'perm:products.create']);
 $router->post('/launches', $A . 'LaunchController@store', ['auth', 'perm:products.create']);
-$router->get('/launches/{id}', $A . 'LaunchController@show', ['auth', 'perm:products.view']);
+$router->get('/launches/{id}', $A . 'LaunchController@show', ['auth']);
 $router->get('/launches/{id}/edit', $A . 'LaunchController@edit', ['auth', 'perm:products.edit']);
 $router->post('/launches/{id}', $A . 'LaunchController@update', ['auth', 'perm:products.edit']);
 $router->post('/launches/{id}/order', $A . 'LaunchController@order', ['auth', 'perm:products.edit']);

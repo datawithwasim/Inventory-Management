@@ -1271,6 +1271,16 @@ check('an order with no fabric cannot be sent, a draft can be cancelled', $c->ca
 check('nothing can be dispatched before the order is sent', $c->call('POST', "/launches/$L/dispatch", ['lines' => [['variant_id' => $lf, 'batch_id' => $lb[0], 'location_id' => '0', 'qty' => '10']]])['status'] === 422);
 $c->call('POST', "/launches/$L/order");
 check('sending the order puts it with the warehouse', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered' && DB::val('SELECT ordered_at FROM catalogue_launches WHERE id = ?', [$L]) !== null);
+$dj = new J($base); $dj->session(); $dj->call('POST', '/login', ['email' => "dis-$sfx@test.local", 'password' => 'Password123']); $dj->session();
+$r = $dj->call('GET', '/launches?status=todo');
+$ids = array_column($r['json']['data']['rows'] ?? [], 'id');
+check('warehouse staff who dispatch (stock.transfer, no catalogue permission) find the fabric orders waiting for them, and open the launch', $r['status'] === 200 && in_array($L, array_map('intval', $ids), true) && $dj->call('GET', "/launches/$L")['status'] === 200 && $dj->call('GET', "/launches/$L/dispatch")['status'] === 200);
+check('the sidebar of that user has "Fabric orders" with the number waiting', str_contains(json_encode($dj->call('GET', '/session')['json']), 'Fabric orders ('));
+$c->call('POST', '/roles', ['name' => 'Viewer Only ' . $sfx, 'perms' => ['items.view']]);
+$rVo = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Viewer Only ' . $sfx]);
+$c->call('POST', '/users', ['name' => 'Viewer Only', 'email' => "vo-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rVo, 'warehouse_id' => '0']);
+$vj = new J($base); $vj->session(); $vj->call('POST', '/login', ['email' => "vo-$sfx@test.local", 'password' => 'Password123']); $vj->session();
+check('someone with no stock or catalogue permission cannot open launches', $vj->call('GET', '/launches')['status'] === 403 && $vj->call('GET', "/launches/$L")['status'] === 403);
 $r = $c->call('GET', "/launches/$L/dispatch");
 check('the warehouse sees the fabric to dispatch, with what is still due', $r['status'] === 200 && (float)$r['json']['data']['fabric'][0]['qty_ordered'] === 60.0 && isset($r['json']['data']['racks']));
 check('another company cannot see the launch', $bl->call('GET', "/launches/$L")['status'] === 404);
