@@ -107,8 +107,8 @@ export default function GrnForm() {
   const rackSelect = (value: string, onChange: (v: string) => void, first: string) => (
     <select className="form-select form-select-sm" value={value} onChange={(e) => onChange(e.target.value)}><option value="">{first}</option>{myRacks.map((r) => <option key={r.id} value={r.id}>{r.code}</option>)}</select>
   );
-  const gcols = gridCols(schema.data.grid, { item: term('item'), billed: 'Billed / due', rolls: 'Rolls received', received: 'Received', rack: term('rack'), price: 'Unit price', tax: 'Tax %' });
-  const widths: Record<string, React.CSSProperties> = { item: { minWidth: 230 }, billed: { width: 120 }, rolls: { minWidth: 200 }, received: { width: 150 }, rack: { width: 150 }, price: { width: 100 }, tax: { width: 70 } };
+  const gcols = gridCols(schema.data.grid, { item: term('item'), billed: 'Billed / due', received: 'Received', rack: term('rack'), price: 'Unit price', tax: 'Tax %' });
+  const widths: Record<string, React.CSSProperties> = { item: { minWidth: 230 }, billed: { width: 120 }, received: { minWidth: 190 }, rack: { width: 150 }, price: { width: 100 }, tax: { width: 70 } };
   const addPo = (p: OpenPo) => {
     setPos((xs) => [...xs, { id: String(p.id), po_no: p.po_no, warehouse_id: String(p.warehouse_id) }]);
     setItems((xs) => [...xs.filter((x) => x.variant_id || x.po_item_id), ...p.lines.map(fromPoLine)]);
@@ -127,15 +127,15 @@ export default function GrnForm() {
       <Messages items={msgs} />
       <div className="card mb-3"><div className="card-body">
         <div className="row mb-3"><div className="col-md-4"><label className="form-label">{term('supplier')}</label>
-          {po ? <input className="form-control" disabled value={po.supplier} /> : <select className="form-select" required value={supplier} onChange={(e) => pickSupplier(e.target.value)}><option value="">Choose…</option>{d.suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</div></div>
+          {po ? <input className="form-control" disabled value={po.supplier} /> : <select className="form-select" required value={supplier} onChange={(e) => pickSupplier(e.target.value)}><option value="">Choose…</option>{d.suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}</div>
+          <PoPicker supplierId={supplierId} added={pos} warehouse={String(values.warehouse_id)} onAdd={addPo} onDrop={dropPo} /></div>
         <SchemaForm schema={schema.data} values={values} onChange={setValues} />
-        <OtherPos supplierId={supplierId} added={pos} warehouse={String(values.warehouse_id)} onAdd={addPo} onDrop={dropPo} />
         <p className="text-muted small mb-0">Extra cost is spread over the items by value and becomes part of their stock cost; it does not change the supplier's bill.</p>
       </div></div>
 
       <div className="card mb-3">
         <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"><span>Items <span className="act-n">{live.length}</span></span>
-          <span className="small text-muted">Write the <b>billed</b> quantity, then the rolls that arrived: <code>4x50</code>, <code>50, 50, 48.5</code> or <code>3x50 + 48.5</code>. Each roll becomes its own {term('batch').toLowerCase()}.</span></div>
+          <span className="small text-muted">Write the <b>billed</b> quantity, then press the received button to enter the rolls that arrived (in the pop-up: <code>4x50</code> or one by one). Each roll becomes its own {term('batch').toLowerCase()}.</span></div>
         <div style={{ overflow: 'visible' }}><table className="table table-sm align-middle mb-0">
           <thead><tr>{gcols.map((c) => <th key={c.key} style={widths[c.key]}>{c.label}</th>)}<th style={{ width: 84 }} /></tr></thead>
           {items.map((x, i) => {
@@ -158,37 +158,22 @@ function ItemRows({ x, i, has, got, billed, diff, grid, term, supplier, rollInpu
   x: Item; i: number; has: boolean; got: number; billed: number; diff: number; grid: GridCol[]; term: (k: string, p?: boolean) => string; supplier: string; rollInputs: React.MutableRefObject<(HTMLInputElement | null)[]>;
   change: (i: number, fn: (x: Item) => Item) => void; applyText: (i: number, l: number[]) => void; rackSelect: (v: string, on: (v: string) => void, first: string) => React.ReactNode; onRemove: () => void;
 }) {
-  const shown = rollsText(x.rolls.map((r) => num(r.qty)).filter((n) => n > 0));
-  const [draft, setDraft] = useState<string | null>(null); const [err, setErr] = useState(''); const [modal, setModal] = useState(false);
-  const commit = () => {
-    if (draft === null) return;
-    const r = parseRolls(draft, x.dec);
-    if (typeof r === 'string') { setErr(r); return; }
-    setErr(''); setDraft(null);
-    if (r.length) applyText(i, r); else change(i, (y) => ({ ...y, rolls: [blankRoll()] }));
-  };
+  const [modal, setModal] = useState(false);
   const n = x.rolls.filter((r) => num(r.qty) > 0).length;
-  const cellClass: Record<string, string | undefined> = { received: 'small text-nowrap' };
+  const cellClass: Record<string, string | undefined> = {};
   const cells: Record<string, React.ReactNode> = {
     item: (<>
           {x.po_item_id ? <><span className="fw-medium">{x.label}</span>{x.tb && <> <span className="badge text-bg-secondary">{term('batch')}</span></>}{x.po_no && <div className="small text-muted">{x.po_no}</div>}</>
             : <ItemSearch value={x.variant_id} label={x.label} supplier={supplier || undefined} placeholder="Search item, SKU or barcode"
-              onPick={(p) => { if (!p) { change(i, (y) => ({ ...y, variant_id: '', label: '' })); return; } const v = p.row; change(i, (y) => ({ ...y, variant_id: String(v.id), label: p.label, unit: v.unit, dec: !!Number(v.allow_decimal), tb: !!Number(v.track_batch), unit_price: String(v.rate ?? v.cost_price ?? ''), tax_rate: String(Number(v.tax_rate ?? 0)) })); setTimeout(() => rollInputs.current[i]?.focus(), 60); }} />}
+              onPick={(p) => { if (!p) { change(i, (y) => ({ ...y, variant_id: '', label: '' })); return; } const v = p.row; change(i, (y) => ({ ...y, variant_id: String(v.id), label: p.label, unit: v.unit, dec: !!Number(v.allow_decimal), tb: !!Number(v.track_batch), unit_price: String(v.rate ?? v.cost_price ?? ''), tax_rate: String(Number(v.tax_rate ?? 0)) })); if (v.track_batch && Number(v.track_batch)) setModal(true); else setTimeout(() => rollInputs.current[i]?.focus(), 60); }} />}
     </>),
     billed: <div className="input-group input-group-sm"><input type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.billed} placeholder={x.po_item_id && x.left ? fmtQty(x.left) : ''} onChange={(e) => change(i, (y) => ({ ...y, billed: e.target.value }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>,
-    rolls: (<>
-          {!has ? <span className="text-muted small">choose the {term('item').toLowerCase()} first</span> : x.tb ? (
-            <>
-              <input ref={(el) => { rollInputs.current[i] = el; }} className={`form-control form-control-sm ${err ? 'is-invalid' : ''}`} placeholder="e.g. 4x50 or 50, 50, 48.5" value={draft ?? shown} aria-label="Rolls received"
-                onChange={(e) => { setDraft(e.target.value); setErr(''); }} onFocus={(e) => e.currentTarget.select()} onBlur={commit}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } else if (e.key === 'Escape') { setDraft(null); setErr(''); } }} />
-              {err && <div className="invalid-feedback d-block">{err}</div>}
-            </>
-          ) : <div className="input-group input-group-sm"><input ref={(el) => { rollInputs.current[i] = el; }} type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.rolls[0]?.qty ?? ''} aria-label="Qty received" onChange={(e) => change(i, (y) => ({ ...y, rolls: [{ ...y.rolls[0], qty: e.target.value }] }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>}
-    </>),
-    received: <>{has && (got > 0 || billed > 0) && <>
-          <b>{fmtQty(got)} {x.unit}</b>{x.tb && n > 0 && <span className="text-muted"> · {n} {n === 1 ? 'roll' : 'rolls'}</span>}
-          {billed > 0 && got > 0 && <div>{Math.abs(diff) < 0.0005 ? <span className="text-success"><i className="bi bi-check-circle" /> matches</span> : diff < 0 ? <span className="badge text-bg-warning">short {fmtQty(-diff)}</span> : <span className="badge text-bg-danger">+{fmtQty(diff)} extra</span>}</div>}</>}</>,
+    received: !has ? <span className="text-muted small">choose the {term('item').toLowerCase()} first</span> : (<>
+      {x.tb
+        ? <button type="button" className="btn btn-sm btn-outline-primary text-nowrap" title={`Roll by roll: lengths, a different ${term('rack').toLowerCase()} for one roll, supplier roll numbers`} onClick={() => setModal(true)}>
+          {n > 0 ? <><b>{fmtQty(got)} {x.unit}</b> · {n} {n === 1 ? 'roll' : 'rolls'} <i className="bi bi-pencil ms-1" /></> : <><i className="bi bi-list-ol" /> Add rolls</>}</button>
+        : <div className="input-group input-group-sm"><input ref={(el) => { rollInputs.current[i] = el; }} type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.rolls[0]?.qty ?? ''} aria-label="Qty received" onChange={(e) => change(i, (y) => ({ ...y, rolls: [{ ...y.rolls[0], qty: e.target.value }] }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>}
+      {billed > 0 && got > 0 && <div className="small mt-1">{Math.abs(diff) < 0.0005 ? <span className="text-success"><i className="bi bi-check-circle" /> matches</span> : diff < 0 ? <span className="badge text-bg-warning">short {fmtQty(-diff)}</span> : <span className="badge text-bg-danger">+{fmtQty(diff)} extra</span>}</div>}</>),
     rack: <>{has ? rackSelect(x.rack, (v) => change(i, (y) => ({ ...y, rack: v })), `No ${term('rack').toLowerCase()}`) : null}</>,
     price: x.po_item_id ? <span className="small text-muted">{x.unit_price}</span> : <input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} />,
     tax: x.po_item_id ? <span className="small text-muted">{x.tax_rate}</span> : <input type="number" step="0.01" min="0" max="100" className="form-control form-control-sm" value={x.tax_rate} onChange={(e) => change(i, (y) => ({ ...y, tax_rate: e.target.value }))} />,
@@ -198,7 +183,6 @@ function ItemRows({ x, i, has, got, billed, diff, grid, term, supplier, rollInpu
       <tr>
         {grid.map((c) => <td key={c.key} className={cellClass[c.key]}>{cells[c.key]}</td>)}
         <td className="text-nowrap text-end">
-          {has && x.tb && <button type="button" className="btn btn-sm btn-outline-secondary me-1" title={`Roll by roll: lengths, a different ${term('rack').toLowerCase()} for one roll, supplier roll numbers`} onClick={() => setModal(true)}><i className="bi bi-list-ol" /> Rolls</button>}
           <button type="button" className="btn btn-sm btn-outline-danger" aria-label="Remove item" onClick={onRemove}>×</button>
         </td>
       </tr>
@@ -267,25 +251,38 @@ function RollsModal({ x, i, got, billed, diff, term, change, rackSelect, onClose
   );
 }
 
-/** Purchase orders of the supplier that still have goods due: tick the ones the supplier's invoice covers and their items join the receipt. */
-function OtherPos({ supplierId, added, warehouse, onAdd, onDrop }: { supplierId: string; added: PoRef[]; warehouse: string; onAdd: (p: OpenPo) => void; onDrop: (id: string) => void }) {
+/** The purchase orders this receipt is against: a dropdown of the supplier's open orders, tick the ones the supplier's invoice covers and their items join the receipt. */
+function PoPicker({ supplierId, added, warehouse, onAdd, onDrop }: { supplierId: string; added: PoRef[]; warehouse: string; onAdd: (p: OpenPo) => void; onDrop: (id: string) => void }) {
   const q = useQuery({ queryKey: ['grn-open-pos', supplierId], enabled: !!supplierId, queryFn: async () => (await get(`/purchase/grns/open-pos?supplier=${supplierId}`)) as any });
+  const [open, setOpen] = useState(false); const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', away); return () => document.removeEventListener('mousedown', away);
+  }, []);
   if (!supplierId) return null;
   const all: OpenPo[] = q.data?.pos ?? [];
   const ids = new Set(added.map((p) => p.id));
-  const more = all.filter((p) => !ids.has(String(p.id)));
-  if (!added.length && !more.length) return null;
+  // the ones already on the receipt stay in the list (so they can be un-ticked), then the other open orders
+  const rows: { id: string; po_no: string; open?: OpenPo; warehouse_id: string }[] = [...added.map((p) => ({ id: p.id, po_no: p.po_no, warehouse_id: p.warehouse_id })), ...all.filter((p) => !ids.has(String(p.id))).map((p) => ({ id: String(p.id), po_no: p.po_no, open: p, warehouse_id: String(p.warehouse_id) }))];
+  if (!rows.length) return null;
   return (
-    <div className="border rounded p-2 mt-3 bg-body-tertiary">
-      <div className="small fw-medium mb-1">Purchase orders on this receipt</div>
-      <div className="small text-muted mb-2">If the supplier sent goods of more than one order on a single invoice, add all those orders here and receive everything in one go.</div>
-      {added.length > 0 && <div className="d-flex flex-wrap gap-2 mb-2">{added.map((p) => <span key={p.id} className="badge text-bg-primary d-inline-flex align-items-center gap-1 fs-6 fw-normal">{p.po_no}
-        <button type="button" className="btn btn-sm p-0 border-0 text-reset lh-1" title={`Remove ${p.po_no} from this receipt`} aria-label={`Remove ${p.po_no}`} onClick={() => onDrop(p.id)}>×</button></span>)}</div>}
-      {more.length > 0 && <div className="d-flex flex-column gap-1">{more.map((p) => {
-        const other = added.length > 0 && String(p.warehouse_id) !== String(warehouse);
-        return <div key={p.id} className="d-flex align-items-center gap-2 small"><button type="button" className="btn btn-sm btn-outline-primary" disabled={other} onClick={() => onAdd(p)}><i className="bi bi-plus-lg" /> Add</button>
-          <span><b>{p.po_no}</b> · {p.order_date} · {p.lines.length} {p.lines.length === 1 ? 'item' : 'items'} due · {p.warehouse}{other && <span className="text-warning-emphasis"> (different warehouse)</span>}</span></div>;
-      })}</div>}
+    <div className="col-md-4" ref={box}><label className="form-label">Purchase order</label>
+      <div className="position-relative">
+        <button type="button" className="form-select text-start" onClick={() => setOpen((o) => !o)}>{added.length ? added.map((p) => p.po_no).join(', ') : <span className="text-muted">No order — choose…</span>}</button>
+        {open && (
+          <div className="border rounded bg-body shadow-sm p-1" style={{ position: 'absolute', left: 0, right: 0, zIndex: 30, maxHeight: 280, overflow: 'auto' }}>
+            {rows.map((r) => {
+              const on = ids.has(r.id); const other = !on && added.length > 0 && r.warehouse_id !== warehouse;
+              return (
+                <label key={r.id} className={`d-flex align-items-start gap-2 px-2 py-1 rounded ${other ? 'text-muted' : ''}`} style={{ cursor: other ? 'not-allowed' : 'pointer' }}>
+                  <input type="checkbox" className="form-check-input mt-1" checked={on} disabled={other} onChange={() => { if (on) onDrop(r.id); else if (r.open) onAdd(r.open); }} />
+                  <span><b>{r.po_no}</b>{r.open && <span className="small text-muted"> · {r.open.order_date} · {r.open.lines.length} {r.open.lines.length === 1 ? 'item' : 'items'} due{other ? ' · other warehouse' : ''}</span>}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

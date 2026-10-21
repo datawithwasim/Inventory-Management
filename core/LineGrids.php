@@ -14,7 +14,7 @@ final class LineGrids
     public const GRIDS = [
         'purchase_order' => ['item' => ['{item}', true], 'qty' => ['Qty', true], 'price' => ['Unit price'], 'tax' => ['Tax %'], 'total' => ['Line total']],
         'sales_order' => ['item' => ['Product', true], 'qty' => ['Qty', true], 'price' => ['Price'], 'disc' => ['Disc %'], 'tax' => ['Tax %'], 'total' => ['Total']],
-        'grn' => ['item' => ['{item}', true], 'billed' => ['Billed / due'], 'rolls' => ['Rolls received', true], 'received' => ['Received'], 'rack' => ['{rack}'], 'price' => ['Unit price'], 'tax' => ['Tax %']],
+        'grn' => ['item' => ['{item}', true], 'billed' => ['Billed / due'], 'received' => ['Received', true], 'rack' => ['{rack}'], 'price' => ['Unit price'], 'tax' => ['Tax %']],
         'adjustment' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'rack' => ['{rack}'], 'qty' => ['Qty change (− to remove)', true], 'cost' => ['Unit cost']],
         'transfer' => ['item' => ['{item}', true], 'batch' => ['{batch}'], 'from_rack' => ['From {rack_l}'], 'to_rack' => ['To {rack_l}'], 'qty' => ['Qty to move', true]],
     ];

@@ -1017,7 +1017,7 @@ DB::run("DELETE FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [
 echo "Items-table columns (line grids)\n";
 $g = $c->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
 check('a purchase order\'s items table is data: item, qty, unit price, tax, line total, in that order, all shown', array_column($g, 'key') === ['item', 'qty', 'price', 'tax', 'total'] && !in_array(false, array_column($g, 'show'), true) && $g[0]['locked'] === true && $g[2]['locked'] === false);
-foreach (['sales_order' => ['item', 'qty', 'price', 'disc', 'tax', 'total'], 'grn' => ['item', 'billed', 'rolls', 'received', 'rack', 'price', 'tax'], 'adjustment' => ['item', 'batch', 'rack', 'qty', 'cost'], 'transfer' => ['item', 'batch', 'from_rack', 'to_rack', 'qty']] as $ent => $keys) {
+foreach (['sales_order' => ['item', 'qty', 'price', 'disc', 'tax', 'total'], 'grn' => ['item', 'billed', 'received', 'rack', 'price', 'tax'], 'adjustment' => ['item', 'batch', 'rack', 'qty', 'cost'], 'transfer' => ['item', 'batch', 'from_rack', 'to_rack', 'qty']] as $ent => $keys) {
     check("the $ent items table has its columns as data", array_column($c->call('GET', "/schema/$ent")['json']['schema']['grid'] ?? [], 'key') === $keys);
 }
 check('a form without an items table has none', ($c->call('GET', '/schema/customer')['json']['schema']['grid'] ?? []) === []);
@@ -1052,7 +1052,7 @@ $vg = array_map(fn($x) => ['key' => $x['key'], 'show' => $x['key'] !== 'cost', '
 $c->call('POST', '/settings/formdesign', ['payload' => json_encode(['grn' => ['style' => $grn['style'], 'lines' => $grn['lines'], 'deleted' => [], 'viewgrid' => $vg, 'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => $sec['fields']], $grn['sections']), 'fields' => (object)[]]]), 'current' => 'grn', 'close' => '', 'return' => '']);
 $by = array_column($c->call('GET', '/schema/grn')['json']['schema']['viewgrid'], null, 'key');
 check('the company can rename and hide a column of the detail table; the form\'s own table is untouched', $by['qty']['label'] === 'Length' && $by['cost']['show'] === false && $by['item']['show'] === true
-    && array_column($c->call('GET', '/schema/grn')['json']['schema']['grid'], 'key') === ['item', 'billed', 'rolls', 'received', 'rack', 'price', 'tax']);
+    && array_column($c->call('GET', '/schema/grn')['json']['schema']['grid'], 'key') === ['item', 'billed', 'received', 'rack', 'price', 'tax']);
 $c->call('POST', '/settings/formdesign', ['payload' => json_encode(['grn' => ['reset' => true, 'style' => 'top', 'lines' => ['disc' => true, 'tax' => true], 'deleted' => [], 'sections' => [], 'fields' => (object)[]]]), 'current' => 'grn', 'close' => '', 'return' => '']);
 check('resetting the form puts the detail table back', ($c->call('GET', '/schema/grn')['json']['schema']['viewgrid'][5]['label'] ?? '') === 'Qty');
 // put the form back the way it was
