@@ -6,7 +6,6 @@ import { fdate, money, moneyIn, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
-import RateForm from '../../components/RateForm';
 
 const poTone: Record<string, string> = { draft: 'secondary', pending_approval: 'warning', approved: 'primary', partial: 'info', received: 'success', closed: 'dark', cancelled: 'danger' };
 const payTone = (b: any) => { const due = Number(b.total) - Number(b.returned_amount) - Number(b.paid_amount); return due <= 0.004 ? ['success', 'Paid'] : Number(b.paid_amount) > 0 ? ['warning', 'Partly paid'] : ['danger', 'Unpaid']; };
@@ -15,11 +14,11 @@ export default function SupplierDetail() {
   const { id } = useParams(); const nav = useNavigate(); const qc = useQueryClient();
   const { can, term } = useSession();
   const q = useQuery({ queryKey: ['supplier', id], queryFn: async () => (await get(`/suppliers/${id}`)).data });
-  const [rateForm, setRateForm] = useState<null | 'new' | any>(null); const [showOld, setShowOld] = useState(false);
+  const [showOld, setShowOld] = useState(false);
   if (q.isLoading) return <Spinner />;
   const d = q.data; if (!d) return <div className="alert alert-danger">{term('supplier')} not found.</div>;
   const s = d.s; const canEdit = can('suppliers.edit');
-  const reload = () => { qc.invalidateQueries({ queryKey: ['supplier', id] }); setRateForm(null); };
+  const reload = () => { qc.invalidateQueries({ queryKey: ['supplier', id] }); };
   const remove = async () => { if (!confirm('Delete this supplier?')) return; const r = await post(`/suppliers/${id}/delete`); if (r.ok) nav('/suppliers'); else alert(r.messages?.[0]?.msg ?? 'Could not delete.'); };
   const delRate = async (rid: number) => { if (!confirm('Remove this rate?')) return; await post(`/suppliers/${id}/rates/${rid}/delete`, { return: `suppliers/${id}` }); reload(); };
   const current = d.rates.filter((r: any) => r.is_current);
@@ -60,8 +59,7 @@ export default function SupplierDetail() {
         <div className="card-header rl-head"><div><div className="rl-title"><i className="bi bi-tags" /> Rate list <span className="act-n">{current.length}</span></div><div className="rl-sub">What this {term('supplier').toLowerCase()} charges us · {current.length} current{d.rates.length - current.length ? ` · ${d.rates.length - current.length} earlier` : ''}</div></div>
           <div className="rl-tools">
             {can('reports.view') && <a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/reports/rate-history?supplier=${s.id}`)}><i className="bi bi-clock-history" /> History report</a>}
-            {canEdit && <><a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/suppliers/${s.id}/rates/template`)}><i className="bi bi-file-earmark-spreadsheet" /> CSV template</a><button className="btn btn-sm btn-primary" onClick={() => setRateForm('new')}><i className="bi bi-plus-lg" /> Add rate</button></>}</div></div>
-        {rateForm && <RateForm key={rateForm === 'new' ? 'new' : rateForm.id} supplierId={s.id} currency={s.origin === 'imported' && s.currency ? s.currency : 'INR'} preset={rateForm === 'new' ? undefined : rateForm} onDone={reload} />}
+            {canEdit && <><a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/suppliers/${s.id}/rates/template`)}><i className="bi bi-file-earmark-spreadsheet" /> CSV template</a><Link className="btn btn-sm btn-primary" to={`/purchase/rates/create?supplier=${s.id}&return=/suppliers/${s.id}`}><i className="bi bi-plus-lg" /> Add rate</Link></>}</div></div>
         {d.rates.length > current.length && <div className="rl-bar"><label className="form-check form-switch m-0 small text-muted"><input className="form-check-input" type="checkbox" checked={showOld} onChange={(e) => setShowOld(e.target.checked)} /> <span>Show earlier rates ({d.rates.length - current.length})</span></label></div>}
         {rates.length ? <div className="table-responsive"><table className="table rl-table align-middle mb-0"><thead><tr><th>{term('item')}</th><th className="text-end">Roll rate</th><th className="text-end">Cut rate</th><th className="text-end">MOQ rate</th><th className="text-end d-none d-md-table-cell">Disc.</th><th className="d-none d-lg-table-cell">Valid</th><th className="d-none d-lg-table-cell">Code</th><th /></tr></thead><tbody>
           {rates.map((r: any) => (
@@ -72,7 +70,7 @@ export default function SupplierDetail() {
               <td className="text-end d-none d-md-table-cell">{Number(r.discount_pct) > 0 ? `${Number(r.discount_pct)}%` : <span className="text-muted">—</span>}</td>
               <td className="small text-nowrap d-none d-lg-table-cell">{fdate(r.valid_from)} → {r.valid_to ? fdate(r.valid_to) : <span className="text-muted">open</span>}</td>
               <td className="small d-none d-lg-table-cell">{r.scode}{r.sname ? <div className="text-muted">{r.sname}</div> : null}</td>
-              <td className="text-end text-nowrap">{canEdit && <>{r.is_current && <button className="btn btn-sm btn-outline-primary" onClick={() => setRateForm(r)}>Revise</button>} <button className="btn btn-sm btn-link text-danger px-1" aria-label="Remove rate" onClick={() => delRate(r.id)}><i className="bi bi-trash" /></button></>}</td></tr>))}</tbody></table></div>
+              <td className="text-end text-nowrap">{canEdit && <>{r.is_current && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/rates/${r.id}/edit?supplier=${s.id}&return=/suppliers/${s.id}`}>Revise</Link>} <button className="btn btn-sm btn-link text-danger px-1" aria-label="Remove rate" onClick={() => delRate(r.id)}><i className="bi bi-trash" /></button></>}</td></tr>))}</tbody></table></div>
           : <div className="rl-empty"><i className="bi bi-tags" /><div><b>No rates yet</b><div className="text-muted small">Add what this {term('supplier').toLowerCase()} quotes. The rate fills in by itself when you pick the {term('item').toLowerCase()} on a purchase order.</div></div></div>}
       </section>
 

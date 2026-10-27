@@ -10,6 +10,7 @@ import CustomerForm from './pages/customers/Form';
 import { GroupList, GroupForm } from './pages/customers/Groups';
 import ItemImport from './pages/items/Import';
 import RateList from './pages/purchase/RateList';
+import { ExchangeRates, RateImport, RatePage } from './pages/purchase/RatePages';
 import FormDesigner from './pages/settings/FormDesigner';
 import PrintDesigner from './pages/settings/PrintDesigner';
 import { CatalogueList, CatalogueDetail, CatalogueForm } from './pages/catalogues/Catalogues';
@@ -118,6 +119,10 @@ export default function App() {
         <Route path="/customers/groups/:id/edit" element={<GroupForm />} />
         <Route path="/items/import" element={<ItemImport />} />
         <Route path="/purchase/rates" element={<RateList />} />
+        <Route path="/purchase/rates/create" element={<RatePage />} />
+        <Route path="/purchase/rates/import" element={<RateImport />} />
+        <Route path="/purchase/rates/exchange" element={<ExchangeRates />} />
+        <Route path="/purchase/rates/:id/edit" element={<RatePage />} />
         <Route path="/customers/:id" element={<CustomerDetail />} />
         <Route path="/customers/:id/edit" element={<CustomerForm />} />
         <Route path="/suppliers" element={<SupplierList />} />
