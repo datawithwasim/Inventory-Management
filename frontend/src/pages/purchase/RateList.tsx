@@ -5,6 +5,7 @@ import { get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
 import { fdate, money, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
+import { createPortal } from 'react-dom';
 import RateForm from '../../components/RateForm';
 
 const plain = (v: any) => rtrimZeros(Number(v).toFixed(2));
@@ -46,12 +47,20 @@ export default function RateList() {
               <button className="btn btn-primary" onClick={() => { setImp(null); setForm({ supplier }); }}><i className="bi bi-plus-lg" /> Add rate</button></>}
           </div>
         </div>
-        {form && (
-          <div className="p-3 border-bottom bg-body-tertiary">
-            <div className="row g-2 mb-2"><div className="col-md-4"><label className="form-label small mb-1">{term('supplier')}</label>
-              <select className="form-select form-select-sm" value={form.supplier} disabled={!!form.preset} onChange={(e) => setForm({ supplier: e.target.value })}><option value="">Choose…</option>{(d?.suppliers ?? []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-            {form.supplier ? <RateForm key={form.supplier + (form.preset?.id ?? '')} supplierId={Number(form.supplier)} preset={form.preset} onDone={reload} /> : <div className="small text-muted">Choose the {term('supplier').toLowerCase()} first.</div>}
-          </div>)}
+        {form && createPortal(
+          <>
+            <div className="modal-backdrop fade show" />
+            <div className="modal fade show d-block" role="dialog" aria-modal="true" aria-label="Rate" onMouseDown={(e) => { if (e.target === e.currentTarget) setForm(null); }}>
+              <div className="modal-dialog modal-lg"><div className="modal-content">
+                <div className="modal-header"><h2 className="modal-title h5 mb-0">{form.preset ? 'Change rate' : 'Add a rate'}</h2><button type="button" className="btn-close" aria-label="Close" onClick={() => setForm(null)} /></div>
+                <div className="modal-body" style={{ overflow: 'visible' }}>
+                  <div className="row g-2 mb-3"><div className="col-md-6"><label className="form-label small mb-1">{term('supplier')}</label>
+                    <select className="form-select form-select-sm" value={form.supplier} disabled={!!form.preset} onChange={(e) => setForm({ supplier: e.target.value })}><option value="">Choose…</option>{(d?.suppliers ?? []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
+                  {form.supplier ? <RateForm plain key={form.supplier + (form.preset?.id ?? '')} supplierId={Number(form.supplier)} preset={form.preset} onDone={reload} /> : <div className="small text-muted">Choose the {term('supplier').toLowerCase()} first.</div>}
+                </div>
+              </div></div>
+            </div>
+          </>, document.body)}
         {imp && (
           <form className="p-3 border-bottom bg-body-tertiary" onSubmit={upload}>
             <div className="row g-2 align-items-end">
