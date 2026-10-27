@@ -40,6 +40,11 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
   const rec: RecordData | undefined = q.data?.record;
   if (!rec) return <div className="alert alert-danger">Could not load this record.</div>;
   const notes: any[] = q.data.notes ?? []; const timeline: any[] = q.data.timeline ?? [];
+  // the document's own "Note" field and the Notes box below would be two notes on one page: the field's text moves into the Notes box (first entry) instead
+  const isNote = (it: Item) => it.key === 'note' || it.key === 'notes';
+  const own = [...rec.summary, ...rec.sections.flatMap((s) => s.items)].filter(isNote).filter((it) => it.text);
+  const sections = rec.sections.map((s) => ({ ...s, items: s.items.filter((it) => !isNote(it)) })).filter((s) => s.items.length);
+  const summary = rec.summary.filter((it) => !isNote(it));
   const addNote = async () => {
     if (!note.trim()) return;
     const r = await post(`/records/${entity}/${id}/notes`, { body: note });
@@ -47,7 +52,7 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
   };
   const delNote = async (nid: number) => { if (!confirm('Remove this note?')) return; await post(`/records/notes/${nid}/delete`); qc.invalidateQueries({ queryKey: ['record', entity, String(id)] }); };
   const scrollTo = (rid: string) => { setTab('overview'); setTimeout(() => document.getElementById(rid)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); };
-  const sideItems = [{ id: 'recOverview', label: 'Overview' }, ...related, { id: 'notes', label: `Notes (${notes.length})` }];
+  const sideItems = [{ id: 'recOverview', label: 'Overview' }, ...related, { id: 'notes', label: `Notes (${notes.length + (own.length ? 1 : 0)})` }];
 
   return (
     <div className="rec">
@@ -73,8 +78,8 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
           <div className="rec-tabs" role="tablist"><button type="button" className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>Overview</button><button type="button" className={tab === 'timeline' ? 'on' : ''} onClick={() => setTab('timeline')}>Timeline</button></div>
           {tab === 'overview' && (
             <div id="recOverview" className="rec-panel">
-              {rec.summary.length > 0 && <div className="card rec-summary"><div className="card-body">{rec.summary.map((it) => <div className="rec-kv" key={it.key}><span>{it.label}</span><b><Value it={it} /></b></div>)}</div></div>}
-              {rec.sections.map((s, i) => (
+              {summary.length > 0 && <div className="card rec-summary"><div className="card-body">{summary.map((it) => <div className="rec-kv" key={it.key}><span>{it.label}</span><b><Value it={it} /></b></div>)}</div></div>}
+              {sections.map((s, i) => (
                 <section className="card rec-sec" key={i}><div className="card-header">{s.title}</div>
                   <div className="card-body"><div className={`rec-grid c${s.cols}`}>{s.items.map((it) => <div className="rec-kv" key={it.key}><span>{it.label}</span><b><Value it={it} /></b></div>)}</div></div></section>
               ))}
@@ -84,12 +89,13 @@ export default function RecordPage({ entity, id, name, back, badges, actions, me
                   <Messages items={err ? [{ type: 'danger', msg: err }] : []} />
                   <textarea className="form-control" rows={2} maxLength={1500} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
                   <button className="btn btn-sm btn-primary mt-2" onClick={addNote}>Add note</button></div>}
+                {own.length > 0 && <div className="rec-note"><div style={{ whiteSpace: 'pre-wrap' }}>{own[0].text}</div><div className="small text-muted">Written when it was created</div></div>}
                 {notes.map((n) => (
                   <div className="rec-note" key={n.id}><div style={{ whiteSpace: 'pre-wrap' }}>{n.body}</div>
                     <div className="small text-muted d-flex justify-content-between"><span>{n.user_name || 'Someone'} · {fdate(String(n.created_at).slice(0, 10))} {String(n.created_at).slice(11, 16)}</span>
                       {q.data.canNote && <button className="btn btn-link btn-sm p-0 text-danger" onClick={() => delNote(n.id)}>Delete</button>}</div></div>
                 ))}
-                {!notes.length && <div className="text-muted small">No notes yet.</div>}
+                {!notes.length && !own.length && <div className="text-muted small">No notes yet.</div>}
               </div></section>
             </div>
           )}
