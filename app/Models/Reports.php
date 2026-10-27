@@ -379,10 +379,10 @@ final class Reports
 
         $defs['rate-comparison'] = [
             'title' => 'Supplier rate comparison', 'group' => 'purchase',
-            'desc' => 'Current rates of every supplier for each item, side by side. The lowest net rate is marked and the others show how much dearer they are.',
+            'desc' => 'Current rates of every supplier for each item, side by side (roll, cut and MOQ rate). Rates in a foreign currency are compared in rupees at today\'s exchange rate; the lowest net roll rate is marked and the others show how much dearer they are.',
             'filters' => ['category', 'supplier', 'q'],
-            'columns' => ['item' => $col('Item'), 'variant' => $col('Variant'), 'sku' => $col('SKU'), 'supplier' => $col('Supplier'), 'rate' => $col('Rate', 'money'), 'discount' => $col('Disc. %'),
-                'net' => $col('Net rate', 'money'), 'min_qty' => $col('Min qty', 'qty'), 'lead' => $col('Lead time'), 'vs' => $col('Compared to lowest'), 'since' => $col('Valid from', 'date')],
+            'columns' => ['item' => $col('Item'), 'variant' => $col('Variant'), 'sku' => $col('SKU'), 'supplier' => $col('Supplier'), 'currency' => $col('Currency'), 'rate' => $col('Roll rate', 'money'), 'cut' => $col('Cut rate', 'money'), 'moq' => $col('MOQ rate', 'money'), 'discount' => $col('Disc. %'),
+                'net' => $col('Net roll rate', 'money'), 'net_inr' => $col('Net roll rate in ₹', 'money'), 'min_qty' => $col('MOQ qty', 'qty'), 'lead' => $col('Lead time'), 'vs' => $col('Compared to lowest'), 'since' => $col('Valid from', 'date')],
             'run' => function (array $f, int $limit) use ($t) {
                 $today = date('Y-m-d');
                 $p = [$t, $today, $today];
@@ -396,21 +396,21 @@ final class Reports
                 $cur = [];
                 foreach ($all as $r) { $k = $r['variant_id'] . '-' . $r['supplier_id']; if (!isset($cur[$k])) $cur[$k] = $r; }
                 $by = [];
-                foreach ($cur as $r) { $r['net'] = Purchase::netRate($r); $by[$r['variant_id']][] = $r; }
+                foreach ($cur as $r) { $r['net'] = Purchase::netRate($r); $r['net_inr'] = Currencies::toInr($r['net'], (string)$r['currency']); $by[$r['variant_id']][] = $r; }
                 $out = [];
                 foreach ($by as $list) {
-                    usort($list, fn($a, $b) => $a['net'] <=> $b['net']);
-                    $low = $list[0]['net'];
+                    usort($list, fn($a, $b) => $a['net_inr'] <=> $b['net_inr']);
+                    $low = $list[0]['net_inr'];
                     if ($f['supplier'] && !in_array($f['supplier'], array_map(fn($r) => (int)$r['supplier_id'], $list), true)) continue;
                     foreach ($list as $r) {
                         if ($f['supplier'] && (int)$r['supplier_id'] !== $f['supplier']) continue;
-                        $out[] = ['item' => $r['item'], 'variant' => $r['variant'] ?? '', 'sku' => $r['sku'], 'supplier' => $r['supplier'], 'rate' => $r['rate'],
+                        $out[] = ['item' => $r['item'], 'variant' => $r['variant'] ?? '', 'sku' => $r['sku'], 'supplier' => $r['supplier'], 'currency' => $r['currency'], 'rate' => $r['rate'], 'cut' => $r['cut_rate'], 'moq' => $r['moq_rate'], 'net_inr' => $r['net_inr'],
                             'discount' => (float)$r['discount_pct'] > 0 ? rtrim(rtrim(number_format((float)$r['discount_pct'], 2), '0'), '.') . '%' : '', 'net' => $r['net'], 'min_qty' => (float)$r['min_qty'] > 0 ? $r['min_qty'] : null,
                             'lead' => ($r['lead_time_days'] ?? $r['s_lead']) ? (int)($r['lead_time_days'] ?? $r['s_lead']) . ' days' : '',
-                            'vs' => count($list) < 2 ? 'Only supplier' : ($r['net'] - $low < 0.005 ? 'Lowest' : '+' . round(($r['net'] - $low) / max($low, 0.01) * 100, 1) . '% (' . number_format($r['net'] - $low, 2) . ' more)'), 'since' => $r['valid_from']];
+                            'vs' => count($list) < 2 ? 'Only supplier' : ($r['net_inr'] - $low < 0.005 ? 'Lowest' : '+' . round(($r['net_inr'] - $low) / max($low, 0.01) * 100, 1) . '% (₹' . number_format($r['net_inr'] - $low, 2) . ' more)'), 'since' => $r['valid_from']];
                     }
                 }
-                usort($out, fn($a, $b) => [$a['item'], $a['variant'], $a['net']] <=> [$b['item'], $b['variant'], $b['net']]);
+                usort($out, fn($a, $b) => [$a['item'], $a['variant'], $a['net_inr']] <=> [$b['item'], $b['variant'], $b['net_inr']]);
                 return array_slice($out, 0, $limit);
             },
         ];
@@ -419,8 +419,8 @@ final class Reports
             'title' => 'Supplier rate history', 'group' => 'purchase',
             'desc' => 'Every rate a supplier has quoted, newest first, with how much it changed from their previous rate.',
             'filters' => ['supplier', 'q'],
-            'columns' => ['from' => $col('Valid from', 'date'), 'to' => $col('Valid till', 'date'), 'supplier' => $col('Supplier'), 'item' => $col('Item'), 'variant' => $col('Variant'),
-                'rate' => $col('Rate', 'money'), 'net' => $col('Net rate', 'money'), 'change' => $col('Change vs previous')],
+            'columns' => ['from' => $col('Valid from', 'date'), 'to' => $col('Valid till', 'date'), 'supplier' => $col('Supplier'), 'item' => $col('Item'), 'variant' => $col('Variant'), 'currency' => $col('Currency'),
+                'rate' => $col('Roll rate', 'money'), 'cut' => $col('Cut rate', 'money'), 'moq' => $col('MOQ rate', 'money'), 'net' => $col('Net roll rate', 'money'), 'change' => $col('Change vs previous')],
             'run' => function (array $f, int $limit) use ($t) {
                 $p = [$t];
                 $w = '';
@@ -438,7 +438,7 @@ final class Reports
                     if (isset($prev[$k]) && $prev[$k] > 0) { $d = ($net - $prev[$k]) / $prev[$k] * 100; $chg = abs($d) < 0.05 ? 'No change' : ($d > 0 ? '▲ +' : '▼ ') . round($d, 1) . '%'; }
                     else $chg = 'First rate';
                     $prev[$k] = $net;
-                    $out[] = ['from' => $r['valid_from'], 'to' => $r['valid_to'], 'supplier' => $r['supplier'], 'item' => $r['item'], 'variant' => $r['variant'] ?? '', 'rate' => $r['rate'], 'net' => $net, 'change' => $chg];
+                    $out[] = ['from' => $r['valid_from'], 'to' => $r['valid_to'], 'supplier' => $r['supplier'], 'item' => $r['item'], 'variant' => $r['variant'] ?? '', 'currency' => $r['currency'], 'rate' => $r['rate'], 'cut' => $r['cut_rate'], 'moq' => $r['moq_rate'], 'net' => $net, 'change' => $chg];
                 }
                 usort($out, fn($a, $b) => [$b['from']] <=> [$a['from']]);
                 return array_slice($out, 0, $limit);

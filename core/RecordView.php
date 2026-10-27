@@ -62,6 +62,7 @@ final class RecordView
         if (isset($tables[$key])) return self::lookup($tables[$key], (int)$v);
         if ($key === 'item_type') return ItemTypes::LABELS[$v] ?? (string)$v;
         if ($key === 'supplier_type') return Purchase::SUPPLIER_TYPES[$v] ?? (string)$v;
+        if ($key === 'origin') return \App\Models\Currencies::ORIGINS[$v] ?? (string)$v;
         if (in_array($key, self::MONEY, true)) return (float)$v > 0 ? money($v) : '';
         if (isset(self::DAYS[$key])) return (int)$v > 0 ? (int)$v . ' days' : self::DAYS[$key];
         return (string)$v;
@@ -139,7 +140,7 @@ final class RecordView
             $row['item_id'] = $vid ? (int)DB::val('SELECT item_id FROM item_variants WHERE tenant_id = ? AND id = ?', [Auth::tenantId(), $vid]) : 0;
             $cur = $vid ? Purchase::currentRate((int)$row['supplier_id'], $vid) : null;
             $last = $vid ? Purchase::lastPaid((int)$row['supplier_id'], $vid) : null;
-            $facts = ['rate' => ['Current rate', $cur ? e(money(Purchase::netRate($cur))) : ''], 'last_paid' => ['Last paid', $last ? e(money($last['unit_price'])) . ' on ' . e(fdate($last['received_date'])) : ''],
+            $facts = ['rate' => ['Current rate', $cur ? e(\App\Models\Currencies::format(Purchase::netRate($cur), (string)$cur['currency'])) . (Purchase::netKinds($cur)['cut'] !== null || Purchase::netKinds($cur)['moq'] !== null ? ' (roll)' : '') : ''], 'last_paid' => ['Last paid', $last ? e(money($last['unit_price'])) . ' on ' . e(fdate($last['received_date'])) : ''],
                 'preferred' => ['Preferred source', !empty($row['is_preferred']) ? 'Yes' : '']];
         }
         $name = fn(string $sql, array $a) => (string)DB::val($sql, $a);
@@ -148,7 +149,8 @@ final class RecordView
         if ($entity === 'purchase_order') {
             $creator = $row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '';
             $approver = $row['approved_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['approved_by']]) : '';
-            $facts = ['created_by' => ['Created by', e($creator ?: '—')], 'approved_by' => ['Approved by', $approver ? e($approver) . ' on ' . e(substr((string)$row['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(money($row['total']))]];
+            $facts = ['created_by' => ['Created by', e($creator ?: '—')], 'approved_by' => ['Approved by', $approver ? e($approver) . ' on ' . e(substr((string)$row['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(\App\Models\Currencies::format((float)$row['total'], (string)($row['currency'] ?? 'INR')))]];
+            if (($row['currency'] ?? 'INR') !== 'INR') $facts['exchange'] = ['Exchange rate', e('1 ' . $row['currency'] . ' = ' . money($row['exchange_rate']))];
         } elseif ($entity === 'grn') {
             $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.tenant_id = ? AND gp.grn_id = ? ORDER BY p.id', [$t, $row['id']]);
             $bill = DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $row['id']]);

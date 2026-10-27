@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\PrintTemplate;
+use App\Models\Currencies;
 use App\Models\Purchase;
 use App\Models\CustomFields;
 use Core\Audit;
@@ -68,7 +69,7 @@ final class PurchaseOrderController extends PurchaseBase
     private function form(string $title, ?array $po, array $lines): void
     {
         $this->view('app/purchase/po_form', [
-            'title' => $title, 'po' => $po, 'suppliers' => $this->suppliers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines,
+            'title' => $title, 'po' => $po, 'suppliers' => $this->suppliers(), 'warehouses' => $this->warehouses(), 'oldLines' => $lines, 'currencies' => Currencies::all(true),
             'cfFields' => CustomFields::fields('purchase_order'), 'cfValues' => CustomFields::formValues('purchase_order', $po ? (int)$po['id'] : null),
         ]);
     }
@@ -89,8 +90,9 @@ final class PurchaseOrderController extends PurchaseBase
             if (isset($seen[$v['id']])) $this->bounce("$prefix: " . $v['item_name'] . ' is listed twice. Combine the quantities.', $back);
             $seen[$v['id']] = 1;
             $price = $this->money($l['unit_price'] ?? '', "$prefix price", $back);
+            $kind = (string)($l['rate_kind'] ?? '');
             $out[] = ['variant_id' => (int)$v['id'], 'qty' => $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back),
-                'price' => $price, 'tax' => $this->taxFor($l['tax_rate'] ?? '', $prefix, $back)];
+                'price' => $price, 'tax' => $this->taxFor($l['tax_rate'] ?? '', $prefix, $back), 'rate_kind' => isset(Purchase::RATE_KINDS[$kind]) ? $kind : null];
         }
         return $out;
     }
@@ -103,7 +105,16 @@ final class PurchaseOrderController extends PurchaseBase
         $order = $this->date($d['order_date'] ?? '', 'Order date', $back);
         $expected = $this->date($d['expected_date'] ?? '', 'Expected date', $back, false);
         if ($expected !== null && $expected < $order) $this->bounce('Expected date cannot be before the order date.', $back);
-        return ['supplier_id' => $supplier['id'], 'warehouse_id' => $wh['id'], 'order_date' => $order, 'expected_date' => $expected,
+        // an imported supplier is bought from in its own currency, at the exchange rate of the day (changeable on the order); everyone else in rupees
+        [$currency, $rate] = Currencies::forSupplier($supplier);
+        if ($currency !== Currencies::BASE) {
+            $posted = trim((string)($d['exchange_rate'] ?? ''));
+            if ($posted !== '') {
+                if (!is_numeric($posted) || (float)$posted <= 0 || (float)$posted > 100000) $this->bounce('The exchange rate must be a number above zero (rupees for one ' . $currency . ').', $back);
+                $rate = round((float)$posted, 6);
+            }
+        }
+        return ['supplier_id' => $supplier['id'], 'currency' => $currency, 'exchange_rate' => $rate, 'warehouse_id' => $wh['id'], 'order_date' => $order, 'expected_date' => $expected,
             'notes' => $this->text($d['notes'] ?? '', 255, 'Notes', $back)];
     }
 
@@ -133,7 +144,7 @@ final class PurchaseOrderController extends PurchaseBase
         DB::run('DELETE FROM purchase_order_items WHERE tenant_id = ? AND po_id = ?', [$this->tid(), $poId]);
         foreach ($lines as $l) {
             DB::insert('purchase_order_items', ['tenant_id' => $this->tid(), 'po_id' => $poId, 'variant_id' => $l['variant_id'],
-                'qty_ordered' => $l['qty'], 'unit_price' => $l['price'], 'tax_rate' => $l['tax']]);
+                'qty_ordered' => $l['qty'], 'unit_price' => $l['price'], 'rate_kind' => $l['rate_kind'] ?? null, 'tax_rate' => $l['tax']]);
         }
         Purchase::recalcPo($poId);
     }
@@ -147,7 +158,7 @@ final class PurchaseOrderController extends PurchaseBase
         }
         $lines = $this->oldLines() ?: array_map(fn($l) => [
             'variant_id' => $l['variant_id'], 'label' => $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')',
-            'unit' => $l['unit'], 'dec' => 1, 'qty' => (float)$l['qty_ordered'], 'unit_price' => $l['unit_price'], 'tax_rate' => $l['tax_rate'],
+            'unit' => $l['unit'], 'dec' => 1, 'qty' => (float)$l['qty_ordered'], 'unit_price' => $l['unit_price'], 'rate_kind' => $l['rate_kind'], 'tax_rate' => $l['tax_rate'],
         ], $this->items((int)$po['id']));
         $this->form('Edit ' . $po['po_no'], $po, $lines);
     }

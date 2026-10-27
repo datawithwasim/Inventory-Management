@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
-import { fdate, money, qty } from '../../lib/format';
+import { fdate, money, moneyIn, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
@@ -27,7 +27,7 @@ export default function SupplierDetail() {
   const typeLabel: Record<string, string> = { manufacturer: 'Manufacturer / mill', trader: 'Trader / dealer', jobworker: 'Job worker', importer: 'Importer' };
   return (
     <RecordPage entity="supplier" id={s.id} name={s.name} back="/suppliers"
-      badges={<>{s.is_active ? null : <><Badge tone="dark">Inactive</Badge> </>}{s.supplier_type ? <Badge tone="secondary">{typeLabel[s.supplier_type] ?? s.supplier_type}</Badge> : null}</>}
+      badges={<>{s.is_active ? null : <><Badge tone="dark">Inactive</Badge> </>}{s.supplier_type ? <Badge tone="secondary">{typeLabel[s.supplier_type] ?? s.supplier_type}</Badge> : null} {s.origin === 'imported' ? <Badge tone="primary">Imported · {s.currency || 'INR'}</Badge> : s.origin === 'market' ? <Badge tone="secondary">Market</Badge> : <Badge tone="secondary">Domestic</Badge>}</>}
       actions={canEdit ? <Link className="btn btn-sm btn-primary" to={`/suppliers/${s.id}/edit`}>Edit</Link> : null}
       menu={(close) => <>
         {can('purchase.create') && <li><a className="dropdown-item" href={legacyUrl(`/purchase/orders/create?supplier=${s.id}`)}><i className="bi bi-cart-plus me-2 text-muted" />New purchase order</a></li>}
@@ -51,7 +51,7 @@ export default function SupplierDetail() {
             <tr key={p.id} className={p.is_active ? '' : 'text-muted'}>
               <td><Link className="fw-medium" to={`/purchase/supplier-items/${p.id}`}>{p.supplier_name || p.supplier_code || 'Same as ours'}</Link>{p.supplier_name && p.supplier_code ? <div className="small text-muted">Code {p.supplier_code}</div> : null}{p.is_preferred ? <> <Badge tone="success">Preferred</Badge></> : null}</td>
               <td>{p.variant_id ? <><a href={legacyUrl(`/items/${p.item_id}`)}>{p.item_name}{p.vname ? ` — ${p.vname}` : ''}</a> <span className="text-muted small">{p.sku}</span></> : <Badge tone="warning">Not linked</Badge>}</td>
-              <td className="text-end">{p.net !== null ? <><span className="fw-semibold">{money(p.net)}</span>{Number(p.rate_row.discount_pct) > 0 && <div className="small text-muted">{money(p.rate_row.rate)} less {Number(p.rate_row.discount_pct)}%</div>}</> : <span className="text-muted small">No rate yet</span>}</td>
+              <td className="text-end">{p.net !== null ? <><span className="fw-semibold">{moneyIn(p.net, p.rate_row.currency)}</span><div className="small text-muted">roll{p.rate_row.cut_rate != null ? ` · cut ${moneyIn(p.rate_row.cut_rate, p.rate_row.currency)}` : ''}{p.rate_row.moq_rate != null ? ` · MOQ ${moneyIn(p.rate_row.moq_rate, p.rate_row.currency)}` : ''}{Number(p.rate_row.discount_pct) > 0 ? ` · less ${Number(p.rate_row.discount_pct)}%` : ''}</div></> : <span className="text-muted small">No rate yet</span>}</td>
               <td className="text-end d-none d-md-table-cell">{p.last_paid !== null ? <>{money(p.last_paid)}<div className="small text-muted">{fdate(p.last_on)}</div></> : <span className="text-muted">—</span>}</td></tr>))}</tbody></table></div>
           : <div className="rl-empty"><i className="bi bi-box-seam" /><div><b>No items yet</b><div className="text-muted small">List what this {term('supplier').toLowerCase()} supplies, with the name and code <i>they</i> use, and link each to your own item.</div></div></div>}
       </section>
@@ -61,14 +61,15 @@ export default function SupplierDetail() {
           <div className="rl-tools">
             {can('reports.view') && <a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/reports/rate-history?supplier=${s.id}`)}><i className="bi bi-clock-history" /> History report</a>}
             {canEdit && <><a className="btn btn-sm btn-outline-secondary" href={legacyUrl(`/suppliers/${s.id}/rates/template`)}><i className="bi bi-file-earmark-spreadsheet" /> CSV template</a><button className="btn btn-sm btn-primary" onClick={() => setRateForm('new')}><i className="bi bi-plus-lg" /> Add rate</button></>}</div></div>
-        {rateForm && <RateForm key={rateForm === 'new' ? 'new' : rateForm.id} supplierId={s.id} preset={rateForm === 'new' ? undefined : rateForm} onDone={reload} />}
+        {rateForm && <RateForm key={rateForm === 'new' ? 'new' : rateForm.id} supplierId={s.id} currency={s.origin === 'imported' && s.currency ? s.currency : 'INR'} preset={rateForm === 'new' ? undefined : rateForm} onDone={reload} />}
         {d.rates.length > current.length && <div className="rl-bar"><label className="form-check form-switch m-0 small text-muted"><input className="form-check-input" type="checkbox" checked={showOld} onChange={(e) => setShowOld(e.target.checked)} /> <span>Show earlier rates ({d.rates.length - current.length})</span></label></div>}
-        {rates.length ? <div className="table-responsive"><table className="table rl-table align-middle mb-0"><thead><tr><th>{term('item')}</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net rate</th><th className="text-end d-none d-md-table-cell">Min qty</th><th className="d-none d-lg-table-cell">Valid</th><th className="d-none d-lg-table-cell">Code</th><th /></tr></thead><tbody>
+        {rates.length ? <div className="table-responsive"><table className="table rl-table align-middle mb-0"><thead><tr><th>{term('item')}</th><th className="text-end">Roll rate</th><th className="text-end">Cut rate</th><th className="text-end">MOQ rate</th><th className="text-end d-none d-md-table-cell">Disc.</th><th className="d-none d-lg-table-cell">Valid</th><th className="d-none d-lg-table-cell">Code</th><th /></tr></thead><tbody>
           {rates.map((r: any) => (
             <tr key={r.id} className={r.is_current ? '' : 'rl-old'}>
               <td><a className="fw-medium" href={legacyUrl(`/items/${r.item_id}`)}>{r.item_name}{r.vname ? ` — ${r.vname}` : ''}</a> <span className="text-muted small">{r.sku}</span>{r.is_current ? null : <> <span className="badge text-bg-light border fw-normal">Earlier</span></>}</td>
-              <td className="text-end">{money(r.rate)}</td><td className="text-end">{Number(r.discount_pct) > 0 ? `${Number(r.discount_pct)}%` : <span className="text-muted">—</span>}</td><td className="text-end fw-semibold">{money(r.net)}</td>
-              <td className="text-end d-none d-md-table-cell">{Number(r.min_qty) > 0 ? qty(r.min_qty) : <span className="text-muted">—</span>}</td>
+              <td className="text-end fw-semibold">{moneyIn(r.nets.roll, r.currency)}</td><td className="text-end">{r.nets.cut !== null ? moneyIn(r.nets.cut, r.currency) : <span className="text-muted">—</span>}</td>
+              <td className="text-end">{r.nets.moq !== null ? <>{moneyIn(r.nets.moq, r.currency)}<div className="small text-muted">from {qty(r.min_qty)}</div></> : <span className="text-muted">—</span>}</td>
+              <td className="text-end d-none d-md-table-cell">{Number(r.discount_pct) > 0 ? `${Number(r.discount_pct)}%` : <span className="text-muted">—</span>}</td>
               <td className="small text-nowrap d-none d-lg-table-cell">{fdate(r.valid_from)} → {r.valid_to ? fdate(r.valid_to) : <span className="text-muted">open</span>}</td>
               <td className="small d-none d-lg-table-cell">{r.scode}{r.sname ? <div className="text-muted">{r.sname}</div> : null}</td>
               <td className="text-end text-nowrap">{canEdit && <>{r.is_current && <button className="btn btn-sm btn-outline-primary" onClick={() => setRateForm(r)}>Revise</button>} <button className="btn btn-sm btn-link text-danger px-1" aria-label="Remove rate" onClick={() => delRate(r.id)}><i className="bi bi-trash" /></button></>}</td></tr>))}</tbody></table></div>

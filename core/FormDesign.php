@@ -13,7 +13,7 @@ final class FormDesign
         'item' => ['name' => 'Item name', 'item_type' => 'Product type', 'category_id' => 'Category', 'brand_id' => 'Brand', 'unit_id' => 'Unit', 'tax_id' => 'Tax', 'hsn_code' => 'HSN code', 'description' => 'Description'],
         'customer' => ['name' => 'Customer name', 'group_id' => 'Group', 'contact_person' => 'Contact person', 'phone' => 'Phone', 'email' => 'Email', 'address' => 'Billing address',
             'ship_address' => 'Delivery address', 'tax_no' => 'Tax number', 'credit_days' => 'Credit days', 'notes' => 'Notes'],
-        'supplier' => ['name' => 'Supplier name', 'supplier_type' => 'Supplier type', 'contact_person' => 'Contact person', 'phone' => 'Phone', 'email' => 'Email', 'tax_no' => 'Tax number',
+        'supplier' => ['name' => 'Supplier name', 'supplier_type' => 'Supplier type', 'origin' => 'Domestic / Imported / Market', 'currency' => 'Currency (imported suppliers)', 'contact_person' => 'Contact person', 'phone' => 'Phone', 'email' => 'Email', 'tax_no' => 'Tax number',
             'pan' => 'PAN', 'address' => 'Address', 'city' => 'City', 'state' => 'State', 'pincode' => 'Pincode', 'ship_address' => 'Godown / dispatch address',
             'payment_terms_days' => 'Payment terms (days)', 'credit_limit' => 'Credit limit', 'lead_time_days' => 'Lead time (days)', 'transport' => 'Preferred transport',
             'bank_name' => 'Bank name', 'bank_account' => 'Account number', 'bank_ifsc' => 'IFSC', 'notes' => 'Notes'],
@@ -37,7 +37,7 @@ final class FormDesign
     public const SPANS = [
         'item' => ['name' => 12, 'item_type' => 4, 'category_id' => 4, 'brand_id' => 4, 'unit_id' => 4, 'tax_id' => 4, 'hsn_code' => 4, 'description' => 12],
         'customer' => ['name' => 8, 'group_id' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'address' => 12, 'ship_address' => 12, 'tax_no' => 4, 'credit_days' => 3, 'notes' => 5],
-        'supplier' => ['name' => 8, 'supplier_type' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'tax_no' => 6, 'pan' => 6, 'address' => 12, 'city' => 4, 'state' => 4, 'pincode' => 4,
+        'supplier' => ['name' => 8, 'supplier_type' => 4, 'origin' => 4, 'currency' => 4, 'contact_person' => 4, 'phone' => 4, 'email' => 4, 'tax_no' => 6, 'pan' => 6, 'address' => 12, 'city' => 4, 'state' => 4, 'pincode' => 4,
             'ship_address' => 12, 'payment_terms_days' => 3, 'credit_limit' => 3, 'lead_time_days' => 3, 'transport' => 3, 'bank_name' => 4, 'bank_account' => 4, 'bank_ifsc' => 4, 'notes' => 12],
         'warehouse' => ['name' => 12, 'code' => 12, 'address' => 12],
         'sales_order' => ['customer_id' => 4, 'warehouse_id' => 3, 'order_date' => 2, 'expected_date' => 3, 'ship_to' => 6, 'delivery_charge' => 3, 'installation_charge' => 3, 'notes' => 8],
@@ -288,7 +288,7 @@ final class FormDesign
 
     /** key => option source, for fields that pick from a list. */
     private const PICK = ['warehouse_id' => 'warehouses', 'to_warehouse_id' => 'all_warehouses', 'group_id' => 'customer_groups',
-        'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'item_type' => 'item_types', 'supplier_type' => 'supplier_types'];
+        'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'item_type' => 'item_types', 'supplier_type' => 'supplier_types', 'origin' => 'supplier_origins', 'currency' => 'currencies'];
     /** key => lookup source: big lists (thousands of suppliers or customers) are searched, not scrolled; the same registry the custom "Lookup" field uses. */
     private const LOOKUP = ['supplier_id' => 'supplier', 'customer_id' => 'customer'];
     /** Overrides of the guess below: entity => key => input type. */

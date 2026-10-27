@@ -158,6 +158,7 @@ $router->get('/products/{id}/edit', $A . 'ProductController@edit', ['auth', 'per
 $router->post('/products/{id}', $A . 'ProductController@update', ['auth', 'perm:products.edit']);
 $router->post('/products/{id}/delete', $A . 'ProductController@destroy', ['auth', 'perm:products.delete']);
 $router->get('/purchase/rates', $A . 'RateListController@index', ['auth', 'perm:suppliers.view']);
+$router->post('/purchase/currencies', $A . 'RateListController@saveCurrencies', ['auth', 'perm:suppliers.edit']);
 $router->get('/suppliers', $A . 'SupplierController@index', ['auth', 'perm:suppliers.view']);
 $router->get('/suppliers/create', $A . 'SupplierController@create', ['auth', 'perm:suppliers.create']);
 $router->post('/suppliers', $A . 'SupplierController@store', ['auth', 'perm:suppliers.create']);

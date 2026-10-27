@@ -76,7 +76,7 @@ abstract class PurchaseBase extends Controller
 
     protected function suppliers(bool $onlyActive = true): array
     {
-        return DB::all('SELECT id, name FROM suppliers WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
+        return DB::all('SELECT id, name, origin, currency FROM suppliers WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
     }
 
     protected function warehouses(): array

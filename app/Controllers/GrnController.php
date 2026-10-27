@@ -85,7 +85,7 @@ final class GrnController extends PurchaseBase
             if ($left <= 0) continue;
             $lines[] = ['po_item_id' => $l['id'], 'po_id' => (int)$po['id'], 'po_no' => $po['po_no'], 'variant_id' => $l['variant_id'], 'label' => $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')',
                 'tb' => (int)$l['track_batch'], 'unit' => $l['unit'], 'dec' => (int)$l['allow_decimal'], 'qty' => $left, 'left' => $left,
-                'unit_price' => $l['unit_price'], 'tax_rate' => $l['tax_rate'], 'location_id' => 0, 'lot_no' => ''];
+                'unit_price' => round((float)$l['unit_price'] * (float)($po['exchange_rate'] ?? 1), 2), 'po_price' => $l['unit_price'], 'po_currency' => $po['currency'] ?? 'INR', 'tax_rate' => $l['tax_rate'], 'location_id' => 0, 'lot_no' => ''];
         }
         return $lines;
     }
@@ -103,7 +103,7 @@ final class GrnController extends PurchaseBase
         $supplier = (int)($_GET['supplier'] ?? 0);
         $out = [];
         foreach (DB::all(
-            "SELECT p.id, p.po_no, p.order_date, p.status, p.warehouse_id, w.name AS warehouse FROM purchase_orders p JOIN warehouses w ON w.id = p.warehouse_id
+            "SELECT p.id, p.po_no, p.order_date, p.status, p.warehouse_id, p.currency, p.exchange_rate, w.name AS warehouse FROM purchase_orders p JOIN warehouses w ON w.id = p.warehouse_id
              WHERE p.tenant_id = ? AND p.supplier_id = ? AND p.status IN ('approved','partial')" . \Core\Scope::sql('p.warehouse_id') . ' ORDER BY p.id', [$this->tid(), $supplier]) as $p) {
             $lines = $this->dueLines($p);
             if ($lines) $out[] = $p + ['lines' => $lines];
@@ -149,7 +149,8 @@ final class GrnController extends PurchaseBase
             if ((int)($l['po_item_id'] ?? 0) > 0) {
                 $pi = $poItems[(int)$l['po_item_id']] ?? $this->bounce("$prefix: this line is not on the purchase orders being received.", $back);
                 $v = Stock::variant((int)$pi['variant_id']);
-                $price = (float)$pi['unit_price'];
+                // a foreign-currency order is received (and costed, and billed) in rupees at the exchange rate the order was made at
+                $price = round((float)$pi['unit_price'] * (float)($pos[(int)$pi['po_id']]['exchange_rate'] ?? 1), 2);
                 $tax = (float)$pi['tax_rate'];
             } else {
                 $pi = null;

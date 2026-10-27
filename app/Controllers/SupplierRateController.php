@@ -29,15 +29,24 @@ final class SupplierRateController extends PurchaseBase
     }
 
     /** Checks one rate row; returns the clean values or an error string. */
-    private function clean(array $d): array|string
+    private function clean(array $d, array $supplier): array|string
     {
+        // the roll rate is the base rate (older sheets call it just "rate"); the cut and MOQ rates are extra
+        if (trim((string)($d['rate'] ?? '')) === '' && trim((string)($d['roll_rate'] ?? '')) !== '') $d['rate'] = $d['roll_rate'];
         $num = fn($k) => trim((string)($d[$k] ?? ''));
         $rate = $num('rate');
-        if ($rate === '' || !is_numeric($rate) || (float)$rate < 0 || (float)$rate > 99999999) return 'Rate must be a number, zero or more.';
+        if ($rate === '' || !is_numeric($rate) || (float)$rate < 0 || (float)$rate > 99999999) return 'The roll rate must be a number, zero or more.';
+        $extra = [];
+        foreach (['cut_rate' => 'cut rate', 'moq_rate' => 'MOQ rate'] as $k => $label) {
+            $v = $num($k);
+            if ($v !== '' && (!is_numeric($v) || (float)$v < 0 || (float)$v > 99999999)) return "The $label must be a number, zero or more.";
+            $extra[$k] = $v === '' ? null : round((float)$v, 2);
+        }
         $disc = $num('discount_pct');
         if ($disc !== '' && (!is_numeric($disc) || (float)$disc < 0 || (float)$disc > 100)) return 'Discount must be between 0 and 100.';
         $min = $num('min_qty');
         if ($min !== '' && (!is_numeric($min) || (float)$min < 0)) return 'Minimum quantity must be zero or more.';
+        if ($extra['moq_rate'] !== null && ($min === '' || (float)$min <= 0)) return 'An MOQ rate needs the minimum order quantity (MOQ) it is for.';
         $lead = $num('lead_time_days');
         if ($lead !== '' && (!ctype_digit($lead) || (int)$lead > 365)) return 'Lead time must be 0 to 365 days.';
         $from = $num('valid_from') ?: date('Y-m-d');
@@ -48,7 +57,7 @@ final class SupplierRateController extends PurchaseBase
         if ($to !== '' && $to < $from) return '"Valid till" cannot be before "Valid from".';
         $code = $num('supplier_code');
         if (mb_strlen($code) > 60) return "Supplier's own code is too long.";
-        return ['rate' => round((float)$rate, 2), 'discount_pct' => $disc === '' ? 0.0 : round((float)$disc, 2), 'min_qty' => $min === '' ? 0.0 : (float)$min,
+        return ['rate' => round((float)$rate, 2), 'cut_rate' => $extra['cut_rate'], 'moq_rate' => $extra['moq_rate'], 'currency' => \App\Models\Currencies::forSupplier($supplier)[0], 'discount_pct' => $disc === '' ? 0.0 : round((float)$disc, 2), 'min_qty' => $min === '' ? 0.0 : (float)$min,
             'lead_time_days' => $lead === '' ? null : (int)$lead, 'supplier_code' => $code !== '' ? $code : null, 'valid_from' => $from, 'valid_to' => $to !== '' ? $to : null, 'note' => null];
     }
 
@@ -58,11 +67,11 @@ final class SupplierRateController extends PurchaseBase
         $d = $this->input();
         $vid = (int)($d['variant_id'] ?? 0);
         if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ? AND i.is_bundle = 0', [$this->tid(), $vid])) $this->fail('Pick an item from the list.', (int)$s['id']);
-        $row = $this->clean($d);
+        $row = $this->clean($d, $s);
         if (is_string($row)) $this->fail($row, (int)$s['id']);
         Purchase::addRate((int)$s['id'], $vid, $row);
         Purchase::saveProduct((int)$s['id'], $vid, (string)($d['supplier_name'] ?? ''), $row['supplier_code']);
-        Audit::log('supplier_rate_add', 'supplier', (int)$s['id'], 'variant ' . $vid . ' @ ' . $row['rate']);
+        Audit::log('supplier_rate_add', 'supplier', (int)$s['id'], 'variant ' . $vid . ' @ ' . $row['rate'] . ' ' . $row['currency']);
         flash('success', 'Rate saved.');
         $this->back((int)$s['id']);
     }
@@ -81,7 +90,7 @@ final class SupplierRateController extends PurchaseBase
         $this->supplier($id);
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="supplier-rates-template.csv"');
-        echo "sku,rate,discount_pct,min_qty,lead_time_days,supplier_code,supplier_name,valid_from\nCURTAIN-001,285.00,5,100,7,D-4471,Royal Velvet 54," . date('Y-m-d') . "\n";
+        echo "sku,roll_rate,cut_rate,moq_rate,min_qty,discount_pct,lead_time_days,supplier_code,supplier_name,valid_from\nCURTAIN-001,285.00,310.00,270.00,100,5,7,D-4471,Royal Velvet 54," . date('Y-m-d') . "\n";
         exit;
     }
 
@@ -96,11 +105,11 @@ final class SupplierRateController extends PurchaseBase
         $head = fgetcsv($h, 0, ',', '"', '\\');
         if (!$head) $this->fail('The file is empty.', $sid);
         $head = array_map(fn($x) => strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string)$x))), $head);
-        if (!in_array('sku', $head, true) || !in_array('rate', $head, true)) $this->fail('The first row must contain the columns "sku" and "rate".', $sid);
+        if (!in_array('sku', $head, true) || (!in_array('rate', $head, true) && !in_array('roll_rate', $head, true))) $this->fail('The first row must contain the columns "sku" and "roll_rate" (or "rate").', $sid);
         $t = $this->tid();
         $ok = 0; $bad = [];
         $line = 1;
-        DB::transaction(function () use ($h, $head, $t, $sid, &$ok, &$bad, &$line) {
+        DB::transaction(function () use ($h, $head, $t, $sid, $s, &$ok, &$bad, &$line) {
             while (($r = fgetcsv($h, 0, ',', '"', '\\')) !== false) {
                 $line++;
                 if ($line > 2001) { $bad[] = 'Stopped at 2000 rows.'; break; }
@@ -110,7 +119,7 @@ final class SupplierRateController extends PurchaseBase
                 $sku = trim((string)($d['sku'] ?? ''));
                 $vid = (int)DB::val('SELECT v.id FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.sku = ? AND i.is_bundle = 0', [$t, $sku]);
                 if (!$vid) { $bad[] = "Row $line: SKU \"$sku\" not found."; continue; }
-                $row = $this->clean($d);
+                $row = $this->clean($d, $s);
                 if (is_string($row)) { $bad[] = "Row $line: $row"; continue; }
                 Purchase::addRate($sid, $vid, $row);
                 Purchase::saveProduct($sid, $vid, (string)($d['supplier_name'] ?? ''), $row['supplier_code']);

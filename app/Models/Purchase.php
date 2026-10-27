@@ -72,10 +72,33 @@ final class Purchase
 
     // ------------------------------------------------------------ supplier rate list
 
-    /** Rate after the supplier's own discount. */
+    /** The three rates a supplier can quote for an item: by the roll (the base rate), cut to length, and for an order of at least the minimum quantity (MOQ). */
+    public const RATE_KINDS = ['roll' => 'Roll rate', 'cut' => 'Cut rate', 'moq' => 'MOQ rate'];
+
+    /** Roll rate after the supplier's own discount. */
     public static function netRate(array $r): float
     {
-        return round((float)$r['rate'] * (1 - (float)$r['discount_pct'] / 100), 2);
+        return self::netKind($r, 'roll') ?? 0.0;
+    }
+
+    /** One of the rates after the supplier's discount, or null when the supplier has not quoted it. */
+    public static function netKind(array $r, string $kind): ?float
+    {
+        $v = match ($kind) { 'cut' => $r['cut_rate'] ?? null, 'moq' => (float)($r['min_qty'] ?? 0) > 0 ? ($r['moq_rate'] ?? null) : null, default => $r['rate'] ?? null };
+        if ($v === null || $v === '') return null;
+        return round((float)$v * (1 - (float)($r['discount_pct'] ?? 0) / 100), 2);
+    }
+
+    /** Which rate a quantity buys at: the MOQ rate from the minimum quantity up (when there is one), else the roll rate. */
+    public static function autoKind(array $r, float $qty): string
+    {
+        return (float)($r['min_qty'] ?? 0) > 0 && $r['moq_rate'] !== null && $r['moq_rate'] !== '' && $qty >= (float)$r['min_qty'] ? 'moq' : 'roll';
+    }
+
+    /** All the net rates of a rate row: ['roll' => x, 'cut' => x|null, 'moq' => x|null]. */
+    public static function netKinds(array $r): array
+    {
+        return ['roll' => self::netKind($r, 'roll'), 'cut' => self::netKind($r, 'cut'), 'moq' => self::netKind($r, 'moq')];
     }
 
     /** Rate in force on a date (default today) for one supplier + variant, or null. */
@@ -95,13 +118,16 @@ final class Purchase
              WHERE l.tenant_id = ? AND g.supplier_id = ? AND l.variant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [self::tid(), $supplierId, $variantId]);
     }
 
-    /** What to put on a purchase line: the supplier's current net rate, else what we last paid them, else the item's default cost. */
-    public static function priceFor(int $supplierId, int $variantId, float $defaultCost): float
+    /**
+     * What to put on a purchase line, in the order's currency: the supplier's current net rate for that quantity (when it is quoted in that currency),
+     * else what we last paid them, else the item's default cost (both rupees, turned into the currency at the order's exchange rate).
+     */
+    public static function priceFor(int $supplierId, int $variantId, float $defaultCost, float $qty = 0, string $currency = 'INR', float $exchange = 1.0): float
     {
         $cur = self::currentRate($supplierId, $variantId);
-        if ($cur) return self::netRate($cur);
-        $last = self::lastPaid($supplierId, $variantId);
-        return $last ? (float)$last['unit_price'] : $defaultCost;
+        if ($cur && ($cur['currency'] ?? 'INR') === $currency) return self::netKind($cur, self::autoKind($cur, $qty)) ?? self::netRate($cur);
+        $inr = ($last = self::lastPaid($supplierId, $variantId)) ? (float)$last['unit_price'] : $defaultCost;
+        return $exchange > 0 ? round($inr / $exchange, 2) : $inr;
     }
 
     /** The smallest quantity this supplier sells of a variant (rate list first, then the supplier item), 0 when none is set. */
@@ -190,6 +216,9 @@ final class Purchase
             $r['has_rate'] = (bool)$cur;
             $r['rate'] = $cur['rate'] ?? null; $r['discount_pct'] = $cur['discount_pct'] ?? 0;
             $r['net'] = $cur ? self::netRate($cur) : null;
+            $r['nets'] = $cur ? self::netKinds($cur) : null;
+            $r['currency'] = $cur['currency'] ?? 'INR';
+            $r['net_inr'] = $cur ? round($r['net'] * Currencies::rate((string)$r['currency']), 2) : null;
             $r['min_qty'] = $cur && (float)$cur['min_qty'] > 0 ? $cur['min_qty'] : $r['si_moq'];
             $r['lead_time_days'] = $cur['lead_time_days'] ?? $r['si_lead'];
         }
@@ -219,7 +248,7 @@ final class Purchase
         $t = self::tid();
         $from = $d['valid_from'];
         $same = DB::val('SELECT id FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? AND valid_from = ?', [$t, $supplierId, $variantId, $from]);
-        $row = ['rate' => $d['rate'], 'discount_pct' => $d['discount_pct'], 'min_qty' => $d['min_qty'], 'lead_time_days' => $d['lead_time_days'],
+        $row = ['rate' => $d['rate'], 'cut_rate' => $d['cut_rate'] ?? null, 'moq_rate' => $d['moq_rate'] ?? null, 'currency' => $d['currency'] ?? 'INR', 'discount_pct' => $d['discount_pct'], 'min_qty' => $d['min_qty'], 'lead_time_days' => $d['lead_time_days'],
             'supplier_code' => $d['supplier_code'], 'valid_to' => $d['valid_to'], 'note' => $d['note']];
         if ($same) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($row)));
@@ -247,7 +276,7 @@ final class Purchase
             $live = $r['valid_from'] <= $today && ($r['valid_to'] === null || $r['valid_to'] >= $today);
             $r['is_current'] = $live && !isset($seen[$r['variant_id']]);
             if ($r['is_current']) $seen[$r['variant_id']] = 1;
-            $r['net'] = self::netRate($r);
+            $r['net'] = self::netRate($r); $r['nets'] = self::netKinds($r);
         }
         return $rows;
     }
@@ -262,7 +291,7 @@ final class Purchase
             $live = $r['valid_from'] <= $today && ($r['valid_to'] === null || $r['valid_to'] >= $today);
             $r['is_current'] = $live && !isset($seen[$k]);
             if ($r['is_current']) $seen[$k] = 1;
-            $r['net'] = self::netRate($r);
+            $r['net'] = self::netRate($r); $r['nets'] = self::netKinds($r);
         }
         return $rows;
     }
@@ -280,11 +309,12 @@ final class Purchase
         foreach ($rows as $r) {
             $k = $r['variant_id'] . '-' . $r['supplier_id'];
             if (isset($out[$k])) continue;
-            $r['net'] = self::netRate($r);
+            $r['net'] = self::netRate($r); $r['nets'] = self::netKinds($r);
+            $r['net_inr'] = round($r['net'] * Currencies::rate((string)$r['currency']), 2);
             $out[$k] = $r;
         }
         $out = array_values($out);
-        usort($out, fn($a, $b) => [$a['variant_id'], $a['net']] <=> [$b['variant_id'], $b['net']]);
+        usort($out, fn($a, $b) => [$a['variant_id'], $a['net_inr']] <=> [$b['variant_id'], $b['net_inr']]);
         return $out;
     }
 }

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg } from '../../lib/api';
-import { qty as fmtQty } from '../../lib/format';
+import { qty as fmtQty, moneyIn } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
 import { SchemaForm, toPayload, useSchema } from '../../components/RecordForm';
@@ -13,7 +13,7 @@ import { gridCols, type GridCol } from '../../components/LineGrid';
 /** One roll (or, for an item that is not tracked by roll, the one quantity). location_id '' means the rack chosen for the item. */
 type Roll = { qty: string; lot_no: string; location_id: string };
 /** One item on the receipt: what the supplier billed, and the rolls that actually arrived. */
-type Item = { po_item_id: string; po_id: string; po_no: string; variant_id: string; label: string; tb: boolean; unit: string; dec: boolean; billed: string; left: string; unit_price: string; tax_rate: string; rack: string; rolls: Roll[] };
+type Item = { po_item_id: string; po_id: string; po_no: string; variant_id: string; label: string; tb: boolean; unit: string; dec: boolean; billed: string; left: string; unit_price: string; tax_rate: string; rack: string; rolls: Roll[]; po_note?: string };
 const blankRoll = (): Roll => ({ qty: '', lot_no: '', location_id: '' });
 const blank = (): Item => ({ po_item_id: '', po_id: '', po_no: '', variant_id: '', label: '', tb: false, unit: '', dec: true, billed: '', left: '', unit_price: '', tax_rate: '', rack: '', rolls: [blankRoll()] });
 const num = (v: string) => Number(v) || 0;
@@ -47,7 +47,7 @@ type OpenPo = { id: number | string; po_no: string; order_date: string; warehous
 /** A purchase order line as an item of the receipt. */
 function fromPoLine(l: any): Item {
   const roll: Roll = { qty: String(l.qty ?? ''), lot_no: l.lot_no ?? '', location_id: l.location_id ? String(l.location_id) : '' };
-  return { ...blank(), po_item_id: String(l.po_item_id ?? ''), po_id: String(l.po_id ?? ''), po_no: l.po_no ?? '', variant_id: String(l.variant_id), label: l.label, tb: !!l.tb, unit: l.unit ?? '', dec: l.dec !== 0, billed: String(l.billed_qty ?? l.left ?? l.qty ?? ''), left: String(l.left ?? ''), unit_price: String(l.unit_price ?? ''), tax_rate: String(l.tax_rate ?? ''), rolls: [roll] };
+  return { ...blank(), po_item_id: String(l.po_item_id ?? ''), po_id: String(l.po_id ?? ''), po_no: l.po_no ?? '', variant_id: String(l.variant_id), label: l.label, tb: !!l.tb, unit: l.unit ?? '', dec: l.dec !== 0, billed: String(l.billed_qty ?? l.left ?? l.qty ?? ''), left: String(l.left ?? ''), unit_price: String(l.unit_price ?? ''), tax_rate: String(l.tax_rate ?? ''), po_note: l.po_currency && l.po_currency !== 'INR' ? `PO ${moneyIn(l.po_price, l.po_currency)}` : '', rolls: [roll] };
 }
 
 /** Receive goods: against one or several approved purchase orders of a supplier (when everything came on one invoice), or straight from a supplier. Each line of a roll item becomes its own roll. */
@@ -175,7 +175,7 @@ function ItemRows({ x, i, has, got, billed, diff, grid, term, supplier, rollInpu
         : <div className="input-group input-group-sm"><input ref={(el) => { rollInputs.current[i] = el; }} type="number" step={x.dec ? '0.001' : '1'} min="0" className="form-control" value={x.rolls[0]?.qty ?? ''} aria-label="Qty received" onChange={(e) => change(i, (y) => ({ ...y, rolls: [{ ...y.rolls[0], qty: e.target.value }] }))} />{x.unit && <span className="input-group-text">{x.unit}</span>}</div>}
       {billed > 0 && got > 0 && <div className="small mt-1">{Math.abs(diff) < 0.0005 ? <span className="text-success"><i className="bi bi-check-circle" /> matches</span> : diff < 0 ? <span className="badge text-bg-warning">short {fmtQty(-diff)}</span> : <span className="badge text-bg-danger">+{fmtQty(diff)} extra</span>}</div>}</>),
     rack: <>{has ? rackSelect(x.rack, (v) => change(i, (y) => ({ ...y, rack: v })), `No ${term('rack').toLowerCase()}`) : null}</>,
-    price: x.po_item_id ? <span className="small text-muted">{x.unit_price}</span> : <input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} />,
+    price: x.po_item_id ? <span className="small text-muted">{x.unit_price}{x.po_note ? <div>{x.po_note}</div> : null}</span> : <input type="number" step="0.01" min="0" className="form-control form-control-sm" value={x.unit_price} onChange={(e) => change(i, (y) => ({ ...y, unit_price: e.target.value }))} />,
     tax: x.po_item_id ? <span className="small text-muted">{x.tax_rate}</span> : <input type="number" step="0.01" min="0" max="100" className="form-control form-control-sm" value={x.tax_rate} onChange={(e) => change(i, (y) => ({ ...y, tax_rate: e.target.value }))} />,
   };
   return (

@@ -64,8 +64,17 @@ final class SupplierController extends PurchaseBase
         if ($pin !== null && !preg_match('/^[0-9A-Za-z \-]{3,12}$/', $pin)) $this->bounce('Pincode is not valid.', $back);
         $pan = $this->text($d['pan'] ?? '', 20, 'PAN', $back);
         if ($pan !== null) $pan = strtoupper($pan);
+        // domestic and market suppliers quote in rupees; an imported one in the foreign currency chosen here
+        $origin = trim((string)($d['origin'] ?? '')) ?: 'domestic';
+        if (!isset(\App\Models\Currencies::ORIGINS[$origin])) $this->bounce('Choose whether the supplier is domestic, imported or a market supplier.', $back);
+        $currency = \App\Models\Currencies::BASE;
+        if ($origin === 'imported') {
+            $currency = strtoupper(trim((string)($d['currency'] ?? '')));
+            $cur = $currency !== '' ? \App\Models\Currencies::get($currency) : null;
+            if (!$cur || !$cur['is_active']) $this->bounce('Choose the currency this imported supplier quotes in.', $back);
+        }
         $row = [
-            'name' => $name, 'supplier_type' => $type !== '' ? $type : null, 'pan' => $pan,
+            'name' => $name, 'supplier_type' => $type !== '' ? $type : null, 'origin' => $origin, 'currency' => $currency, 'pan' => $pan,
             'city' => $this->text($d['city'] ?? '', 80, 'City', $back), 'state' => $this->text($d['state'] ?? '', 80, 'State', $back), 'pincode' => $pin,
             'ship_address' => $this->text($d['ship_address'] ?? '', 255, 'Dispatch address', $back), 'transport' => $this->text($d['transport'] ?? '', 100, 'Transport', $back),
             'bank_name' => $this->text($d['bank_name'] ?? '', 100, 'Bank name', $back), 'bank_account' => $this->text($d['bank_account'] ?? '', 40, 'Account number', $back),

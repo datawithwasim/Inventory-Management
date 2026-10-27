@@ -109,11 +109,12 @@ final class ReportController extends PurchaseBase
                     $made[] = "requisition (" . count($list) . ' items)';
                     continue;
                 }
-                $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $sid, 'warehouse_id' => $wh,
+                [$cur, $ex] = \App\Models\Currencies::forSupplier(Purchase::supplier($sid) ?? []);
+                $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $sid, 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh,
                     'order_date' => date('Y-m-d'), 'status' => 'draft', 'notes' => 'Created from low-stock report', 'created_by' => Auth::user()['id']]);
                 foreach ($list as $r) {
                     $tax = (float)DB::val('SELECT COALESCE(x.rate,0) FROM items i LEFT JOIN taxes x ON x.id = i.tax_id WHERE i.id = ?', [$r['item_id']]);
-                    DB::insert('purchase_order_items', ['tenant_id' => $t, 'po_id' => $poId, 'variant_id' => $r['variant_id'], 'qty_ordered' => $r['suggest'], 'unit_price' => $r['cost'], 'tax_rate' => $tax]);
+                    DB::insert('purchase_order_items', ['tenant_id' => $t, 'po_id' => $poId, 'variant_id' => $r['variant_id'], 'qty_ordered' => $r['suggest'], 'unit_price' => Purchase::priceFor($sid, (int)$r['variant_id'], (float)$r['cost'], (float)$r['suggest'], $cur, $ex), 'tax_rate' => $tax]);
                 }
                 Purchase::recalcPo($poId);
                 $made[] = (string)DB::val('SELECT po_no FROM purchase_orders WHERE id = ?', [$poId]);

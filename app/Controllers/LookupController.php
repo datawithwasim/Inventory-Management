@@ -40,9 +40,13 @@ final class LookupController extends Controller
                 if ($prod) { $r['sup_name'] = (string)($prod['supplier_name'] ?? ''); $r['sup_code'] = (string)($prod['supplier_code'] ?? ''); }
                 $cur = Purchase::currentRate($supplier, (int)$r['id']);
                 if ($cur) {
-                    $r['rate'] = Purchase::netRate($cur);
-                    $r['rate_note'] = 'Supplier rate ' . number_format((float)$cur['rate'], 2) . ((float)$cur['discount_pct'] > 0 ? ' less ' . (float)$cur['discount_pct'] . '%' : '')
-                        . ((float)$cur['min_qty'] > 0 ? ' · min ' . (float)$cur['min_qty'] : '');
+                    $nets = Purchase::netKinds($cur);
+                    $r['rate'] = $nets['roll'];
+                    // all three rates, in the currency they were quoted in, so the order line can pick the one the quantity buys at
+                    $r['rates'] = $nets + ['min_qty' => (float)$cur['min_qty'], 'currency' => (string)$cur['currency']];
+                    $r['rate_note'] = 'Roll ' . number_format((float)$cur['rate'], 2) . ($nets['cut'] !== null ? ' · Cut ' . number_format((float)$cur['cut_rate'], 2) : '')
+                        . ($nets['moq'] !== null ? ' · MOQ ' . number_format((float)$cur['moq_rate'], 2) . ' (from ' . (float)$cur['min_qty'] . ')' : '')
+                        . ((float)$cur['discount_pct'] > 0 ? ' · less ' . (float)$cur['discount_pct'] . '%' : '') . ' ' . $cur['currency'];
                 }
                 $last = Purchase::lastPaid($supplier, (int)$r['id']);
                 if ($last) $r['last_paid'] = (float)$last['unit_price'];

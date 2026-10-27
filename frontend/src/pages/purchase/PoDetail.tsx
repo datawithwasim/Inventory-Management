@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, type Msg, appUrl } from '../../lib/api';
-import { fdate, money, qty } from '../../lib/format';
+import { fdate, money, moneyIn, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
@@ -33,9 +33,9 @@ export default function PoDetail() {
     ordered: { className: 'text-end', cell: (l) => <>{qty(l.qty_ordered)} {l.unit}</> },
     received: { className: 'text-end', cell: (l) => qty(l.qty_received) },
     due: { className: 'text-end', cell: (l) => qty(Math.max(0, Number(l.qty_ordered) - Number(l.qty_received))) },
-    price: { className: 'text-end', cell: (l) => money(l.unit_price) },
+    price: { className: 'text-end', cell: (l) => moneyIn(l.unit_price, po.currency) },
     tax: { className: 'text-end', cell: (l) => qty(l.tax_rate) },
-    total: { className: 'text-end', cell: (l) => money(Number(l.qty_ordered) * Number(l.unit_price) * (1 + Number(l.tax_rate) / 100)) },
+    total: { className: 'text-end', cell: (l) => moneyIn(Number(l.qty_ordered) * Number(l.unit_price) * (1 + Number(l.tax_rate) / 100), po.currency) },
   };
   const btn = (cls: string, label: string, onClick: () => void) => <button className={`btn btn-sm ${cls}`} onClick={onClick}>{label}</button>;
   const actions = <>
@@ -53,7 +53,7 @@ export default function PoDetail() {
       notice={msgs.length ? <div className="mb-3"><Messages items={msgs} onClose={() => setMsgs([])} /></div> : null}
       related={[{ id: 'items', label: 'Items' }, ...(d.grns.length ? [{ id: 'grns', label: 'Goods received' }] : [])]}>
       <DetailTable cols={cols} rows={d.items} rowKey={(l: any) => l.id} defs={poDefs}
-        footer={<><tr><td className="text-muted">Subtotal</td><td className="text-end">{money(po.subtotal)}</td></tr><tr><td className="text-muted">Tax</td><td className="text-end">{money(po.tax_total)}</td></tr><tr><th>Total</th><th className="text-end">{money(po.total)}</th></tr></>} />
+        footer={<><tr><td className="text-muted">Subtotal</td><td className="text-end">{moneyIn(po.subtotal, po.currency)}</td></tr><tr><td className="text-muted">Tax</td><td className="text-end">{moneyIn(po.tax_total, po.currency)}</td></tr><tr><th>Total</th><th className="text-end">{moneyIn(po.total, po.currency)}</th></tr>{po.currency && po.currency !== 'INR' && <tr><td className="text-muted">In rupees at ₹ {Number(po.exchange_rate)}</td><td className="text-end">{money(Number(po.total) * Number(po.exchange_rate))}</td></tr>}</>} />
       {d.grns.length > 0 && <div className="card mb-3" id="grns"><div className="card-header">Goods received against this order</div><ul className="list-group list-group-flush">
         {d.grns.map((g: any) => <li className="list-group-item" key={g.id}><Link to={`/purchase/grns/${g.id}`}>{g.grn_no}</Link> <span className="text-muted">· {fdate(g.received_date)}</span></li>)}</ul></div>}
     </RecordPage>

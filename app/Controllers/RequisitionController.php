@@ -112,13 +112,14 @@ final class RequisitionController extends PurchaseBase
         $supplier = $this->activeSupplier($d['supplier_id'] ?? 0, $back);
         $wh = $this->activeWarehouse($d['warehouse_id'] ?? 0, $back);
         $items = $this->items((int)$r['id']);
-        $poId = DB::transaction(function () use ($r, $supplier, $wh, $items) {
+        [$cur, $ex] = \App\Models\Currencies::forSupplier($supplier);
+        $poId = DB::transaction(function () use ($r, $supplier, $wh, $items, $cur, $ex) {
             $t = $this->tid();
-            $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $supplier['id'], 'warehouse_id' => $wh['id'],
+            $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $supplier['id'], 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh['id'],
                 'order_date' => date('Y-m-d'), 'status' => 'draft', 'notes' => 'From requisition ' . $r['req_no'], 'created_by' => Auth::user()['id']]);
             foreach ($items as $l) {
                 DB::insert('purchase_order_items', ['tenant_id' => $t, 'po_id' => $poId, 'variant_id' => $l['variant_id'], 'qty_ordered' => $l['qty'],
-                    'unit_price' => Purchase::priceFor((int)$supplier['id'], (int)$l['variant_id'], (float)$l['cost_price']), 'tax_rate' => $l['tax_rate']]);
+                    'unit_price' => Purchase::priceFor((int)$supplier['id'], (int)$l['variant_id'], (float)$l['cost_price'], (float)$l['qty'], $cur, $ex), 'tax_rate' => $l['tax_rate']]);
             }
             Purchase::recalcPo($poId);
             DB::run("UPDATE purchase_requisitions SET status = 'converted', po_id = ? WHERE tenant_id = ? AND id = ?", [$poId, $t, $r['id']]);

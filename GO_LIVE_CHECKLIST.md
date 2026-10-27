@@ -25,7 +25,7 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
 7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`, `020_print_templates`, `021_catalogues_products`, `022_grn_billed_qty`, `023_grn_purchase_orders`, `024_lookup_field_type`, `025_custom_fields_more_forms`, `026_gutt_numbers`, `027_catalogue_launches`, `028_launch_sales_orders`. Afterwards the page must say "The database is up to date."
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`, `020_print_templates`, `021_catalogues_products`, `022_grn_billed_qty`, `023_grn_purchase_orders`, `024_lookup_field_type`, `025_custom_fields_more_forms`, `026_gutt_numbers`, `027_catalogue_launches`, `028_launch_sales_orders`, `029_rates_currency`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/` (it should land on `/app/`) once with a hard refresh (Ctrl+F5), and check `.env` does **not** contain `LEGACY_UI=1`.
 
@@ -71,7 +71,8 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] Stock overview, Stock by rack, Rolls list + roll page history, Ledger filters.
 
 **Purchase**
-- [ ] Supplier with rate list and "Supplier items" (their name/code linked to our item).
+- [ ] Supplier with rate list and "Supplier items" (their name/code linked to our item). Each supplier is Domestic / Imported / Market; an imported one has a currency. Rates have a roll rate, optional cut rate, and optional MOQ rate with its MOQ quantity.
+- [ ] Purchase → Rate lists → Exchange rates: set today's rupee value of USD, EUR… A purchase order to an imported supplier is in its currency (exchange rate editable on the order); the goods receipt, stock cost and bill are in rupees at that rate.
 - [ ] Item ↔ supplier items: an item a supplier is linked to cannot be deleted (it says why); Low stock → "Create draft purchase orders" picks the **preferred** supplier, its current rate and never less than its minimum order; "Turn into PO" on a requisition prices from the chosen supplier's rate list.
 - [ ] PO (with approval on/off as per your rule) → receive goods (one roll per line, rack, supplier lot) → bill → payment → status "Paid".
 - [ ] Purchase return reduces stock and credits the bill; requisition → "Turn into PO".

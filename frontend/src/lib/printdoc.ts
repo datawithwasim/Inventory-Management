@@ -1,4 +1,4 @@
-import { fdate, money, qty } from './format';
+import { fdate, money, moneyIn, qty } from './format';
 
 /* A designed print layout (config) and the document data it is drawn with. The server keeps and checks the config (PrintDoc.php);
    the app draws it, in print pages and in the designer's preview, with the same component. */
@@ -52,15 +52,15 @@ export function normalise(kind: DocKind, a: any): DocData {
     };
   }
   if (kind === 'purchase_order') {
-    const po = a.po;
+    const po = a.po; const cur = po.currency; const foreign = !!cur && cur !== 'INR';
     return {
-      no: po.po_no, date: po.order_date, party: po.supplier, notes: po.notes ?? '', grand: Number(po.total),
+      no: po.po_no, date: po.order_date, party: po.supplier, notes: po.notes ?? '', grand: foreign ? 0 : Number(po.total),
       meta: { expected: po.expected_date ? fdate(po.expected_date) : '' },
       parties: { supplier: compact([po.supplier, po.sup_address, po.sup_phone, po.sup_tax ? `Tax no. ${po.sup_tax}` : '']), deliver_to: compact([po.warehouse]) },
       rows: (a.items as any[]).map((l) => ({
-        cells: { item: l.item_name + (l.vname ? ` — ${l.vname}` : ''), sku: l.sku ?? '', hsn: l.hsn_code ?? '', their: l.their ?? '', qty: `${qty(l.qty_ordered)} ${l.unit}`, price: money(l.unit_price), tax: qty(l.tax_rate) },
-        net: money(l.net), tot: money(l.tot) })),
-      totals: { subtotal: money(po.subtotal), tax: money(po.tax_total), total: money(po.total) },
+        cells: { item: l.item_name + (l.vname ? ` — ${l.vname}` : ''), sku: l.sku ?? '', hsn: l.hsn_code ?? '', their: l.their ?? '', qty: `${qty(l.qty_ordered)} ${l.unit}`, price: moneyIn(l.unit_price, cur), tax: qty(l.tax_rate) },
+        net: moneyIn(l.net, cur), tot: moneyIn(l.tot, cur) })),
+      totals: { subtotal: moneyIn(po.subtotal, cur), tax: moneyIn(po.tax_total, cur), total: moneyIn(po.total, cur) },
     };
   }
   const d = a.d;

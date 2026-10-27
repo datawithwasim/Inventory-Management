@@ -16,6 +16,15 @@ export function money(v: unknown): string {
   return (neg ? '-' : '') + s;
 }
 
+const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', CNY: 'CN¥', JPY: 'JP¥' };
+
+/** An amount in its own currency: rupees the way the company writes money, other currencies with their symbol (or code). */
+export function moneyIn(v: unknown, code?: string | null): string {
+  if (!code || code === 'INR') return money(v);
+  const n = Number(v ?? 0);
+  return `${SYMBOLS[code] ?? code} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /** Quantities: up to 3 decimals, no trailing zeros. */
 export function qty(v: unknown): string {
   const s = Number(v ?? 0).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');

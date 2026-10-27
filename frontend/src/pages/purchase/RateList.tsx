@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
-import { fdate, money, qty } from '../../lib/format';
+import { fdate, moneyIn, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
 import { createPortal } from 'react-dom';
@@ -10,6 +10,37 @@ import RateForm from '../../components/RateForm';
 
 const plain = (v: any) => rtrimZeros(Number(v).toFixed(2));
 const rtrimZeros = (s: string) => s.replace(/\.?0+$/, '');
+
+/** The rupee value of each foreign currency, kept by the company; new purchase orders to imported suppliers start from these. */
+function ExchangeRates({ currencies, onSaved }: { currencies: any[]; onSaved: (m: Msg[]) => void }) {
+  const [rows, setRows] = useState<Record<string, { rate: string; on: boolean }>>(() => Object.fromEntries(currencies.filter((c) => c.code !== 'INR').map((c) => [c.code, { rate: String(Number(c.rate_to_inr)), on: !!Number(c.is_active) }])));
+  const [nw, setNw] = useState({ code: '', name: '', symbol: '', rate_to_inr: '' }); const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const r = await post('/purchase/currencies', { rows: Object.entries(rows).map(([code, v]) => ({ code, rate_to_inr: v.rate, is_active: v.on ? 1 : 0 })), new: nw });
+    setBusy(false); onSaved(r.ok ? [{ type: 'success', msg: 'Exchange rates saved. New purchase orders use them; orders already made keep the rate they were made at.' }] : r.messages ?? []);
+    if (r.ok) setNw({ code: '', name: '', symbol: '', rate_to_inr: '' });
+  };
+  return (
+    <div className="p-3 border-bottom bg-body-tertiary">
+      <div className="small text-muted mb-2">How many rupees one unit is worth. Used for imported suppliers: their orders are made in their currency and every stock cost, bill and report is in rupees at this rate.</div>
+      <div className="row g-2 align-items-end">
+        {currencies.filter((c) => c.code !== 'INR').map((c) => (
+          <div className="col-6 col-md-3" key={c.code}>
+            <label className="form-label small mb-1 d-flex justify-content-between"><span>1 {c.code} <span className="text-muted">{c.name}</span></span></label>
+            <div className="input-group input-group-sm"><span className="input-group-text">₹</span><input type="number" step="0.0001" min="0" className="form-control" value={rows[c.code]?.rate ?? ''} onChange={(e) => setRows({ ...rows, [c.code]: { ...rows[c.code], rate: e.target.value } })} />
+              <span className="input-group-text"><input type="checkbox" className="form-check-input mt-0" title="In use" checked={rows[c.code]?.on ?? false} onChange={(e) => setRows({ ...rows, [c.code]: { ...rows[c.code], on: e.target.checked } })} /></span></div>
+          </div>))}
+        <div className="col-12"><div className="small text-muted mt-1">Add another currency</div></div>
+        <div className="col-4 col-md-2"><input className="form-control form-control-sm" maxLength={3} placeholder="Code, e.g. CHF" value={nw.code} onChange={(e) => setNw({ ...nw, code: e.target.value.toUpperCase() })} /></div>
+        <div className="col-8 col-md-3"><input className="form-control form-control-sm" placeholder="Name" value={nw.name} onChange={(e) => setNw({ ...nw, name: e.target.value })} /></div>
+        <div className="col-4 col-md-2"><input className="form-control form-control-sm" maxLength={8} placeholder="Symbol" value={nw.symbol} onChange={(e) => setNw({ ...nw, symbol: e.target.value })} /></div>
+        <div className="col-8 col-md-3"><div className="input-group input-group-sm"><span className="input-group-text">₹</span><input type="number" step="0.0001" min="0" className="form-control" placeholder="Rupees for 1" value={nw.rate_to_inr} onChange={(e) => setNw({ ...nw, rate_to_inr: e.target.value })} /></div></div>
+        <div className="col-12 d-flex gap-2"><button type="button" className="btn btn-sm btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save exchange rates'}</button></div>
+      </div>
+    </div>
+  );
+}
 
 export default function RateList() {
   const { can, term } = useSession(); const qc = useQueryClient();
@@ -20,8 +51,9 @@ export default function RateList() {
   const res = useQuery({ queryKey: ['rates', supplier, show, applied], queryFn: async () => (await get(`/purchase/rates?q=${encodeURIComponent(applied)}&supplier=${supplier}&show=${show}`)).data });
   const [form, setForm] = useState<null | { supplier: string; preset?: any }>(null);
   const [imp, setImp] = useState<null | { supplier: string }>(null);
-  const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
+  const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false); const [fx, setFx] = useState(false);
   const d = res.data; const canEdit = can('suppliers.edit');
+  const curOf = (sid: string) => { const x = (d?.suppliers ?? []).find((y: any) => String(y.id) === String(sid)); return x && x.origin === 'imported' && x.currency ? x.currency : 'INR'; };
   const reload = () => { qc.invalidateQueries({ queryKey: ['rates'] }); setForm(null); setImp(null); };
   const del = async (r: any) => { if (!confirm('Remove this rate?')) return; await post(`/suppliers/${r.supplier_id}/rates/${r.id}/delete`, { return: 'purchase/rates' }); reload(); };
   const upload = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -43,10 +75,12 @@ export default function RateList() {
           <div className="rl-tools">
             {can('reports.view') && <Link className="btn btn-outline-secondary" to="/reports/rate-comparison"><i className="bi bi-bar-chart" /><span className="d-none d-md-inline"> Compare suppliers</span></Link>}
             {canEdit && <>
+              <button className="btn btn-outline-secondary" onClick={() => setFx(!fx)}><i className="bi bi-currency-exchange" /><span className="d-none d-md-inline"> Exchange rates</span></button>
               <button className="btn btn-outline-secondary" onClick={() => { setForm(null); setImp({ supplier }); }}><i className="bi bi-upload" /><span className="d-none d-md-inline"> Import CSV</span></button>
               <button className="btn btn-primary" onClick={() => { setImp(null); setForm({ supplier }); }}><i className="bi bi-plus-lg" /> Add rate</button></>}
           </div>
         </div>
+        {fx && canEdit && d && <ExchangeRates currencies={d.currencies} onSaved={(m) => { setMsgs(m); qc.invalidateQueries({ queryKey: ['rates'] }); }} />}
         {form && createPortal(
           <>
             <div className="modal-backdrop fade show" />
@@ -56,7 +90,7 @@ export default function RateList() {
                 <div className="modal-body" style={{ overflow: 'visible' }}>
                   <div className="row g-2 mb-3"><div className="col-md-6"><label className="form-label small mb-1">{term('supplier')}</label>
                     <select className="form-select form-select-sm" value={form.supplier} disabled={!!form.preset} onChange={(e) => setForm({ supplier: e.target.value })}><option value="">Choose…</option>{(d?.suppliers ?? []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                  {form.supplier ? <RateForm plain key={form.supplier + (form.preset?.id ?? '')} supplierId={Number(form.supplier)} preset={form.preset} onDone={reload} /> : <div className="small text-muted">Choose the {term('supplier').toLowerCase()} first.</div>}
+                  {form.supplier ? <RateForm plain key={form.supplier + (form.preset?.id ?? '')} supplierId={Number(form.supplier)} preset={form.preset} currency={curOf(form.supplier)} onDone={reload} /> : <div className="small text-muted">Choose the {term('supplier').toLowerCase()} first.</div>}
                 </div>
               </div></div>
             </div>
@@ -70,7 +104,7 @@ export default function RateList() {
               <div className="col-auto d-flex gap-2"><button className="btn btn-sm btn-primary" disabled={busy || !imp.supplier}>{busy ? 'Importing…' : 'Import'}</button>
                 <a className={`btn btn-sm btn-outline-secondary ${imp.supplier ? '' : 'disabled'}`} href={imp.supplier ? legacyUrl(`/suppliers/${imp.supplier}/rates/template`) : '#'}><i className="bi bi-download" /> Template</a>
                 <button type="button" className="btn btn-sm btn-link text-muted" onClick={() => setImp(null)}>Cancel</button></div>
-              <div className="col-12 form-text">Columns: <code>sku, rate, discount_pct, min_qty, lead_time_days, supplier_code, supplier_name, valid_from</code>. Only <b>sku</b> and <b>rate</b> are needed.</div>
+              <div className="col-12 form-text">Columns: <code>sku, roll_rate, cut_rate, moq_rate, min_qty, discount_pct, lead_time_days, supplier_code, supplier_name, valid_from</code>. Only <b>sku</b> and <b>roll_rate</b> are needed; rates are in the {term('supplier').toLowerCase()}&apos;s currency.</div>
             </div>
           </form>)}
         <form className="rl-bar" onSubmit={(e) => { e.preventDefault(); set('q', q); }}>
@@ -80,25 +114,26 @@ export default function RateList() {
         </form>
         {res.isLoading ? <Spinner /> : d.rows.length ? (
           <div className="table-responsive"><table className="table rl-table align-middle mb-0">
-            <thead><tr><th>{term('item')}</th><th>{term('supplier')}</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net rate</th><th className="text-end d-none d-md-table-cell">Min qty</th><th className="d-none d-lg-table-cell">Valid</th><th /></tr></thead>
+            <thead><tr><th>{term('item')}</th><th>{term('supplier')}</th><th className="text-end">Roll rate</th><th className="text-end">Cut rate</th><th className="text-end">MOQ rate</th><th className="text-end d-none d-md-table-cell">Disc.</th><th className="d-none d-lg-table-cell">Valid</th><th /></tr></thead>
             <tbody>{d.rows.map((r: any) => {
               const name = r.item_name + (r.vname ? ' — ' + r.vname : '');
-              const lowest = r.is_current && d.low[r.variant_id] != null && Math.abs(r.net - d.low[r.variant_id]) < 0.005;
+              const lowest = r.is_current && d.low[r.variant_id] != null && Math.abs(r.net_inr - d.low[r.variant_id]) < 0.005;
+              const foreign = r.currency && r.currency !== 'INR';
+              const cell = (v: number | null) => v === null ? <span className="text-muted">—</span> : <>{moneyIn(v, r.currency)}</>;
               return (
                 <tr key={r.id} className={r.is_current ? '' : 'rl-old'}>
                   <td><Link className="fw-medium" to={`/items/${r.item_id}`}>{name}</Link> <span className="text-muted small">{r.sku}</span>{r.is_current ? null : <> <span className="badge text-bg-light border fw-normal">Earlier</span></>}</td>
                   <td><Link to={`/suppliers/${r.supplier_id}`}>{r.supplier_name}</Link>{r.scode ? <span className="text-muted small"> {r.scode}</span> : null}{r.sname ? <div className="small text-muted">{r.sname}</div> : null}</td>
-                  <td className="text-end">{money(r.rate)}</td>
-                  <td className="text-end">{Number(r.discount_pct) > 0 ? `${plain(r.discount_pct)}%` : <span className="text-muted">—</span>}</td>
-                  <td className="text-end fw-semibold">{money(r.net)}{lowest ? <> <span className="badge text-bg-success fw-normal" title="Cheapest current rate for this item">Lowest</span></> : null}</td>
-                  <td className="text-end d-none d-md-table-cell">{Number(r.min_qty) > 0 ? qty(r.min_qty) : <span className="text-muted">—</span>}</td>
+                  <td className="text-end fw-semibold">{cell(r.nets.roll)}{lowest ? <> <span className="badge text-bg-success fw-normal" title="Cheapest current roll rate for this item">Lowest</span></> : null}{foreign && r.is_current ? <div className="small text-muted fw-normal">≈ {moneyIn(r.net_inr, 'INR')}</div> : null}</td>
+                  <td className="text-end">{cell(r.nets.cut)}</td>
+                  <td className="text-end">{cell(r.nets.moq)}{r.nets.moq !== null ? <div className="small text-muted">from {qty(r.min_qty)}</div> : null}</td>
+                  <td className="text-end d-none d-md-table-cell">{Number(r.discount_pct) > 0 ? `${plain(r.discount_pct)}%` : <span className="text-muted">—</span>}</td>
                   <td className="small text-nowrap d-none d-lg-table-cell">{fdate(r.valid_from)} <span className="text-muted">→</span> {r.valid_to ? fdate(r.valid_to) : <span className="text-muted">open</span>}</td>
                   <td className="text-end text-nowrap">{canEdit && <>{r.is_current && <button className="btn btn-sm btn-outline-primary" onClick={() => { setImp(null); setForm({ supplier: String(r.supplier_id), preset: { ...r, scode: r.scode, sname: r.sname } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Revise</button>} <button className="btn btn-sm btn-link text-danger px-1" title="Remove" aria-label="Remove rate" onClick={() => del(r)}><i className="bi bi-trash" /></button></>}</td>
                 </tr>);
             })}</tbody></table></div>
         ) : (
-          <div className="rl-empty"><i className="bi bi-currency-rupee" /><div><b>{applied || supplier ? 'Nothing matches these filters' : 'No rates yet'}</b><div className="text-muted small">{applied || supplier ? `Clear the search or choose another ${term('supplier').toLowerCase()}.` : `Add what your ${term('supplier', true).toLowerCase()} quote. The rate fills in by itself when you pick the ${term('item').toLowerCase()} on a purchase order.`}</div></div>
-            {canEdit && !applied && !supplier && <button className="btn btn-primary btn-sm ms-auto" onClick={() => setForm({ supplier: '' })}><i className="bi bi-plus-lg" /> Add the first rate</button>}</div>
+          <div className="rl-empty"><i className="bi bi-currency-rupee" /><div><b>{applied || supplier ? 'Nothing matches these filters' : 'No rates yet'}</b><div className="text-muted small">{applied || supplier ? `Clear the search or choose another ${term('supplier').toLowerCase()}.` : `Add the roll, cut and MOQ rates your ${term('supplier', true).toLowerCase()} quote. The rate fills in by itself when you pick the ${term('item').toLowerCase()} on a purchase order.`}</div></div></div>
         )}
       </section>
     </>

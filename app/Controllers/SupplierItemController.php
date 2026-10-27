@@ -16,7 +16,7 @@ use Core\FormFields;
  */
 final class SupplierItemController extends PurchaseBase
 {
-    private const SEL = 'SELECT p.*, s.name AS supplier, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, u.short_name AS unit
+    private const SEL = 'SELECT p.*, s.name AS supplier, s.origin AS s_origin, s.currency AS s_currency, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, u.short_name AS unit
         FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id LEFT JOIN item_variants v ON v.id = p.variant_id LEFT JOIN items i ON i.id = v.item_id LEFT JOIN units u ON u.id = i.unit_id';
 
     private function load(string $id): array

@@ -26,7 +26,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 
 - **Purchase masters: done** — fuller Supplier master (type, GSTIN/PAN, city/state, dispatch address, bank, credit limit, lead time, transport, extra contacts),
   Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type, HSN; design no., composition, width, GSM, pattern and finish live on the **supplier item** the item is tagged to; migration 018), and a **supplier-wise rate list**
-  (rate, discount, min qty, validity, history, CSV import) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
+  (**roll rate, cut rate and MOQ rate** with the MOQ quantity, discount, validity, history, CSV import). Every supplier is **Domestic**, **Imported** or **Market**: domestic and market suppliers quote in rupees, an imported one in a foreign currency (USD, EUR, … kept with exchange rates under Purchase → Rate lists → Exchange rates). A purchase order to an imported supplier is made in that currency at the exchange rate of the day; receiving it books stock cost and bill in rupees (migration 029) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
 
 - **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles, Super Admin) is a React app at `/app`
   (built files are committed in `public/ui/`, so the server needs no Node). **The site address opens the app**, and every old screen address (`/dashboard`, `/customers`, `/login` …) sends the browser to its twin under `/app`; including the password reset pages, customer groups, rate lists, imports, the Ctrl K search, the page layout designer and every printout (PO, invoice, delivery note, vouchers, transfer challan, report print, barcode labels). Only files stay server-made: CSV/Excel downloads, the backup download and the installer. Do **not** set `LEGACY_UI` in the live `.env` (it keeps the old HTML screens reachable for the automated tests only). See `frontend/README.md`.
@@ -82,6 +82,7 @@ php tests/sales.php http://127.0.0.1:8099     # phase 4
 php tests/settings.php http://127.0.0.1:8099  # phase 5
 php tests/reports.php http://127.0.0.1:8099   # phase 6
 php tests/personalise.php http://127.0.0.1:8099 # personalisation layer
+php tests/rates.php http://127.0.0.1:8099      # roll/cut/MOQ rates, supplier origin, currencies, foreign-currency orders
 php tests/robust.php http://127.0.0.1:8099 /path/to/server.log # every route with junk input
 php tests/extras.php http://127.0.0.1:8099    # phase 8 (needs local `mysql -uroot` for the restore check)  (run all against a throw-away database)
 ```

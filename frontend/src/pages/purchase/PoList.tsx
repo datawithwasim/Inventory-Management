@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { post } from '../../lib/api';
-import { fdate, money } from '../../lib/format';
+import { fdate, money, moneyIn } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import DocList from '../../components/DocList';
 import { PoBadge } from '../../components/Badges';
@@ -22,7 +22,7 @@ export default function PoList() {
         </form>)}
       columns={[
         { head: 'PO', cell: (r) => <Link to={`/purchase/orders/${r.id}`}>{r.po_no}</Link> }, { head: 'Date', cell: (r) => fdate(r.order_date) }, { head: term('supplier'), cell: (r) => r.supplier },
-        { head: 'Deliver to', cell: (r) => r.warehouse }, { head: 'Expected', cell: (r) => fdate(r.expected_date) }, { head: 'Total', className: 'text-end', cell: (r) => money(r.total) }, { head: 'Status', cell: (r) => <PoBadge status={r.status} /> },
+        { head: 'Deliver to', cell: (r) => r.warehouse }, { head: 'Expected', cell: (r) => fdate(r.expected_date) }, { head: 'Total', className: 'text-end', cell: (r) => moneyIn(r.total, r.currency) }, { head: 'Status', cell: (r) => <PoBadge status={r.status} /> },
       ]}
       below={(d) => can('settings.edit') ? (
         <div className="mt-3 form-check form-switch"><input className="form-check-input" type="checkbox" id="appr" checked={!!d.approval} onChange={(e) => toggle(e.target.checked)} /><label className="form-check-label" htmlFor="appr">Purchase orders need approval before goods can be received</label></div>) : null} />

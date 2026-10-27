@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { get, legacyUrl, post } from '../../lib/api';
-import { fdate, money, qty } from '../../lib/format';
+import { fdate, money, moneyIn, qty } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Badge, Spinner } from '../../components/ui';
 import RecordPage from '../../components/RecordPage';
@@ -18,7 +18,7 @@ export default function ItemDetail() {
   const remove = async () => { if (!confirm('Delete this item?')) return; const r = await post(`/items/${id}/delete`); if (r.ok) nav('/items'); else alert(r.messages?.[0]?.msg ?? 'Could not delete.'); };
   const rates: any[] = d.rates ?? [];
   const best: Record<string, number> = {};
-  rates.forEach((r) => { if (r.net !== null && best[r.variant_id] === undefined) best[r.variant_id] = r.net; });
+  rates.forEach((r) => { if (r.net_inr != null && (best[r.variant_id] === undefined || r.net_inr < best[r.variant_id])) best[r.variant_id] = r.net_inr; });
   const types = session?.stockTypes ?? {};
   const related = [bundle ? { id: 'contents', label: 'Bundle contents' } : null, !bundle ? { id: 'rates', label: 'Suppliers & rates' } : null, (d.products ?? []).length ? { id: 'products', label: 'Sold as products' } : null, { id: 'variants', label: 'Stock & SKU' }, !bundle ? { id: 'history', label: 'Stock movements' } : null].filter(Boolean) as { id: string; label: string }[];
   return (
@@ -36,16 +36,16 @@ export default function ItemDetail() {
         <div className="card mb-3" id="rates"><div className="card-header d-flex justify-content-between align-items-center gap-2"><span><i className="bi bi-truck me-1" />Suppliers &amp; rates <span className="act-n">{rates.length}</span></span>
           <span className="d-flex gap-2">{can('reports.view') && <Link className="btn btn-sm btn-outline-secondary" to={`/reports/rate-history?q=${encodeURIComponent(it.name)}`}><i className="bi bi-clock-history" /> Rate history</Link>}
             {can('suppliers.create') && d.variants.length > 0 && <Link className="btn btn-sm btn-outline-primary" to={`/purchase/supplier-items/create?variant=${d.variants[0].id}`}><i className="bi bi-plus-lg" /> Link a supplier</Link>}</span></div>
-          {rates.length ? <div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>{term('supplier')}</th><th>Their item</th><th>Details</th><th className="text-end">Rate</th><th className="text-end">Disc.</th><th className="text-end">Net</th><th className="text-end">Min qty</th><th>Lead time</th></tr></thead><tbody>
+          {rates.length ? <div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>{term('supplier')}</th><th>Their item</th><th>Details</th><th className="text-end">Roll rate</th><th className="text-end">Cut rate</th><th className="text-end">MOQ rate</th><th>Lead time</th></tr></thead><tbody>
             {rates.map((r) => {
               const many = rates.filter((x) => x.variant_id === r.variant_id && x.net !== null).length > 1;
               return (
                 <tr key={r.si_id}>
-                  <td><Link to={`/suppliers/${r.supplier_id}`}>{r.supplier_name}</Link>{r.is_preferred ? <> <Badge tone="primary">Preferred</Badge></> : null}{r.net !== null && many && Math.abs(r.net - best[r.variant_id]) < 0.005 ? <> <Badge tone="success">Lowest</Badge></> : null}</td>
+                  <td><Link to={`/suppliers/${r.supplier_id}`}>{r.supplier_name}</Link>{r.is_preferred ? <> <Badge tone="primary">Preferred</Badge></> : null}{r.net !== null && many && Math.abs(r.net_inr - best[r.variant_id]) < 0.005 ? <> <Badge tone="success">Lowest</Badge></> : null}</td>
                   <td className="small"><Link to={`/purchase/supplier-items/${r.si_id}`}>{r.sname || r.scode || 'Same as ours'}</Link>{r.sname && r.scode ? <div className="text-muted">{r.scode}</div> : null}</td>
                   <td className="small text-muted">{[r.design_no && `Design ${r.design_no}`, r.composition, r.width && `Width ${r.width}`, r.gsm && `${r.gsm} GSM`, r.pattern, r.finish].filter(Boolean).join(' · ') || '—'}</td>
-                  {r.net === null ? <td colSpan={3} className="text-end text-muted small">No rate yet</td> : <><td className="text-end">{money(r.rate)}</td><td className="text-end">{Number(r.discount_pct) > 0 ? `${Number(r.discount_pct)}%` : '—'}</td><td className="text-end fw-semibold">{money(r.net)}</td></>}
-                  <td className="text-end">{Number(r.min_qty) > 0 ? qty(r.min_qty) : '—'}</td><td>{r.lead_time_days != null ? `${r.lead_time_days} days` : '—'}</td>
+                  {r.net === null ? <td colSpan={3} className="text-end text-muted small">No rate yet</td> : <><td className="text-end fw-semibold">{moneyIn(r.nets.roll, r.currency)}{Number(r.discount_pct) > 0 ? <div className="small text-muted fw-normal">less {Number(r.discount_pct)}%</div> : null}</td><td className="text-end">{r.nets.cut !== null ? moneyIn(r.nets.cut, r.currency) : '—'}</td><td className="text-end">{r.nets.moq !== null ? <>{moneyIn(r.nets.moq, r.currency)}<div className="small text-muted">from {qty(r.min_qty)}</div></> : '—'}</td></>}
+                  <td>{r.lead_time_days != null ? `${r.lead_time_days} days` : '—'}</td>
                 </tr>
               );
             })}</tbody></table></div>

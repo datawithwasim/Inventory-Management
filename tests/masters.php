@@ -106,7 +106,7 @@ check("…or delete them", (bool)$val('SELECT 1 FROM supplier_rates WHERE id = ?
 // lookup used by the purchase forms
 $today = date('Y-m-d');
 $l = json_decode($a->get("/lookup/items?q=RVW&supplier=$s1")['body'], true);
-check('item lookup carries the supplier rate (net of discount) for the chosen supplier', ($l[0]['rate'] ?? null) !== null && (float)$l[0]['rate'] === 305.0 && str_contains((string)($l[0]['rate_note'] ?? ''), 'Supplier rate'));
+check("item lookup carries the supplier rate (net of discount) for the chosen supplier", ($l[0]["rate"] ?? null) !== null && (float)$l[0]["rate"] === 305.0 && str_contains((string)($l[0]["rate_note"] ?? ""), "Roll 305.00"));
 $l2 = json_decode($a->get("/lookup/items?q=RVW&supplier=$s2")['body'], true);
 check('a different supplier gives its own rate', (float)($l2[0]['rate'] ?? 0) === 290.0);
 $l3 = json_decode($a->get('/lookup/items?q=RVW')['body'], true);
@@ -133,7 +133,7 @@ check('item page compares suppliers and flags the lowest', str_contains($ish, 'S
 
 // CSV
 $tpl = $a->get("/suppliers/$s1/rates/template");
-check('CSV template downloads', $tpl['status'] === 200 && str_contains($tpl['body'], 'sku,rate,discount_pct'));
+check('CSV template downloads', $tpl['status'] === 200 && str_contains($tpl['body'], 'sku,roll_rate,cut_rate,moq_rate'));
 $csv = tempnam(sys_get_temp_dir(), 'rt') . '.csv';
 file_put_contents($csv, "sku,rate,discount_pct,min_qty,lead_time_days,supplier_code,valid_from\nRVT,310,2,50,5,TT-9,2026-02-01\nNOPE,1,,,,,\nRVW,abc,,,,,\nWP1,880,,,,,\n");
 $a->post("/suppliers/$s1/rates/import", ['file' => new CURLFile($csv, 'text/csv', 'r.csv')], "/suppliers/$s1");
