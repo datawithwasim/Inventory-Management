@@ -84,6 +84,9 @@ function last_transfer(): int
  */
 function fresh_company(string $base, string $name = 'Test Company', ?string $email = null): array
 {
+    // never on a live site: the installer writes APP_ENV=production into its .env
+    $env = is_file(ROOT . '/.env') && preg_match('/^APP_ENV\s*=\s*"?(\w+)/m', (string)file_get_contents(ROOT . '/.env'), $m) ? $m[1] : '';
+    if ($env === 'production') { fwrite(STDERR, "Refusing to empty a production database (APP_ENV=production in .env).\n"); exit(2); }
     $pdo = Core\DB::pdo();
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
     foreach ($pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $t) $pdo->exec("DROP TABLE `$t`");
