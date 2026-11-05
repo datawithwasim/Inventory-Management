@@ -103,6 +103,7 @@ function Customize({ layout, names, onClose, onSaved }: { layout: Layout; names:
 
 /** The dashboard: period, getting-started guide and the widgets (charts included), as the classic page draws them. */
 export default function Dashboard() {
+  const { session } = useSession();
   const [sp] = useSearchParams(); const qc = useQueryClient(); const guard = useLinkGuard();
   const [custom, setCustom] = useState(false);
   const range = sp.get('range') ?? '';
@@ -118,13 +119,14 @@ export default function Dashboard() {
   const visible = layout.order.filter((k) => !layout.hidden.includes(k) && (k === 'setup' ? !!setup : !!d.html[k]));
   return (
     <div onClick={guard}>
-      <PageHead title="Dashboard" />
-      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <div className="btn-group btn-group-sm" role="group" aria-label="Period">
-          {Object.entries(d.ranges as Record<string, string>).map(([k, l]) => <Link key={k} className={`btn btn-outline-secondary ${d.p.key === k ? 'active' : ''}`} to={`/dashboard?range=${k}`}>{l}</Link>)}
+      <PageHead title="Dashboard" sub={`Hello ${session?.user?.name.split(' ')[0] ?? ''} — here is how the business is doing.`}>
+        <button type="button" className="btn btn-outline-secondary" onClick={() => setCustom(true)}><i className="bi bi-sliders me-1" />Customize</button>
+      </PageHead>
+      <div className="dash-bar">
+        <div className="seg" role="group" aria-label="Period">
+          {Object.entries(d.ranges as Record<string, string>).map(([k, l]) => <Link key={k} className={d.p.key === k ? 'on' : ''} to={`/dashboard?range=${k}`}>{l}</Link>)}
         </div>
-        <span className="text-muted small">{fdate(d.p.from)} – {fdate(d.p.to)} · compared with the {d.p.days} days before</span>
-        <button type="button" className="btn btn-sm btn-outline-secondary ms-auto" onClick={() => setCustom(true)}><i className="bi bi-layout-text-window-reverse me-1" />Customize</button>
+        <span className="range">{fdate(d.p.from)} – {fdate(d.p.to)} · compared with the {d.p.days} days before</span>
       </div>
       <div className="dash-grid">
         {visible.map((k) => k === 'setup' && setup ? (

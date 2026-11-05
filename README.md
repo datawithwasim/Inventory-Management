@@ -1,10 +1,10 @@
 # Home Furnishing Inventory (SaaS)
 
-Multi-tenant inventory management for home-furnishing businesses. PHP 8.1+ and MySQL 8 / MariaDB.
-Each company (tenant) has its own users, roles and data; the platform owner manages companies and plans from the Super Admin panel.
+Inventory management for one home-furnishing business. PHP 8.1+ and MySQL 8 / MariaDB.
+The software runs one company: its owner manages users, roles, settings, database updates and backups (Settings → Updates & backup). There is no Super Admin panel, no plans and no company list (migration 030 turned the older multi-company database into one company).
 
 ## Status
-- **Phase 1 – Foundation: done** (auth, tenants, roles & permissions, Super Admin panel, plans/limits, audit log)
+- **Phase 1 – Foundation: done** (auth, roles & permissions, audit log; one company only since migration 030)
 - **Phase 2 – Items, stock & batches: done** (masters, warehouses, items (one item = one SKU; every colour / design / size is its own item) and bundles, stock ledger,
   batches where 1 batch = 1 roll, adjustments / opening stock, transfers, stock-takes, CSV import/export)
 - **Racks / locations: done** (racks per warehouse, stock kept and moved per rack, "Stock by rack" search)
@@ -28,7 +28,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
   Item master for Fabrics / Linen / Wallpaper / Carpets / Accessories (type, HSN; design no., composition, width, GSM, pattern and finish live on the **supplier item** the item is tagged to; migration 018), and a **supplier-wise rate list**
   (**roll rate, cut rate and MOQ rate** with the MOQ quantity, discount, validity, history, CSV import). Every supplier is **Domestic**, **Imported** or **Market**: domestic and market suppliers quote in rupees, an imported one in a foreign currency (USD, EUR, … kept with exchange rates under Purchase → Rate lists → Exchange rates). A purchase order to an imported supplier is made in that currency at the exchange rate of the day; receiving it books stock cost and bill in rupees (migration 029) that fills the price on purchase orders and shows last-bought price, plus a Rate lists page in the Purchase menu and 4 purchase reports (supplier purchases & outstanding, rate comparison, rate history, price paid). Needs migration 010.
 
-- **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles, Super Admin) is a React app at `/app`
+- **React interface: done** — every screen (dashboard, masters, items, purchase, sales, stock, reports, settings, users/roles) is a React app at `/app`
   (built files are committed in `public/ui/`, so the server needs no Node). **The site address opens the app**, and every old screen address (`/dashboard`, `/customers`, `/login` …) sends the browser to its twin under `/app`; including the password reset pages, customer groups, rate lists, imports, the Ctrl K search, the page layout designer and every printout (PO, invoice, delivery note, vouchers, transfer challan, report print, barcode labels). Only files stay server-made: CSV/Excel downloads, the backup download and the installer. Do **not** set `LEGACY_UI` in the live `.env` (it keeps the old HTML screens reachable for the automated tests only). See `frontend/README.md`.
 - **Transfers between warehouses are tracked:** dispatch (stock leaves the sender and is *in transit*) → the other warehouse confirms what arrived and puts it on racks → shortages are settled (lost / sent back); challan, overdue alerts, report and `stock.receive` permission (migration 016).
 - **Goods receipt by rolls:** one compact row per item, so a delivery of 10–15 items fits on one screen: write the billed quantity (200 m), then press the Received button: a pop-up takes the rolls that really arrived as text (`4x50`, `50, 50, 48.5`, `3x50 + 48.5`) or roll by roll. The row shows received / matches the bill / short / extra and a footer says how many items differ. The pop-up has the roll-by-roll editor (length, a different rack for one roll, the supplier's roll no.; Enter on the last length adds the next roll). Each roll becomes its own batch (`ITEM-B0001` …); the receipt keeps billed against received; up to 500 roll lines per receipt (migration 022).
@@ -37,6 +37,7 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - **Items tables as data:** the columns of the items table of a purchase order, sales order, goods receipt, stock adjustment and stock transfer are defined in `core/LineGrids.php` and drawn by one shared React table (`components/LineGrid.tsx`). In Edit page layout → "Items table" the company renames a column, hides it (the columns marked with a lock are needed) and moves it left or right; the choice is saved with the form layout and applies to that form only. The older tax / discount switches follow it. The table on each document's detail page (purchase order, goods receipt, bill, purchase return, requisition, sales order, delivery, invoice, sales return) has its own column design in the same place ("Items table on the detail page"). No migration.
 - **Own fields on more forms:** custom fields (all 16 types, incl. Lookup) can now also be added to goods receipts, purchase bills, deliveries, invoices, purchase and sales returns, requisitions, stock adjustments, transfers, stock-takes and warehouses (Edit page layout → New fields). They are asked on the form, checked, saved and shown on the record page. The "Edit page layout" entry is no longer in the ⋯ menu of detail pages (it stays on the create / edit forms) (migration 025).
 - **Gutt numbers:** a catalogue or a design (product) can be created with just its gutt number; until it is named it is called by the number (a design: "catalogue-number") and shows "name pending". Naming it later keeps the number. Lists, search, the sales item picker and the CSV import / export (column `Gutt No`) know the number (migration 026).
+- **New look:** a white menu with collapsible sections, a wide search in the top bar (Ctrl K), page titles with a line of help, lists as one card with status tabs (All / Draft / Ordered …) and the filters over a quiet table, status pills with a dot, and a dashboard with an Overview card (large figures, change vs the period before, sparklines) and soft area charts. The accent is the company's brand colour (Settings → Appearance); migration 031 moves companies still on the old dark menu to the white one (`public/assets/css/skin.css`).
 - **Catalogue launches** (Sales → Catalogue launches): the fabric for a new catalogue is asked from the warehouse the way every order reaches a warehouse: with a **sales order**. The catalogue team makes a launch (catalogue, the place the fabric must go, the sizes of the book — Large, Small …) and presses "Ask the warehouse for fabric": this opens a new sales order addressed to the *Catalogue Department* (a customer made automatically), with the delivery address and prices of 0, tied to the launch. The warehouse sees it among its sales orders (badge "CL-…"), confirms and **delivers** it roll by roll with the usual delivery screen (no invoice needed). The launch follows those orders: fabric asked for, delivered, what came back and what it cost (from the delivery lines); its status goes Draft → Ordered → Fabric partly delivered → Fabric delivered by itself. Wrong fabric comes back with an ordinary sales return of that delivery (create the delivery's invoice first: it is for 0), and the right fabric is asked for with *Another order*. When the printed books arrive they are received per size into the warehouse or the catalogue department: an item (type Catalogue) is made for each size, and a book costs (fabric delivered + extra cost such as printing and binding) shared over the books received. Catalogues are given free to showrooms (stock transfer) and dealers (stock adjustment, reason \"Given free\"). Reports → Catalogue launch costs lists the launches. Catalogue team: `products.*`, receiving the books: `stock.receive`; anyone who may see sales can open a launch (migrations 027, 028).
 - **Catalogues & products (showroom names):** a catalogue is a book (CARAVAN), a product is one design in it (CARAVAN-7) with its own price, and each product is sold from one item (the stock the warehouse counts). One item can be sold under several products (the same fabric in two books); a product may have no catalogue (ready-made goods). Sales orders, deliveries, invoices and their printouts show the product name; the warehouse voucher, stock, GRN and purchase keep the item. Import the sheet `Catalogue Name, Product Name, Item Name, Price` on the Products page. Sales summary can be grouped by product or catalogue (migration 021).
 - **Print templates:** each company designs its own layouts for the invoice, delivery note and purchase order (Settings → Print templates): paper size and orientation, letterhead (logo position and size, company lines, heading, rule), and ordered sections (parties, items table with its own columns and style, totals with amount in words, notes, bank details, terms, own text blocks, signature lines, footer), watermark, colours and font; several templates per document, one used for printing, switchable on the print page (migration 020, `app/Models/PrintDoc.php`). The built-in Standard layout follows the older simple options.
@@ -46,14 +47,14 @@ Each company (tenant) has its own users, roles and data; the platform owner mana
 - Before going live, follow **GO_LIVE_CHECKLIST.md**.
 
 ### Updating an installed copy (cPanel)
-Upload the new files over the old ones (keep your `.env`), then sign in as Super Admin → **System → Run updates**.
+Upload the new files over the old ones (keep your `.env`), then sign in as the company owner → **Settings → Updates & backup → Run updates** (a yellow bar on every page says when updates wait).
 
 ## Deploy on cPanel (no terminal needed)
 1. **PHP version:** cPanel → *MultiPHP Manager* → select PHP 8.1 or higher for your domain.
 2. **Database:** cPanel → *MySQL Databases* → create a database and a user, and add the user to the database with *All Privileges*. Note the full names (they carry your cPanel username prefix).
 3. **Upload:** download this branch as a ZIP, then upload and extract it in `public_html` (or in a sub-folder such as `public_html/inventory`). The files (`index.php`, `.htaccess`, `core/`, `app/` …) must sit directly in that folder. The bundled `.htaccess` hides code, config and `.env` from the web.
-4. **Install:** open `https://your-domain/install`, enter the database details and your Super Admin login. The installer creates the tables, writes `.env` and locks itself.
-5. Sign in at `/admin/login`, create your first company and give it a plan.
+4. **Install:** open `https://your-domain/install`, enter the database details, your company name and your owner login. The installer creates the tables, the company, its roles and starter masters, writes `.env` and locks itself.
+5. Sign in at `/login` with that email and password.
 
 Better, if cPanel lets you: point the domain's document root at the `public/` folder (then nothing but `public/` is web-visible).
 The folder `storage/` must be writable (company logos are stored in `storage/uploads/`, outside the web folder).
@@ -61,17 +62,18 @@ Password-reset emails use PHP `mail()` on the installer-generated `.env`; if sen
 
 ## Setup (command line / local development)
 ```bash
-cp .env.example .env            # set DB_* and the first Super Admin credentials
+cp .env.example .env            # set DB_* and COMPANY_NAME / OWNER_* (the first owner)
 php database/migrate.php        # create tables
-php database/seed.php           # default plans + first Super Admin
+php database/seed.php           # the company, its roles, the owner and starter masters
 php -S 127.0.0.1:8000 -t public public/index.php
 ```
-- Company login: `/login`  ·  Super Admin: `/admin/login`
+- Sign in: `/login`
 - Production: point the web server document root at `public/` (an Apache `.htaccess` is included).
 - Password-reset emails are written to `storage/logs/mail.log` until an SMTP driver is added.
-- Change the seeded Super Admin password after first login.
+- Change the seeded owner password after first login. Forgotten and no mail: `php database/reset-password.php owner@example.com 'NewPassword123'`.
 
 ## Tests
+Every suite **empties the database it runs against** and sets up one fresh company in it (`fresh_company` in `tests/lib.php`): run them only against a throw-away database, never the live one.
 ```bash
 php -S 127.0.0.1:8099 -t public public/index.php &
 php tests/smoke.php http://127.0.0.1:8099     # phase 1
@@ -83,11 +85,12 @@ php tests/settings.php http://127.0.0.1:8099  # phase 5
 php tests/reports.php http://127.0.0.1:8099   # phase 6
 php tests/personalise.php http://127.0.0.1:8099 # personalisation layer
 php tests/rates.php http://127.0.0.1:8099      # roll/cut/MOQ rates, supplier origin, currencies, foreign-currency orders
+php tests/upgrade.php                          # an older multi-company database becomes one company (migration 030)
 php tests/robust.php http://127.0.0.1:8099 /path/to/server.log # every route with junk input
 php tests/extras.php http://127.0.0.1:8099    # phase 8 (needs local `mysql -uroot` for the restore check)  (run all against a throw-away database)
 ```
 
 ## Layout
-`core/` framework · `app/` company app · `app/Admin/` Super Admin · `views/` templates · `database/migrations/` SQL · `config/routes.php` routes.
+`core/` framework · `app/` the app · `views/` templates · `database/migrations/` SQL (and PHP) migrations · `config/routes.php` routes.
 
-Every tenant-owned model extends `Core\Model`, which forces `tenant_id` on every query.
+Simple tables extend `Core\Model` (all / find / create / update / delete by id). There is one company, so no query carries a company id.

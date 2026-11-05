@@ -279,7 +279,6 @@ check('staff cannot record payments', $count('supplier_payments') === $n);
 $s->post('/purchase/orders/approval-setting', ['po_approval' => 1], '/purchase/orders');
 check('staff cannot change the approval setting', $val("SELECT svalue FROM settings WHERE skey = 'po_approval'") === '0');
 
-echo "Tenant isolation\n";
 $nPo = (int)$val('SELECT COUNT(*) FROM purchase_orders');
 $nL = $ledger();
 $a->post("/suppliers/$sup/delete", [], '/suppliers');

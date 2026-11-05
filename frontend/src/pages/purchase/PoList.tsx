@@ -10,12 +10,11 @@ export default function PoList() {
   const { can, term, session } = useSession(); const qc = useQueryClient();
   const toggle = async (on: boolean) => { await post('/purchase/orders/approval-setting', { po_approval: on ? 1 : '' }); qc.invalidateQueries({ queryKey: ['pos'] }); };
   return (
-    <DocList title="Purchase orders" api="/purchase/orders" queryKey="pos" empty="No purchase orders found."
+    <DocList title="Purchase orders" api="/purchase/orders" queryKey="pos" empty="No purchase orders found." sub="Orders you place with suppliers, from draft to fully received."
+      tabs={() => [['', 'All'], ['open', 'Open'], ...Object.entries(session?.poStatus ?? {}).map(([k, [l]]) => [k, l] as [string, string])]}
       actions={() => can('purchase.create') ? <Link className="btn btn-primary" to="/purchase/orders/create"><i className="bi bi-plus-lg" /> New purchase order</Link> : null}
       filters={(d, set, sp) => (
         <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); set({ q: (e.currentTarget.elements.namedItem('q') as HTMLInputElement).value }); }}>
-          <div className="col-md-3"><select className="form-select" value={sp.get('status') ?? ''} onChange={(e) => set({ status: e.target.value })}><option value="">All statuses</option><option value="open">Open (not finished)</option>
-            {Object.entries(session?.poStatus ?? {}).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></div>
           <div className="col-md-3"><select className="form-select" value={sp.get('supplier') ?? ''} onChange={(e) => set({ supplier: e.target.value })}><option value="">All {term('supplier', true).toLowerCase()}</option>{d.suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
           <div className="col-md-2"><input name="q" className="form-control" placeholder="PO no." defaultValue={sp.get('q') ?? ''} /></div>
           <div className="col-auto"><button className="btn btn-outline-secondary">Filter</button></div>

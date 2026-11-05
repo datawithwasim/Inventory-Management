@@ -40,14 +40,21 @@ final class Charts
     {
         $n = count($labels);
         if ($n < 1 || !$series) return '<p class="text-muted small mb-0">No data for this period.</p>';
-        $W = 720; $H = 250; $L = 46; $R = 70; $T = 12; $B = 34;
+        static $chartNo = 0;
+        $chartNo++;
+        $W = 1000; $H = 280; $L = 46; $R = 78; $T = 14; $B = 34;
         $max = 0.0;
         foreach ($series as $vals) foreach ($vals as $v) $max = max($max, (float)$v);
         [$top, $step] = self::scale($max);
         $x = fn(int $i) => $n === 1 ? $L + ($W - $L - $R) / 2 : $L + ($W - $L - $R) * $i / ($n - 1);
         $y = fn(float $v) => $T + ($H - $T - $B) * (1 - $v / $top);
 
-        $o = '<svg class="viz-svg" viewBox="0 0 ' . $W . ' ' . $H . '" role="img" aria-label="' . e($summary) . '">';
+        $o = '<svg class="viz-svg" viewBox="0 0 ' . $W . ' ' . $H . '" role="img" aria-label="' . e($summary) . '"><defs>';
+        // soft fill under each line, fading to nothing at the baseline
+        for ($s = 1; $s <= min(4, count($series)); $s++) {
+            $o .= '<linearGradient id="vg' . $chartNo . '-' . $s . '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--s' . $s . ');stop-opacity:.22"/><stop offset="1" style="stop-color:var(--s' . $s . ');stop-opacity:0"/></linearGradient>';
+        }
+        $o .= '</defs>';
         for ($g = 0.0; $g <= $top + 1e-9; $g += $step) {
             $gy = round($y($g), 1);
             $o .= '<line class="grid" x1="' . $L . '" x2="' . ($W - $R) . '" y1="' . $gy . '" y2="' . $gy . '"/>'
@@ -62,8 +69,11 @@ final class Charts
         foreach ($series as $name => $vals) {
             $k++;
             $pts = [];
-            foreach (array_values($vals) as $i => $v) $pts[] = round($x($i), 1) . ',' . round($y((float)$v), 1);
-            $o .= '<polyline class="line s' . $k . '" pathLength="1" points="' . implode(' ', $pts) . '"/>';
+            foreach (array_values($vals) as $i => $v) $pts[] = [$x($i), $y((float)$v)];
+            $d = self::smooth($pts);
+            $base = round($y(0.0), 1);
+            $o .= '<path class="area s' . $k . '" fill="url(#vg' . $chartNo . '-' . $k . ')" d="' . $d . ' L' . round(end($pts)[0], 1) . ',' . $base . ' L' . round($pts[0][0], 1) . ',' . $base . ' Z"/>';
+            $o .= '<path class="line s' . $k . '" pathLength="1" d="' . $d . '"/>';
             $last = count($vals) - 1;
             $ly = $y((float)array_values($vals)[$last]);
             $o .= '<circle class="end s' . $k . '" cx="' . round($x($last), 1) . '" cy="' . round($ly, 1) . '" r="4"/>';
@@ -102,6 +112,32 @@ final class Charts
             $leg .= '</div>';
         }
         return $leg . $o;
+    }
+
+    /**
+     * A smooth line through the points that never overshoots them (monotone cubic, Fritsch–Carlson):
+     * a day with no sales stays on the baseline instead of dipping below it.
+     */
+    private static function smooth(array $p): string
+    {
+        $n = count($p);
+        $f = fn(float $v) => round($v, 1);
+        if ($n === 1) return 'M' . $f($p[0][0]) . ',' . $f($p[0][1]);
+        $dx = $dy = $m = $t = [];
+        for ($i = 0; $i < $n - 1; $i++) { $dx[$i] = $p[$i + 1][0] - $p[$i][0]; $dy[$i] = $p[$i + 1][1] - $p[$i][1]; $m[$i] = $dx[$i] ? $dy[$i] / $dx[$i] : 0.0; }
+        $t[0] = $m[0]; $t[$n - 1] = $m[$n - 2];
+        for ($i = 1; $i < $n - 1; $i++) $t[$i] = ($m[$i - 1] * $m[$i] <= 0) ? 0.0 : ($m[$i - 1] + $m[$i]) / 2;
+        for ($i = 0; $i < $n - 1; $i++) {
+            if ($m[$i] == 0.0) { $t[$i] = $t[$i + 1] = 0.0; continue; }
+            $a = $t[$i] / $m[$i]; $b = $t[$i + 1] / $m[$i]; $h = $a * $a + $b * $b;
+            if ($h > 9) { $k = 3 / sqrt($h); $t[$i] = $k * $a * $m[$i]; $t[$i + 1] = $k * $b * $m[$i]; }
+        }
+        $d = 'M' . $f($p[0][0]) . ',' . $f($p[0][1]);
+        for ($i = 0; $i < $n - 1; $i++) {
+            $h = $dx[$i] / 3;
+            $d .= ' C' . $f($p[$i][0] + $h) . ',' . $f($p[$i][1] + $t[$i] * $h) . ' ' . $f($p[$i + 1][0] - $h) . ',' . $f($p[$i + 1][1] - $t[$i + 1] * $h) . ' ' . $f($p[$i + 1][0]) . ',' . $f($p[$i + 1][1]);
+        }
+        return $d;
     }
 
     /** Horizontal bars. $rows = [[label, value, display, optional colourIndex 1-5, optional href]]. */

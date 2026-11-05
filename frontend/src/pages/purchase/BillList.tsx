@@ -8,10 +8,10 @@ import { PayBadge } from '../../components/Badges';
 export default function BillList() {
   const { term } = useSession();
   return (
-    <DocList title="Purchase bills" api="/purchase/bills" queryKey="bills" empty="No bills found. Create a bill from a goods receipt."
+    <DocList title="Purchase bills" api="/purchase/bills" queryKey="bills" empty="No bills found. Create a bill from a goods receipt." sub="What suppliers billed us, and what is still to pay."
+      tabs={[['', 'All'], ['unpaid', 'Unpaid'], ['partial', 'Partly paid'], ['paid', 'Paid'], ['overdue', 'Overdue']]}
       filters={(d, set, sp) => (
         <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); set({ q: (e.currentTarget.elements.namedItem('q') as HTMLInputElement).value }); }}>
-          <div className="col-md-3"><select className="form-select" value={sp.get('status') ?? ''} onChange={(e) => set({ status: e.target.value })}><option value="">All bills</option><option value="unpaid">Unpaid</option><option value="partial">Partly paid</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div>
           <div className="col-md-3"><select className="form-select" value={sp.get('supplier') ?? ''} onChange={(e) => set({ supplier: e.target.value })}><option value="">All {term('supplier', true).toLowerCase()}</option>{d.suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
           <div className="col-md-3"><input name="q" className="form-control" placeholder="Bill no. or supplier bill no." defaultValue={sp.get('q') ?? ''} /></div>
           <div className="col-auto"><button className="btn btn-outline-secondary">Filter</button></div>

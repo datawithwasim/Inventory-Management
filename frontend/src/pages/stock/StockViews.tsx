@@ -63,12 +63,11 @@ export function StockRacks() {
 export function StockBatches() {
   const { term } = useSession();
   return (
-    <DocList title={`${term('rolls')} (rolls)`} api="/stock/batches" queryKey="stock-batches"
+    <DocList tabDefault="active" tabs={[['active', 'In stock / in transit'], ['transit', 'In transit'], ['finished', 'Finished'], ['all', 'All']]} title={`${term('rolls')} (rolls)`} api="/stock/batches" queryKey="stock-batches"
       empty={`No ${term('rolls').toLowerCase()} found. ${term('rolls')} are created when stock is added to an ${term('item').toLowerCase()} that has "Track by ${term('batch').toLowerCase()}" turned on.`}
       filters={(_d, set, sp) => (
-        <Filters names={['q', 'status']} sp={sp} set={set}>
+        <Filters names={['q']} sp={sp} set={set}>
           <div className="col-md-4"><input name="q" className="form-control" placeholder="Batch no., supplier lot, item, SKU" defaultValue={sp.get('q') ?? ''} /></div>
-          <div className="col-md-3"><select name="status" className="form-select" defaultValue={sp.get('status') ?? 'active'}><option value="active">In stock / in transit</option><option value="transit">In transit</option><option value="finished">Finished</option><option value="all">All</option></select></div>
         </Filters>)}
       columns={[
         { head: term('batch'), cell: (r) => <Link to={`/stock/batches/${r.id}`}>{r.batch_no}</Link> }, { head: term('item'), cell: (r) => `${r.item_name}${r.vname ? ` — ${r.vname}` : ''}` },

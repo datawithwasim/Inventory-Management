@@ -219,7 +219,6 @@ $n = $ledgerRows();
 $s->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'found', 'lines' => [['variant_id' => $tableV, 'qty' => 5]]], '/stock');
 check('staff POST to adjust is blocked', $ledgerRows() === $n);
 
-echo "Tenant isolation\n";
 check("A's data untouched", $ledgerRows() >= 10);
 
 echo "Record pages (Zoho-style) for stock documents and warehouses\n";

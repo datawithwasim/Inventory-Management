@@ -12,7 +12,7 @@ Tick each line. Sections A–B are done on the server, C is a click-through on t
 
 ## B. Server (cPanel)
 
-Before anything: **take a backup** (Super Admin → System → Download backup, and copy the `storage/uploads/` folder).
+Before anything: **take a backup** (Settings → Updates & backup → Download backup — on the older version: Super Admin → System — and copy the `storage/uploads/` folder).
 
 1. [ ] **PHP version** 8.1 or higher (MultiPHP Manager). Extensions on: `pdo_mysql, mbstring, zip` (Excel export needs `zip`), `fileinfo`, `gd`.
 2. [ ] **Upload** the project (see the file list in the last message, or upload the whole ZIP over the old files).
@@ -24,18 +24,17 @@ Before anything: **take a backup** (Super Admin → System → Download backup, 
 4. [ ] **`.htaccess`** is the new one (it also blocks every `*.md` file). If the site is in a sub-folder, `RewriteBase` is not needed, but the folder must allow `.htaccess` (`AllowOverride All`).
 5. [ ] **`storage/`** and `storage/uploads/`, `storage/logs/` are writable (755/775). Logo upload and logs depend on it.
 6. [ ] **`.env`**: `APP_DEBUG=false`, DB details correct, `MAIL_FROM` set to a real address on your domain (password-reset mails use PHP `mail()`).
-7. [ ] **Database updates**: sign in at `/admin/login` (or `/app/admin/login`) → **System → Run updates**.
-   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`, `020_print_templates`, `021_catalogues_products`, `022_grn_billed_qty`, `023_grn_purchase_orders`, `024_lookup_field_type`, `025_custom_fields_more_forms`, `026_gutt_numbers`, `027_catalogue_launches`, `028_launch_sales_orders`, `029_rates_currency`. Afterwards the page must say "The database is up to date."
+7. [ ] **Database updates**: sign in as the **company owner** at `/login` → **Settings → Updates & backup → Run updates** (a yellow bar says when updates wait). Migration `030_single_company` keeps the company of the owner who presses the button (or `KEEP_COMPANY_ID` from `.env`) and **deletes every other company** in the database, then removes the Super Admin, plans and companies tables. Take the backup first.
+   Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`, `020_print_templates`, `021_catalogues_products`, `022_grn_billed_qty`, `023_grn_purchase_orders`, `024_lookup_field_type`, `025_custom_fields_more_forms`, `026_gutt_numbers`, `027_catalogue_launches`, `028_launch_sales_orders`, `029_rates_currency`, `030_single_company.php`, `031_new_look`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
 9. [ ] Open `https://your-domain/` (it should land on `/app/`) once with a hard refresh (Ctrl+F5), and check `.env` does **not** contain `LEGACY_UI=1`.
 
 ## C. Click-through on the live site (≈ 20 minutes)
 
-Use a test company (Super Admin → Companies → New company) so real data is not touched. Delete or suspend it afterwards.
+There is one company now: test on a copy of the site (another folder + a copy of the database), or use clearly named test records and delete them afterwards.
 
 **Sign-in and shell**
-- [ ] Super Admin sign-in works; **"Forgot password?"** on the admin login mails a reset link (check the spam folder; if no mail arrives, the link is in `storage/logs/mail.log`, or run `php database/reset-admin.php <email> '<new password>'` from the cPanel Terminal); Dashboard, Companies, Plans, System, Audit log all open.
-- [ ] Create a company; "Open as owner" lands on the company dashboard with the support bar; "Back to admin" returns to Companies.
+- [ ] **"Forgot password?"** on the sign-in page mails a reset link (check the spam folder; if no mail arrives, the link is in `storage/logs/mail.log`, or run `php database/reset-password.php you@yourdomain.com 'NewPassword123'`).
 - [ ] Company owner signs in at `/app/login`; wrong password shows an error; sign-out works.
 - [ ] Menu shows Inventory / Purchase / Sales / Insights; **no POS** anywhere (menu, "New" button, Settings → Modules, Roles).
 
@@ -88,22 +87,21 @@ Use a test company (Super Admin → Companies → New company) so real data is n
 - [ ] Dashboard figures match the Sales register / Stock summary for the same period.
 - [ ] A report: Excel and CSV download open correctly; Print / PDF opens.
 - [ ] Low stock → "Create draft purchase orders" makes POs per supplier.
-- [ ] Super Admin → System → **Download backup** gives a `.sql` file (open it: it must contain `CREATE TABLE`).
+- [ ] Settings → Updates & backup → **Download backup** gives a `.sql` file (open it: it must contain `CREATE TABLE`).
 
 **Limits**
-- [ ] Plan limits: a plan with 1 user refuses a second user; "0 = unlimited" really is unlimited.
 
 ## D. Safety
 
-- [ ] **Change the Super Admin password** (the seeded `ChangeMe123!` must not exist on the live site).
+- [ ] **Change the owner password** if it was seeded (`ChangeMe123!` must not exist on the live site).
 - [ ] `https://your-domain/.env`, `/storage/logs/mail.log`, `/config/config.php`, `/README.md`, `/GO_LIVE_CHECKLIST.md`, `/tests/` all answer **403/404**.
 - [ ] `/install` is locked (`storage/installed.lock` exists) and answers **404**, not the installer.
-- [ ] Test companies/users created in section C are suspended or deleted.
+- [ ] Test users and records created in section C are deleted.
 - [ ] A second copy of the backup is stored **off the server**.
 
 ## E. If something goes wrong
 
-- **Super Admin forgot the password and mail does not work:** `php database/reset-admin.php admin@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH), or in phpMyAdmin set `super_admins.password_hash` to a hash made by `php -r "echo password_hash('NewPassword123', PASSWORD_DEFAULT);"`.
+- **The owner forgot the password and mail does not work:** `php database/reset-password.php owner@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH).
 - **White page / "Unexpected answer" in the app:** check `storage/logs/` and the cPanel error log; the usual causes are PHP < 8.1, a missing extension, or `storage/` not writable.
 - **Screens look old after upload:** hard refresh; confirm `public/ui/index.html` points to the same `index-*.js` that exists in `public/ui/assets/`.
 - **An address shows "Page not found" inside the app:** there is no screen at that address. Old PHP screen addresses are redirected to `/app/...` automatically; downloads (CSV / Excel, backup) stay server files by design.

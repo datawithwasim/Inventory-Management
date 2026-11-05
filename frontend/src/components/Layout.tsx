@@ -114,12 +114,8 @@ export default function Layout() {
       <div className="shell">
         <header className="topbar">
           <button type="button" className="icon-btn d-lg-none" aria-label="Open menu" onClick={() => setMobile(true)}><i className="bi bi-list fs-4" /></button>
-          <nav className="crumbs" aria-label="Breadcrumb">
-            <Link to="/dashboard">Home</Link>
-            {crumbItem && path !== '/dashboard' && <><i className="bi bi-chevron-right" /><span>{crumbGroup}</span><i className="bi bi-chevron-right" /><AppLink item={crumbItem}>{crumbItem.label}</AppLink></>}
-          </nav>
+          <button type="button" className="search-trigger" onClick={() => setSearching(true)} aria-label="Search (Ctrl K)"><i className="bi bi-search" /><span className="d-none d-sm-inline">Search or jump to…</span><kbd className="d-none d-md-inline">Ctrl K</kbd></button>
           <div className="topbar-actions">
-            <button type="button" className="icon-btn" aria-label="Search" title="Search (Ctrl K)" onClick={() => setSearching(true)}><i className="bi bi-search" /></button>
             {!!session.quick?.length && (
               <Dropdown button={() => <button className="btn btn-primary btn-sm d-flex align-items-center gap-1"><i className="bi bi-plus-lg" /><span className="d-none d-sm-inline">New</span></button>}>
                 {(close) => <ul className="list-unstyled m-0">{session.quick!.map((q) => <li key={q.path}><AppLink item={q} className="dropdown-item" onClick={close}><i className={`bi bi-${q.icon} me-2 text-muted`} />{q.label}</AppLink></li>)}</ul>}
@@ -143,7 +139,10 @@ export default function Layout() {
             </Dropdown>
           </div>
         </header>
-        <main className="content" id="main">{denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<ErrorBoundary resetKey={loc.pathname}><Outlet /></ErrorBoundary></main>
+        <main className="content" id="main">
+          {session.updates ? <div className="alert alert-warning d-flex justify-content-between align-items-center gap-2"><span><i className="bi bi-arrow-repeat me-1" />{session.updates} database update(s) are waiting after the new version was uploaded.</span><Link className="btn btn-sm btn-warning" to="/settings/system">Run updates</Link></div> : null}
+          {crumbItem && path !== '/dashboard' && <nav className="page-crumbs" aria-label="Breadcrumb"><Link to="/dashboard">Home</Link><i className="bi bi-chevron-right" /><span>{crumbGroup}</span><i className="bi bi-chevron-right" /><AppLink item={crumbItem}>{crumbItem.label}</AppLink></nav>}
+          {denied && <div className="alert alert-warning">{denied === 403 ? 'You do not have permission to open this page. Ask the company owner to change your role.' : 'This page or record was not found. It may have been deleted.'}</div>}<ErrorBoundary resetKey={loc.pathname}><Outlet /></ErrorBoundary></main>
         <Palette open={searching} onClose={() => setSearching(false)} />
       </div>
     </>

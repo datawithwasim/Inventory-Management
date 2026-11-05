@@ -1311,7 +1311,7 @@ check('the site address itself opens the app', $rootNoFollow[0] === 302 && (bool
 echo "The React shell\n";
 $spa = (new Client($base))->get('/app/customers/12');
 check('/app/... serves the built React page (any deep link), without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));
-check('the app page has the product icon, the product name as its title and the brand colours from the first paint (so the sign-in page is never unstyled)', str_contains($spa['body'], 'rel="icon"') && str_contains($spa['body'], '<title>' . config('name') . '</title>') && str_contains($spa['body'], 'id="brand-vars">:root{--brand:#') && str_contains($spa['body'], 'name="app-title"') && str_contains($spa['body'], '/assets/js/charts.js'));
+check('the app page has the product icon, the company name as its title and the brand colours from the first paint (so the sign-in page is never unstyled)', str_contains($spa['body'], 'rel="icon"') && str_contains($spa['body'], '<title>' . htmlspecialchars(company_name(), ENT_QUOTES) . '</title>') && str_contains($spa['body'], 'id="brand-vars">:root{--brand:#') && str_contains($spa['body'], 'name="app-title"') && str_contains($spa['body'], '/assets/js/charts.js'));
 check('its built files are reachable', preg_match('~src="(/ui/assets/[^"]+\.js)"~', $spa['body'], $m) === 1 && (new Client($base))->get($m[1])['status'] === 200);
 
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";

@@ -20,11 +20,11 @@ const go = (nav: (p: string) => void, redirect: string | undefined, fallback: st
 export function OrderList() {
   const { can, term, session } = useSession();
   return (
-    <DocList title="Sales orders" api="/sales/orders" queryKey="sales-orders" empty="No orders found."
+    <DocList title="Sales orders" api="/sales/orders" queryKey="sales-orders" empty="No orders found." sub="What customers ordered, and what is still to deliver."
+      tabs={() => [['', 'All'], ['open', 'To deliver'], ...Object.entries(session?.soStatus ?? {}).map(([k, [l]]) => [k, l] as [string, string])]}
       actions={() => can('sales.create') ? <Link className="btn btn-primary" to="/sales/orders/create"><i className="bi bi-plus-lg" /> New sales order</Link> : null}
       filters={(d, set, sp) => (
-        <Filters names={['status', 'customer', 'q']} sp={sp} set={set}>
-          <div className="col-md-3"><select name="status" className="form-select" defaultValue={sp.get('status') ?? ''}><option value="">All statuses</option><option value="open">Open (to deliver)</option>{Object.entries(session?.soStatus ?? {}).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></div>
+        <Filters names={['customer', 'q']} sp={sp} set={set}>
           <div className="col-md-3"><select name="customer" className="form-select" defaultValue={sp.get('customer') ?? ''}><option value="">All {term('customer', true).toLowerCase()}</option>{d.customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="col-md-2"><input name="q" className="form-control" placeholder="Order no." defaultValue={sp.get('q') ?? ''} /></div>
         </Filters>)}

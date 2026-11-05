@@ -18,10 +18,10 @@ export function InvoiceList() {
   const { term } = useSession();
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <DocList title="Sales invoices" api="/sales/invoices" queryKey="invoices" empty="No invoices found."
+    <DocList title="Sales invoices" api="/sales/invoices" queryKey="invoices" empty="No invoices found." sub="Bills to customers, what they paid and what is still due."
+      tabs={[['', 'All'], ['unpaid', 'Unpaid'], ['partial', 'Partly paid'], ['paid', 'Paid'], ['overdue', 'Overdue']]}
       filters={(d, set, sp) => (
-        <Filters names={['status', 'customer', 'q']} sp={sp} set={set}>
-          <div className="col-md-2"><select name="status" className="form-select" defaultValue={sp.get('status') ?? ''}><option value="">All invoices</option><option value="unpaid">Unpaid</option><option value="partial">Partly paid</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div>
+        <Filters names={['customer', 'q']} sp={sp} set={set}>
           <div className="col-md-3"><select name="customer" className="form-select" defaultValue={sp.get('customer') ?? ''}><option value="">All {term('customer', true).toLowerCase()}</option>{d.customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div className="col-md-3"><input name="q" className="form-control" placeholder="Invoice no." defaultValue={sp.get('q') ?? ''} /></div>
         </Filters>)}

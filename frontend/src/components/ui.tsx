@@ -38,9 +38,9 @@ export function Dropdown({ button, children, align = 'end', className = '', menu
 
 export const Spinner = () => <div className="text-center py-5"><div className="spinner-border text-primary" role="status" aria-label="Loading" /></div>;
 
-export function PageHead({ title, children, extra }: { title: ReactNode; children?: ReactNode; extra?: ReactNode }) {
-  return <div className="page-head"><div><h1>{title}{extra}</h1></div><div className="page-actions">{children}</div></div>;
+export function PageHead({ title, children, extra, sub }: { title: ReactNode; children?: ReactNode; extra?: ReactNode; sub?: ReactNode }) {
+  return <div className="page-head"><div><h1>{title}{extra}</h1>{sub && <div className="page-sub">{sub}</div>}</div><div className="page-actions">{children}</div></div>;
 }
 
 /** Badge colours the old pages used for statuses. */
-export const Badge = ({ tone = 'secondary', children }: { tone?: string; children: ReactNode }) => <span className={`badge text-bg-${tone}`}>{children}</span>;
+export const Badge = ({ tone = 'secondary', dot = false, children }: { tone?: string; dot?: boolean; children: ReactNode }) => <span className={`badge text-bg-${tone}${dot ? ' st' : ''}`}>{children}</span>;

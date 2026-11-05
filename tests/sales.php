@@ -278,7 +278,6 @@ check('every balance equals the sum of its ledger rows', !$bad);
 check('no negative balances anywhere', !DB::val('SELECT 1 FROM stock_balances WHERE qty < -0.0005'));
 check('every invoice total equals goods − discount + tax + charges', !DB::val('SELECT 1 FROM sales_invoices WHERE ABS(total - (subtotal - discount_total + tax_total + delivery_charge + installation_charge)) > 0.011'));
 
-echo "Tenant isolation\n";
 $nO = (int)$val('SELECT COUNT(*) FROM sales_orders');
 $nL = $ledger();
 $nD = (int)$val('SELECT COUNT(*) FROM deliveries');

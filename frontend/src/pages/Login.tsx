@@ -32,7 +32,7 @@ export default function Login() {
       <section className="auth-pane"><div className="auth-card"><div className="card"><div className="card-body p-4">
         {notice && <div className="alert alert-success py-2">{notice}</div>}
         <Messages items={msgs} />
-        <h2 className="h5 mb-3">Sign in</h2>
+        <h2 className="h4 mb-1">Welcome back</h2><p className="text-muted mb-4">Sign in to {appName}.</p>
         <form onSubmit={submit}>
           <div className="mb-3"><label className="form-label" htmlFor="email">Email</label><input id="email" type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></div>
           <div className="mb-3"><label className="form-label" htmlFor="pw">Password</label><input id="pw" type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>

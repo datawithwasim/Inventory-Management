@@ -18,12 +18,11 @@ const catLabel = (r: { catalogue: string; catalogue_code?: string | null }) => <
 export function LaunchList() {
   const { can } = useSession();
   return (
-    <DocList title="Catalogue launches" api="/launches" queryKey="launches" empty="No launches yet. A launch is a new catalogue: order its fabric from the warehouse, then receive the printed books."
+    <DocList tabs={(d) => [['', 'All'], ['open', 'Not closed'], ...Object.entries(d.statuses as Record<string, string>)]} title="Catalogue launches" api="/launches" queryKey="launches" empty="No launches yet. A launch is a new catalogue: order its fabric from the warehouse, then receive the printed books."
       actions={() => can('products.create') ? <Link className="btn btn-primary" to="/launches/create"><i className="bi bi-plus-lg" /> New launch</Link> : null}
       filters={(d, set, sp) => (
         <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); set({ q: (new FormData(e.currentTarget).get('q') as string) ?? '' }); }}>
           <div className="col-md-4"><input name="q" className="form-control" defaultValue={sp.get('q') ?? ''} placeholder="Launch no., catalogue or gutt no." /></div>
-          <div className="col-md-3"><select className="form-select" value={sp.get('status') ?? ''} onChange={(e) => set({ status: e.target.value })}><option value="">All launches</option><option value="open">Not closed</option>{Object.entries(d.statuses).map(([k, l]) => <option key={k} value={k}>{l as string}</option>)}</select></div>
           <div className="col-auto"><button className="btn btn-outline-secondary">Search</button></div>
         </form>)}
       columns={[

@@ -10,14 +10,14 @@ final class Theme
     public const SIDEBARS = ['dark' => 'Dark', 'light' => 'Light', 'brand' => 'Brand colour'];
     public const DENSITY = ['comfortable' => 'Comfortable', 'compact' => 'Compact'];
     public const MODES = ['light' => 'Light', 'dark' => 'Dark', 'auto' => 'Match the device'];
-    public const DEFAULTS = ['appearance.brand' => '#4f46e5', 'appearance.sidebar' => 'dark', 'appearance.density' => 'comfortable', 'appearance.mode' => 'light'];
+    public const DEFAULTS = ['appearance.brand' => '#4f46e5', 'appearance.sidebar' => 'light', 'appearance.density' => 'comfortable', 'appearance.mode' => 'light'];
 
     public static function get(string $key): string
     {
         $v = Auth::user() ? Settings::get($key, self::DEFAULTS[$key]) : self::DEFAULTS[$key];
         return match ($key) {
             'appearance.brand' => preg_match('/^#[0-9a-f]{6}$/i', $v) ? strtolower($v) : self::DEFAULTS[$key],
-            'appearance.sidebar' => isset(self::SIDEBARS[$v]) ? $v : 'dark',
+            'appearance.sidebar' => isset(self::SIDEBARS[$v]) ? $v : 'light',
             'appearance.density' => isset(self::DENSITY[$v]) ? $v : 'comfortable',
             'appearance.mode' => isset(self::MODES[$v]) ? $v : 'light',
             default => $v,

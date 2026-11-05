@@ -33,7 +33,7 @@ check('custom-field create/edit pages keep the frame', str_contains($body('/sett
 check('unknown settings tab is 404', $a->get('/settings/nope')['status'] === 404);
 
 echo "Appearance\n";
-check('default look: indigo brand, dark menu, comfortable, light', str_contains($body('/dashboard'), '--brand:#4f46e5') && str_contains($body('/dashboard'), 'sbs-dark') && str_contains($body('/dashboard'), 'density-comfortable'));
+check('default look: indigo brand, white menu, comfortable, light', str_contains($body('/dashboard'), '--brand:#4f46e5') && str_contains($body('/dashboard'), 'sbs-light') && str_contains($body('/dashboard'), 'density-comfortable'));
 $a->post('/settings/appearance', ['brand' => '#0d9488', 'brand_custom' => '', 'sidebar' => 'light', 'density' => 'compact', 'mode' => 'dark'], '/settings/appearance');
 $h = $body('/dashboard');
 check('saved: teal brand, light menu, compact, dark default applied on every page', str_contains($h, '--brand:#0d9488') && str_contains($h, 'sbs-light') && str_contains($h, 'density-compact') && str_contains($h, '"dark"'));

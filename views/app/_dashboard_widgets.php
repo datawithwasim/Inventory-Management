@@ -15,43 +15,30 @@ $buf = function (callable $f): string { ob_start(); $f(); return (string)ob_get_
 
 /** key => HTML. Order and visibility come from the user's own layout. */
 $render = [];
-$render['kpi'] = $buf(function () use ($m, $p, $salesNow, $salesPrev, $buyNow, $buyPrev, $buySeries, $receivable, $payable, $ordersOpen, $lowCount, $stockValue, $rolls, $canReports) { ?>
-<div class="row g-3">
-  <div class="col-lg-5">
-    <div class="card h-100"><div class="card-body d-flex flex-column justify-content-center">
-      <div class="text-muted small">Net sales · <?= e($p['label']) ?></div>
+$render['kpi'] = $buf(function () use ($m, $p, $salesNow, $salesPrev, $buyNow, $buyPrev, $salesSeries, $buySeries, $receivable, $payable, $ordersOpen, $lowCount, $stockValue, $rolls, $canReports) { ?>
+<div class="card ov-card">
+  <div class="card-header"><span>Overview</span><span class="text-muted small fw-normal"><?= e($p['label']) ?> · compared with the period before</span></div>
+  <div class="ov-grid top" style="--ov-cols:3">
+    <div class="ov-cell ov-big">
       <div class="hero"><?= e($m($salesNow)) ?></div>
-      <div class="small"><?= Charts::delta($salesNow, $salesPrev, true) ?> <span class="text-muted">vs <?= e($m($salesPrev)) ?> before</span></div>
-      <div class="text-muted small mt-1">Invoices minus returns</div>
-    </div></div>
-  </div>
-  <div class="col-lg-7">
-    <div class="row g-3 h-100">
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl">Purchases</div><div class="big"><?= e($m($buyNow)) ?></div>
-        <?= Charts::delta($buyNow, $buyPrev, null) ?><?= Charts::spark($buySeries) ?>
-      </div></div></div>
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl"><?= e(term('customers')) ?> owe us</div>
-        <div class="big"><a class="text-reset text-decoration-none" href="<?= url('sales/invoices?status=unpaid') ?>"><?= e($m($receivable)) ?></a></div>
-      </div></div></div>
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl">We owe <?= e(term('suppliers', true)) ?></div>
-        <div class="big"><a class="text-reset text-decoration-none" href="<?= url('purchase/bills?status=unpaid') ?>"><?= e($m($payable)) ?></a></div>
-      </div></div></div>
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl">Orders to deliver</div>
-        <div class="big"><a class="text-reset text-decoration-none" href="<?= url('sales/orders?status=open') ?>"><?= (int)$ordersOpen ?></a></div>
-      </div></div></div>
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl">Low-stock <?= e(term('items', true)) ?></div>
-        <div class="big <?= $lowCount ? 'text-danger' : '' ?>"><a class="text-reset text-decoration-none" href="<?= url($canReports ? 'reports/low-stock' : 'stock?low=1') ?>"><?= (int)$lowCount ?></a></div>
-      </div></div></div>
-      <div class="col-6 col-md-4"><div class="card h-100 stat"><div class="card-body">
-        <div class="lbl">Stock value · <?= (int)$rolls ?> rolls</div>
-        <div class="big"><?= e($m($stockValue)) ?></div>
-      </div></div></div>
+      <div class="ov-lbl accent">Net sales <?= Charts::delta($salesNow, $salesPrev, true) ?></div>
+      <?= Charts::spark($salesSeries) ?>
     </div>
+    <div class="ov-cell ov-big">
+      <div class="ov-val"><?= e($m($buyNow)) ?></div>
+      <div class="ov-lbl">Purchases <?= Charts::delta($buyNow, $buyPrev, null) ?></div>
+      <?= Charts::spark($buySeries) ?>
+    </div>
+    <div class="ov-cell ov-big">
+      <div class="ov-val"><?= e($m($stockValue)) ?></div>
+      <div class="ov-lbl">Stock value · <?= (int)$rolls ?> <?= e(strtolower(term('batches', true))) ?> in stock</div>
+    </div>
+  </div>
+  <div class="ov-grid" style="--ov-cols:4">
+    <div class="ov-cell"><div class="ov-val"><a href="<?= url('sales/invoices?status=unpaid') ?>"><?= e($m($receivable)) ?></a></div><div class="ov-lbl"><?= e(term('customers')) ?> owe us</div></div>
+    <div class="ov-cell"><div class="ov-val"><a href="<?= url('purchase/bills?status=unpaid') ?>"><?= e($m($payable)) ?></a></div><div class="ov-lbl">We owe <?= e(term('suppliers', true)) ?></div></div>
+    <div class="ov-cell"><div class="ov-val"><a href="<?= url('sales/orders?status=open') ?>"><?= (int)$ordersOpen ?></a></div><div class="ov-lbl">Orders to deliver</div></div>
+    <div class="ov-cell"><div class="ov-val <?= $lowCount ? 'text-danger' : '' ?>"><a href="<?= url($canReports ? 'reports/low-stock' : 'stock?low=1') ?>"><?= (int)$lowCount ?></a></div><div class="ov-lbl">Low-stock <?= e(term('items', true)) ?></div></div>
   </div>
 </div>
 <?php });

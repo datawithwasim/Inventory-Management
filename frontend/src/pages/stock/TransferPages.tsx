@@ -22,12 +22,10 @@ function StatusBadge({ r, statuses }: { r: any; statuses: Record<string, [string
 export function TransferList() {
   const { can, term } = useSession();
   return (
-    <DocList title="Stock transfers" api="/stock/transfers" queryKey="stock-docs" empty="No transfers yet."
+    <DocList tabs={(d) => [['', 'All'], ['open', 'On the road'], ['overdue', 'Overdue'], ...Object.entries(d.statuses as Record<string, [string, string]>).map(([k, [l]]) => [k, l] as [string, string])]} title="Stock transfers" api="/stock/transfers" queryKey="stock-docs" empty="No transfers yet."
       actions={() => can('stock.transfer') ? <Link className="btn btn-primary" to="/stock/transfers/create"><i className="bi bi-plus-lg" /> New transfer</Link> : null}
       filters={(d, set, sp) => (
-        <Filters names={['status', 'warehouse']} sp={sp} set={set}>
-          <div className="col-md-3"><select name="status" className="form-select" defaultValue={sp.get('status') ?? ''}><option value="">All transfers</option><option value="open">Still on the road</option><option value="overdue">Overdue</option>
-            {Object.entries(d.statuses as Record<string, [string, string]>).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select></div>
+        <Filters names={['warehouse']} sp={sp} set={set}>
           <div className="col-md-3"><select name="warehouse" className="form-select" defaultValue={sp.get('warehouse') ?? ''}><option value="">Any {term('warehouse').toLowerCase()} (sending or receiving)</option>{d.warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
         </Filters>)}
       above={(d) => (
