@@ -1276,17 +1276,16 @@ check('a document with no total row (delivery note) has no totals section to des
 DB::run('DELETE FROM print_templates');
 
 echo "The app is the front door\n";
-$sp = ['/' => '/app/', '/dashboard' => '/app/dashboard', '/customers/12/edit' => '/app/customers/12/edit', '/settings/formdesign' => '/app/settings/formdesign', '/forgot-password' => '/app/forgot-password',
-    '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];
-$bad = []; foreach ($sp as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
-check('classic screen addresses map to their twin in the app', !$bad);
+$sp = ['/', '/dashboard', '/customers/12/edit', '/settings/formdesign', '/forgot-password', '/purchase/rates', '/items/import'];
+$bad = []; foreach ($sp as $from) if (!Core\Spa::isScreen($from)) $bad[] = $from;
+check('screen addresses are answered by the app at the same address (no /app in front)', !$bad);
 $keep = ['/items/export', '/items/import/template', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/settings/system/backup', '/labels/barcode', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
-$bad = []; foreach ($keep as $path) if (Core\Spa::redirectFor($path) !== null) $bad[] = $path;
+$bad = []; foreach ($keep as $path) if (Core\Spa::isScreen($path)) $bad[] = $path;
 check('files and lookups are never sent to the app', !$bad);
-$pr = ['/purchase/orders/5/print' => '/app/purchase/orders/5/print', '/sales/invoices/5/print' => '/app/sales/invoices/5/print', '/sales/deliveries/3/print' => '/app/sales/deliveries/3/print', '/sales/deliveries/3/voucher' => '/app/sales/deliveries/3/voucher',
-    '/stock/adjustments/3/voucher' => '/app/stock/adjustments/3/voucher', '/stock/transfers/3/voucher' => '/app/stock/transfers/3/voucher', '/stock/transfers/3/challan' => '/app/stock/transfers/3/challan', '/labels/print' => '/app/labels/print'];
-$bad = []; foreach ($pr as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
-check('printouts are pages of the app too', !$bad && Core\Spa::redirectFor('/reports/stock-summary', ['print' => '1']) === '/app/reports/stock-summary');
+$pr = ['/purchase/orders/5/print', '/sales/invoices/5/print', '/sales/deliveries/3/print', '/sales/deliveries/3/voucher', '/stock/adjustments/3/voucher', '/stock/transfers/3/voucher', '/stock/transfers/3/challan', '/labels/print', '/reports/stock-summary'];
+$bad = []; foreach ($pr as $from) if (!Core\Spa::isScreen($from)) $bad[] = $from;
+check('printouts are pages of the app too', !$bad);
+check('older /app/... links map to the plain address', Core\Spa::plainFor('/app/customers/12') === '/customers/12' && Core\Spa::plainFor('/app') === '/' && Core\Spa::plainFor('/apple') === null && Core\Spa::plainFor('/customers') === null);
 
 // print data over JSON: letterhead and ready-made line amounts
 $po = (int)DB::val('SELECT id FROM purchase_orders LIMIT 1');
@@ -1306,11 +1305,13 @@ check('labels for printing answer with the template, the page layout and the fil
 $r = $c->call('POST', '/logout', []);
 check('signing out over JSON answers success (not an error) and ends the session', $r['status'] === 200 && ($r['json']['ok'] ?? false) === true && $c->call('GET', '/customers')['status'] === 401);
 $rootNoFollow = (function () use ($base) { $ch = curl_init($base . '/'); curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true]); $h = (string)curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$st, $h]; })();
-check('the site address itself opens the app', $rootNoFollow[0] === 302 && (bool)preg_match('~Location: .*/app/\r?\n~i', $rootNoFollow[1]));
+check('the site address itself is the app (no redirect to /app)', $rootNoFollow[0] === 200 && str_contains($rootNoFollow[1], 'id="root"'));
+$oldNoFollow = (function () use ($base) { $ch = curl_init($base . '/app/purchase/orders?status=open'); curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true]); $h = (string)curl_exec($ch); $st = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch); return [$st, $h]; })();
+check('an older /app/... link moves to the plain address, keeping its filters', $oldNoFollow[0] === 301 && (bool)preg_match('~Location: [^\r\n]*/purchase/orders\?status=open\r?\n~i', $oldNoFollow[1]) && !preg_match('~Location: [^\r\n]*/app/~i', $oldNoFollow[1]));
 
 echo "The React shell\n";
-$spa = (new Client($base))->get('/app/customers/12');
-check('/app/... serves the built React page (any deep link), without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));
+$spa = (new Client($base))->get('/');
+check('the built React page is served, without needing a session', $spa['status'] === 200 && str_contains($spa['body'], 'id="root"') && str_contains($spa['body'], '/ui/assets/'));
 check('the app page has the product icon, the company name as its title and the brand colours from the first paint (so the sign-in page is never unstyled)', str_contains($spa['body'], 'rel="icon"') && str_contains($spa['body'], '<title>' . htmlspecialchars(company_name(), ENT_QUOTES) . '</title>') && str_contains($spa['body'], 'id="brand-vars">:root{--brand:#') && str_contains($spa['body'], 'name="app-title"') && str_contains($spa['body'], '/assets/js/charts.js'));
 check('its built files are reachable', preg_match('~src="(/ui/assets/[^"]+\.js)"~', $spa['body'], $m) === 1 && (new Client($base))->get($m[1])['status'] === 200);
 

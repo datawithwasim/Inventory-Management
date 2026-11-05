@@ -23,21 +23,19 @@ final class Router
         $base = base_path();
         if ($base !== '' && str_starts_with($path, $base)) $path = substr($path, strlen($base));
         $path = '/' . trim($path, '/');
-        if ($path === '/app' || str_starts_with($path, '/app/')) \App\Controllers\SpaController::serve();
+        // older /app/... links (bookmarks, mails) go to the same screen at its plain address
+        if (($plain = Spa::plainFor($path)) !== null) {
+            $qs = (string)parse_url($uri, PHP_URL_QUERY);
+            header('Location: ' . url(ltrim($plain, '/')) . ($qs !== '' ? '?' . $qs : ''), true, 301);
+            exit;
+        }
         if (preg_match('~^/api(/v1)?(/|$)~', $path)) {
             Api::enable();
             $path = '/' . trim((string)preg_replace('~^/api(/v1)?~', '', $path), '/');
         }
 
-        // a browser opening a classic screen address goes to the same screen in the app; the root always does
-        if ($method === 'GET' && !Api::on()) {
-            $to = Spa::redirectFor($path, $_GET);
-            if ($to !== null && ($path === '/' || !config('legacy_ui'))) {
-                $qs = (string)parse_url($uri, PHP_URL_QUERY);
-                header('Location: ' . url(ltrim($to, '/')) . ($qs !== '' ? '?' . $qs : ''));
-                exit;
-            }
-        }
+        // a browser opening a screen gets the app's page, at the same address; the root always does
+        if ($method === 'GET' && !Api::on() && Spa::isScreen($path) && ($path === '/' || !config('legacy_ui'))) \App\Controllers\SpaController::serve();
 
         foreach ($this->routes as [$m, $pattern, $handler, $mw]) {
             $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[^/]+)', $pattern) . '$#';

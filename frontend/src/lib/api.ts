@@ -10,7 +10,7 @@ export const setCsrf = (t: string) => { csrf = t; };
 export const getCsrf = () => csrf;
 /** Address of a legacy (PHP-rendered) page: used for screens not rebuilt in React yet. */
 export const legacyUrl = (path: string) => base + (path.startsWith('/') ? path : '/' + path);
-export const appBase = base + '/app';
+export const appBase = base;
 /** Address of a screen of the app, for links that open in a new tab (printouts). */
 export const appUrl = (path: string) => appBase + (path.startsWith('/') ? path : '/' + path);
 /** Address of an API call, for things fetched as plain files (a barcode picture). */

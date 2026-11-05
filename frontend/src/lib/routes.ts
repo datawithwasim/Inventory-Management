@@ -9,7 +9,7 @@ export const localPath = (url: string) => {
   return base && p.startsWith(base) ? p.slice(base.length) || '/' : p;
 };
 
-/** The browser address as a router path: no site folder and no /app in front ("/site/app/customers/3" -> "/customers/3"). */
+/** The browser address as a router path: no site folder, and no /app in front of an older link ("/site/app/customers/3" -> "/customers/3"). */
 export const routerPath = (url: string) => localPath(url).replace(/^\/app(?=\/|$)/, '') || '/';
 
 /** Files, printouts and little lookups under those addresses stay server-made: they are not screens. */

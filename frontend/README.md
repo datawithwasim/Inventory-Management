@@ -7,7 +7,7 @@ and now also answers JSON. Screens not rebuilt yet open the old PHP page, so not
 
 | | |
 |---|---|
-| **Pages** | `/app/...` — one PHP route (`SpaController`) serves the built React page for every address under it |
+| **Pages** | the plain screen addresses (`/purchase/orders` …) — `SpaController` serves the built React page for each of them; older `/app/...` links move to the plain address |
 | **Built files** | `public/ui/` (committed, so cPanel needs no Node) |
 | **Data** | `/api/v1/<any existing route>` — the *same controller* as the page, answering JSON (`core/Api.php`) |
 | **Sign-in** | same session cookie; `POST`s send the `X-CSRF-Token` header (token comes from `GET /api/v1/session`) |
@@ -63,6 +63,6 @@ Upload `public/ui/` to the server after a build.
 | CSV / Excel downloads, backup download, installer | stay server-made on purpose (they are files, not screens) |
 
 ## The site opens the app
-`core/Spa.php` lists the address starts the app shows. `Router::dispatch` sends a browser `GET` for any of them (and for `/`) to `/app/...`; downloads (export, template, backup, logo, barcode, lookup) are left alone. `LEGACY_UI=1` in `.env` switches that off for the screens (not for `/`), which only the automated tests need. Keep `Spa::PREFIXES` and `src/lib/routes.ts` in step.
+`core/Spa.php` lists the address starts the app shows. `Router::dispatch` answers a browser `GET` for any of them (and for `/`) with the app's page at the same address; downloads (export, template, backup, logo, barcode, lookup) are left alone. `LEGACY_UI=1` in `.env` switches that off for the screens (not for `/`), which only the automated tests need. Keep `Spa::PREFIXES` and `src/lib/routes.ts` in step.
 
 Remaining server-made: file downloads and the installer.

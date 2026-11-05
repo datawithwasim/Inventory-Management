@@ -27,7 +27,7 @@ Before anything: **take a backup** (Settings → Updates & backup → Download b
 7. [ ] **Database updates**: sign in as the **company owner** at `/login` → **Settings → Updates & backup → Run updates** (a yellow bar says when updates wait). Migration `030_single_company` keeps the company of the owner who presses the button (or `KEEP_COMPANY_ID` from `.env`) and **deletes every other company** in the database, then removes the Super Admin, plans and companies tables. Take the backup first.
    Expected pending list when coming from the older version: `013_supplier_products`, `014_supplier_items`, `015_remove_pos`, `016_transfer_in_transit`, `017_user_warehouse`, `018_one_item_one_sku`, `019_label_templates`, `020_print_templates`, `021_catalogues_products`, `022_grn_billed_qty`, `023_grn_purchase_orders`, `024_lookup_field_type`, `025_custom_fields_more_forms`, `026_gutt_numbers`, `027_catalogue_launches`, `028_launch_sales_orders`, `029_rates_currency`, `030_single_company.php`, `031_new_look`. Afterwards the page must say "The database is up to date."
 8. [ ] **HTTPS** is on for the domain (cookies carry the login; do not run the app on plain http).
-9. [ ] Open `https://your-domain/` (it should land on `/app/`) once with a hard refresh (Ctrl+F5), and check `.env` does **not** contain `LEGACY_UI=1`.
+9. [ ] Open `https://your-domain/` (it should land on `/login` or `/dashboard`, with no `/app` in the address) once with a hard refresh (Ctrl+F5), and check `.env` does **not** contain `LEGACY_UI=1`.
 
 ## C. Click-through on the live site (≈ 20 minutes)
 
@@ -35,7 +35,7 @@ There is one company now: test on a copy of the site (another folder + a copy of
 
 **Sign-in and shell**
 - [ ] **"Forgot password?"** on the sign-in page mails a reset link (check the spam folder; if no mail arrives, the link is in `storage/logs/mail.log`, or run `php database/reset-password.php you@yourdomain.com 'NewPassword123'`).
-- [ ] Company owner signs in at `/app/login`; wrong password shows an error; sign-out works.
+- [ ] Company owner signs in at `/login`; wrong password shows an error; sign-out works.
 - [ ] Menu shows Inventory / Purchase / Sales / Insights; **no POS** anywhere (menu, "New" button, Settings → Modules, Roles).
 
 **Settings first (so formats are right)**
@@ -104,7 +104,7 @@ There is one company now: test on a copy of the site (another folder + a copy of
 - **The owner forgot the password and mail does not work:** `php database/reset-password.php owner@yourdomain.com 'NewPassword123'` (cPanel Terminal / SSH).
 - **White page / "Unexpected answer" in the app:** check `storage/logs/` and the cPanel error log; the usual causes are PHP < 8.1, a missing extension, or `storage/` not writable.
 - **Screens look old after upload:** hard refresh; confirm `public/ui/index.html` points to the same `index-*.js` that exists in `public/ui/assets/`.
-- **An address shows "Page not found" inside the app:** there is no screen at that address. Old PHP screen addresses are redirected to `/app/...` automatically; downloads (CSV / Excel, backup) stay server files by design.
+- **An address shows "Page not found" inside the app:** there is no screen at that address. Older `/app/...` links move to the plain address automatically; downloads (CSV / Excel, backup) stay server files by design.
 - **The old HTML screens still open (no redirect):** `.env` contains `LEGACY_UI=1`. Remove that line on the live site.
 - **Roll back:** restore the old files, then restore the `.sql` backup in phpMyAdmin into an **empty** database (migrations are not reversible).
 

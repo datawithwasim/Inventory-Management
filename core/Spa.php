@@ -4,8 +4,9 @@ declare(strict_types=1);
 namespace Core;
 
 /**
- * The screens now live in the app (/app/...). A browser that opens a classic screen address is sent to its twin there.
- * Downloads and exports stay what they are: files the server makes. Printouts (invoice, PO, labels …) are pages of the app.
+ * The screens are the app's, at their plain addresses (/purchase/orders, not /app/purchase/orders): a browser that opens
+ * one gets the app's page and the app shows the screen. Downloads and exports stay what they are: files the server makes.
+ * Printouts (invoice, PO, labels …) are pages of the app. The older /app/... addresses send the browser to the plain one.
  * LEGACY_UI=1 in .env keeps the classic screens reachable (the automated tests read them as HTML).
  */
 final class Spa
@@ -18,14 +19,21 @@ final class Spa
     /** Downloads and little lookups under those prefixes: files, not screens. (Printouts are screens of the app too.) */
     private const KEEP = '~(/(export|template|barcode|data|backup|logo|lookup|placement|batch-options)(/|$))|^/lookup/~';
 
-    public static function redirectFor(string $path, array $query = []): ?string
+    /** Is this address one of the app's screens (the app's page answers it), rather than a file or a lookup? */
+    public static function isScreen(string $path): bool
     {
-        if ($path === '/') return '/app/';
+        if ($path === '/') return true;
         foreach (self::PREFIXES as $p) {
             if ($path !== $p && !str_starts_with($path, $p . '/')) continue;
-            if (preg_match(self::KEEP, $path)) return null;
-            return '/app' . $path;
+            return !preg_match(self::KEEP, $path);
         }
-        return null;
+        return false;
+    }
+
+    /** The plain address of an older /app/... link ("/app/customers/3" -> "/customers/3"), or null when it is not one. */
+    public static function plainFor(string $path): ?string
+    {
+        if ($path !== '/app' && !str_starts_with($path, '/app/')) return null;
+        return '/' . ltrim(substr($path, 4), '/');
     }
 }

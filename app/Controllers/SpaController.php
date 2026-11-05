@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
-/** Serves the React app's page (built into public/app/) for every /app/... address; the app itself decides what to show. */
+/** Serves the React app's page (built into public/ui/) for every screen address; the app itself decides what to show. */
 final class SpaController
 {
     public static function serve(): never
