@@ -18,23 +18,23 @@ final class DeliveryController extends SalesBase
         return DB::one(
             'SELECT d.*, c.name AS customer, w.name AS warehouse, u.name AS user_name, o.order_no, i.id AS invoice_id, i.invoice_no
              FROM deliveries d JOIN customers c ON c.id = d.customer_id JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN users u ON u.id = d.created_by
-             LEFT JOIN sales_orders o ON o.id = d.order_id LEFT JOIN sales_invoices i ON i.delivery_id = d.id AND i.tenant_id = d.tenant_id
-             WHERE d.tenant_id = ? AND d.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             LEFT JOIN sales_orders o ON o.id = d.order_id LEFT JOIN sales_invoices i ON i.delivery_id = d.id
+             WHERE d.id = ?' . \Core\Scope::sql('d.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'd.tenant_id = ?' . \Core\Scope::sql('d.warehouse_id');
-        $params = [$this->tid()];
+        $where = '1=1' . \Core\Scope::sql('d.warehouse_id');
+        $params = [];
         if ($customer) { $where .= ' AND d.customer_id = ?'; $params[] = $customer; }
         if ($q !== '') { $where .= ' AND d.delivery_no LIKE ?'; $params[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
         [$page, $pages, $limit] = $this->pageOf('deliveries d', $where, $params);
         $rows = DB::all(
             "SELECT d.*, c.name AS customer, w.name AS warehouse, o.order_no, i.id AS invoice_id, i.invoice_no
              FROM deliveries d JOIN customers c ON c.id = d.customer_id JOIN warehouses w ON w.id = d.warehouse_id
-             LEFT JOIN sales_orders o ON o.id = d.order_id LEFT JOIN sales_invoices i ON i.delivery_id = d.id AND i.tenant_id = d.tenant_id
+             LEFT JOIN sales_orders o ON o.id = d.order_id LEFT JOIN sales_invoices i ON i.delivery_id = d.id
              WHERE $where ORDER BY d.id DESC $limit", $params);
         $this->view('app/sales/delivery_index', ['title' => 'Deliveries', 'rows' => $rows, 'customer' => $customer, 'q' => $q, 'customers' => $this->customers(false), 'page' => $page, 'pages' => $pages]);
     }
@@ -51,7 +51,7 @@ final class DeliveryController extends SalesBase
 
     private function openOrder(string $id): array
     {
-        $o = DB::one('SELECT o.*, c.name AS customer FROM sales_orders o JOIN customers c ON c.id = o.customer_id WHERE o.tenant_id = ? AND o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+        $o = DB::one('SELECT o.*, c.name AS customer FROM sales_orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [(int)$id]) ?? $this->notFound();
         if (!in_array($o['status'], ['confirmed', 'partial'], true)) {
             flash('danger', 'Goods can only be delivered on a confirmed order that is not finished.');
             redirect("sales/orders/{$o['id']}");
@@ -90,7 +90,7 @@ final class DeliveryController extends SalesBase
             foreach (DB::all(
                 'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, u.short_name AS unit, u.allow_decimal
                  FROM sales_order_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-                 WHERE l.tenant_id = ? AND l.order_id = ? ORDER BY l.id', [$this->tid(), $o['id']]) as $l) {
+                 WHERE l.order_id = ? ORDER BY l.id', [$o['id']]) as $l) {
                 $left = round((float)$l['qty_ordered'] - (float)$l['qty_delivered'], 3);
                 if ($left <= 0) continue;
                 $base = ['order_item_id' => (int)$l['id'], 'variant_id' => (int)$l['variant_id'], 'product_id' => $l['product_id'] ? (int)$l['product_id'] : null, 'label' => $this->saleLabel($l), 'tb' => (int)$l['track_batch'], 'bundle' => (int)$l['is_bundle'],
@@ -117,7 +117,7 @@ final class DeliveryController extends SalesBase
         $note = $this->text($d['note'] ?? '', 255, 'Note', $back);
 
         $orderItems = [];
-        if ($order) foreach (DB::all('SELECT * FROM sales_order_items WHERE tenant_id = ? AND order_id = ?', [$this->tid(), $order['id']]) as $oi) $orderItems[$oi['id']] = $oi;
+        if ($order) foreach (DB::all('SELECT * FROM sales_order_items WHERE order_id = ?', [$order['id']]) as $oi) $orderItems[$oi['id']] = $oi;
         $lines = [];
         $perItem = [];
         foreach ($this->postedLines($back) as $n => $l) {
@@ -166,29 +166,29 @@ final class DeliveryController extends SalesBase
     public function show(string $id): void
     {
         $d = $this->load($id);
-        $this->view('app/sales/delivery_show', ['title' => $d['delivery_no'], 'd' => $d, 'items' => self::rows((int)$d['id'], $this->tid())]);
+        $this->view('app/sales/delivery_show', ['title' => $d['delivery_no'], 'd' => $d, 'items' => self::rows((int)$d['id'])]);
     }
 
     /** Delivery lines with their rolls / racks, in display order (set parts under their set). */
-    public static function rows(int $deliveryId, int $tenantId): array
+    public static function rows(int $deliveryId): array
     {
         return DB::all(
             'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.hsn_code, i.is_bundle, u.short_name AS unit, b.batch_no, k.code AS rack
              FROM delivery_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations k ON k.id = l.location_id AND l.location_id > 0
-             WHERE l.tenant_id = ? AND l.delivery_id = ? ORDER BY COALESCE(l.parent_id, l.id), l.parent_id IS NOT NULL, l.id', [$tenantId, $deliveryId]);
+             WHERE l.delivery_id = ? ORDER BY COALESCE(l.parent_id, l.id), l.parent_id IS NOT NULL, l.id', [$deliveryId]);
     }
 
     public function print(string $id): void
     {
         $d = $this->load($id);
-        $c = DB::one('SELECT phone, address FROM customers WHERE tenant_id = ? AND id = ?', [$this->tid(), $d['customer_id']]);
+        $c = DB::one('SELECT phone, address FROM customers WHERE id = ?', [$d['customer_id']]);
         $d['cust_phone'] = $c['phone'] ?? null;
         $d['cust_address'] = $c['address'] ?? null;
         $items = array_map(function ($l) {
             [, , , , $tot] = Sales::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['discount_pct'], (float)$l['tax_rate']);
             return $l + ['tot' => $tot];
-        }, self::rows((int)$d['id'], $this->tid()));
+        }, self::rows((int)$d['id']));
         $this->view('app/sales/delivery_print', ['title' => $d['delivery_no'], 'd' => $d, 'items' => $items, 'tpl' => PrintTemplate::get('delivery_note'), 'design' => \App\Models\PrintDoc::forPrint('delivery_note', $_GET['tpl'] ?? null), 'head' => PrintTemplate::head()], 'layouts/print');
     }
 

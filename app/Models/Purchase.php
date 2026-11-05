@@ -11,11 +11,6 @@ final class Purchase
 {
     public const SUPPLIER_TYPES = ['manufacturer' => 'Manufacturer / mill', 'trader' => 'Trader / wholesaler', 'jobworker' => 'Job worker (dyeing, stitching…)', 'importer' => 'Importer'];
 
-    public static function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     /** @return array{0: float, 1: float, 2: float} net, tax, total */
     public static function line(float $qty, float $price, float $taxRate): array
     {
@@ -40,26 +35,26 @@ final class Purchase
     public static function supplierOutstanding(int $supplierId): float
     {
         return (float)DB::val(
-            'SELECT COALESCE(SUM(total - returned_amount - paid_amount), 0) FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ?',
-            [self::tid(), $supplierId]);
+            'SELECT COALESCE(SUM(total - returned_amount - paid_amount), 0) FROM purchase_bills WHERE supplier_id = ?',
+            [$supplierId]);
     }
 
     public static function supplier(int $id): ?array
     {
-        return DB::one('SELECT * FROM suppliers WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
+        return DB::one('SELECT * FROM suppliers WHERE id = ?', [$id]);
     }
 
     /** Recomputes PO header totals from its lines. */
     public static function recalcPo(int $poId): void
     {
         $sub = $tax = 0.0;
-        foreach (DB::all('SELECT qty_ordered, unit_price, tax_rate FROM purchase_order_items WHERE tenant_id = ? AND po_id = ?', [self::tid(), $poId]) as $l) {
+        foreach (DB::all('SELECT qty_ordered, unit_price, tax_rate FROM purchase_order_items WHERE po_id = ?', [$poId]) as $l) {
             [$n, $t] = self::line((float)$l['qty_ordered'], (float)$l['unit_price'], (float)$l['tax_rate']);
             $sub += $n;
             $tax += $t;
         }
-        DB::run('UPDATE purchase_orders SET subtotal = ?, tax_total = ?, total = ? WHERE tenant_id = ? AND id = ?',
-            [round($sub, 2), round($tax, 2), round($sub + $tax, 2), self::tid(), $poId]);
+        DB::run('UPDATE purchase_orders SET subtotal = ?, tax_total = ?, total = ? WHERE id = ?',
+            [round($sub, 2), round($tax, 2), round($sub + $tax, 2), $poId]);
     }
 
     public const PO_STATUS = [
@@ -106,8 +101,8 @@ final class Purchase
     {
         $on = $on ?: date('Y-m-d');
         return DB::one(
-            'SELECT * FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to >= ?)
-             ORDER BY valid_from DESC, id DESC LIMIT 1', [self::tid(), $supplierId, $variantId, $on, $on]);
+            'SELECT * FROM supplier_rates WHERE supplier_id = ? AND variant_id = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to >= ?)
+             ORDER BY valid_from DESC, id DESC LIMIT 1', [$supplierId, $variantId, $on, $on]);
     }
 
     /** What we actually paid this supplier last time for a variant (latest goods receipt line). */
@@ -115,7 +110,7 @@ final class Purchase
     {
         return DB::one(
             'SELECT l.unit_price, g.received_date FROM grn_items l JOIN grns g ON g.id = l.grn_id
-             WHERE l.tenant_id = ? AND g.supplier_id = ? AND l.variant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [self::tid(), $supplierId, $variantId]);
+             WHERE g.supplier_id = ? AND l.variant_id = ? ORDER BY g.received_date DESC, g.id DESC LIMIT 1', [$supplierId, $variantId]);
     }
 
     /**
@@ -143,8 +138,8 @@ final class Purchase
     {
         return DB::one(
             'SELECT p.supplier_id, p.variant_id, s.name AS supplier_name FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id JOIN item_variants v ON v.id = p.variant_id
-             WHERE p.tenant_id = ? AND v.item_id = ? AND p.is_preferred = 1 AND p.is_active = 1 AND s.is_active = 1 AND v.is_active = 1
-             ORDER BY (p.variant_id = ?) DESC, p.id LIMIT 1', [self::tid(), $itemId, $preferVariant]);
+             WHERE v.item_id = ? AND p.is_preferred = 1 AND p.is_active = 1 AND s.is_active = 1 AND v.is_active = 1
+             ORDER BY (p.variant_id = ?) DESC, p.id LIMIT 1', [$itemId, $preferVariant]);
     }
 
     // ------------------------------------------------------------ supplier product master
@@ -152,7 +147,7 @@ final class Purchase
     /** The supplier's own name / code for one variant, or null when it is not in their catalogue. */
     public static function productOf(int $supplierId, int $variantId): ?array
     {
-        return DB::one('SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [self::tid(), $supplierId, $variantId]);
+        return DB::one('SELECT * FROM supplier_items WHERE supplier_id = ? AND variant_id = ?', [$supplierId, $variantId]);
     }
 
     /**
@@ -161,15 +156,14 @@ final class Purchase
      */
     public static function saveProduct(int $supplierId, int $variantId, ?string $name, ?string $code, ?string $note = null, bool $overwrite = false): int
     {
-        $t = self::tid();
         $name = $name !== null && trim($name) !== '' ? mb_substr(trim($name), 0, 150) : null;
         $code = $code !== null && trim($code) !== '' ? mb_substr(trim($code), 0, 60) : null;
         $note = $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 150) : null;
         $have = self::productOf($supplierId, $variantId);
-        if (!$have) return DB::insert('supplier_items', ['tenant_id' => $t, 'supplier_id' => $supplierId, 'variant_id' => $variantId, 'supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]);
+        if (!$have) return DB::insert('supplier_items', ['supplier_id' => $supplierId, 'variant_id' => $variantId, 'supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]);
         $set = $overwrite ? ['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note]
             : array_filter(['supplier_name' => $name, 'supplier_code' => $code, 'note' => $note], fn($v) => $v !== null);
-        if ($set) DB::run('UPDATE supplier_items SET ' . implode(',', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE tenant_id = ? AND id = ?', [...array_values($set), $t, $have['id']]);
+        if ($set) DB::run('UPDATE supplier_items SET ' . implode(',', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE id = ?', [...array_values($set), $have['id']]);
         return (int)$have['id'];
     }
 
@@ -179,7 +173,7 @@ final class Purchase
         $rows = DB::all(
             'SELECT p.*, v.sku, v.name AS vname, v.is_active AS v_active, i.name AS item_name, i.id AS item_id, i.item_type, u.short_name AS unit
              FROM supplier_items p LEFT JOIN item_variants v ON v.id = p.variant_id LEFT JOIN items i ON i.id = v.item_id LEFT JOIN units u ON u.id = i.unit_id
-             WHERE p.tenant_id = ? AND p.supplier_id = ? ORDER BY i.name, v.name', [self::tid(), $supplierId]);
+             WHERE p.supplier_id = ? ORDER BY i.name, v.name', [$supplierId]);
         foreach ($rows as &$r) {
             $cur = $r['variant_id'] ? self::currentRate($supplierId, (int)$r['variant_id']) : null;
             $r['rate_row'] = $cur;
@@ -194,9 +188,8 @@ final class Purchase
     /** Making one supplier item the preferred source of its variant clears the flag on the others. */
     public static function setPreferred(int $supplierItemId, int $variantId, bool $on): void
     {
-        $t = self::tid();
-        if ($on && $variantId > 0) DB::run('UPDATE supplier_items SET is_preferred = 0 WHERE tenant_id = ? AND variant_id = ? AND id <> ?', [$t, $variantId, $supplierItemId]);
-        DB::run('UPDATE supplier_items SET is_preferred = ? WHERE tenant_id = ? AND id = ?', [$on && $variantId > 0 ? 1 : 0, $t, $supplierItemId]);
+        if ($on && $variantId > 0) DB::run('UPDATE supplier_items SET is_preferred = 0 WHERE variant_id = ? AND id <> ?', [$variantId, $supplierItemId]);
+        DB::run('UPDATE supplier_items SET is_preferred = ? WHERE id = ?', [$on && $variantId > 0 ? 1 : 0, $supplierItemId]);
     }
 
     /**
@@ -205,12 +198,11 @@ final class Purchase
      */
     public static function suppliersForItem(int $itemId): array
     {
-        $t = self::tid();
         $rows = DB::all(
             'SELECT p.id AS si_id, p.supplier_id, p.variant_id, p.supplier_name AS sname, p.supplier_code AS scode, p.is_preferred, p.lead_time_days AS si_lead, p.min_order_qty AS si_moq, p.design_no, p.composition, p.width, p.gsm, p.pattern, p.finish,
                     s.name AS supplier_name, v.sku, v.name AS vname
              FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id JOIN item_variants v ON v.id = p.variant_id
-             WHERE p.tenant_id = ? AND v.item_id = ? AND p.is_active = 1 AND s.is_active = 1 ORDER BY p.variant_id, s.name', [$t, $itemId]);
+             WHERE v.item_id = ? AND p.is_active = 1 AND s.is_active = 1 ORDER BY p.variant_id, s.name', [$itemId]);
         foreach ($rows as &$r) {
             $cur = self::currentRate((int)$r['supplier_id'], (int)$r['variant_id']);
             $r['has_rate'] = (bool)$cur;
@@ -230,7 +222,7 @@ final class Purchase
     /** SQL columns sup_name / sup_code: the supplier's own name and code for a line's variant. $supplierSql names the supplier id (an expression using the line alias l). */
     public static function theirCols(string $supplierSql): string
     {
-        $sub = fn($c) => "(SELECT sp.$c FROM supplier_items sp WHERE sp.tenant_id = l.tenant_id AND sp.supplier_id = ($supplierSql) AND sp.variant_id = l.variant_id)";
+        $sub = fn($c) => "(SELECT sp.$c FROM supplier_items sp WHERE sp.supplier_id = ($supplierSql) AND sp.variant_id = l.variant_id)";
         return ', ' . $sub('supplier_name') . ' AS sup_name, ' . $sub('supplier_code') . ' AS sup_code';
     }
 
@@ -238,28 +230,27 @@ final class Purchase
     public static function productMap(int $supplierId): array
     {
         $o = [];
-        foreach (DB::all('SELECT variant_id, supplier_name, supplier_code FROM supplier_items WHERE tenant_id = ? AND supplier_id = ?', [self::tid(), $supplierId]) as $r) $o[(int)$r['variant_id']] = $r;
+        foreach (DB::all('SELECT variant_id, supplier_name, supplier_code FROM supplier_items WHERE supplier_id = ?', [$supplierId]) as $r) $o[(int)$r['variant_id']] = $r;
         return $o;
     }
 
     /** Adds a rate. A newer rate closes the one before it, so the old one stays as history. */
     public static function addRate(int $supplierId, int $variantId, array $d): int
     {
-        $t = self::tid();
         $from = $d['valid_from'];
-        $same = DB::val('SELECT id FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? AND valid_from = ?', [$t, $supplierId, $variantId, $from]);
+        $same = DB::val('SELECT id FROM supplier_rates WHERE supplier_id = ? AND variant_id = ? AND valid_from = ?', [$supplierId, $variantId, $from]);
         $row = ['rate' => $d['rate'], 'cut_rate' => $d['cut_rate'] ?? null, 'moq_rate' => $d['moq_rate'] ?? null, 'currency' => $d['currency'] ?? 'INR', 'discount_pct' => $d['discount_pct'], 'min_qty' => $d['min_qty'], 'lead_time_days' => $d['lead_time_days'],
             'supplier_code' => $d['supplier_code'], 'valid_to' => $d['valid_to'], 'note' => $d['note']];
         if ($same) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($row)));
-            DB::run("UPDATE supplier_rates SET $set WHERE tenant_id = ? AND id = ?", [...array_values($row), $t, $same]);
+            DB::run("UPDATE supplier_rates SET $set WHERE id = ?", [...array_values($row), $same]);
             return (int)$same;
         }
         if ($row['valid_to'] === null) {
-            DB::run('UPDATE supplier_rates SET valid_to = DATE_SUB(?, INTERVAL 1 DAY) WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? AND valid_from < ? AND (valid_to IS NULL OR valid_to >= ?)',
-                [$from, $t, $supplierId, $variantId, $from, $from]);
+            DB::run('UPDATE supplier_rates SET valid_to = DATE_SUB(?, INTERVAL 1 DAY) WHERE supplier_id = ? AND variant_id = ? AND valid_from < ? AND (valid_to IS NULL OR valid_to >= ?)',
+                [$from, $supplierId, $variantId, $from, $from]);
         }
-        return DB::insert('supplier_rates', ['tenant_id' => $t, 'supplier_id' => $supplierId, 'variant_id' => $variantId, 'valid_from' => $from, 'created_by' => Auth::user()['id'] ?? null] + $row);
+        return DB::insert('supplier_rates', ['supplier_id' => $supplierId, 'variant_id' => $variantId, 'valid_from' => $from, 'created_by' => Auth::user()['id'] ?? null] + $row);
     }
 
     /** Every rate of one supplier (newest first) with item names; 'is_current' marks the ones in force today. */
@@ -268,8 +259,8 @@ final class Purchase
         $rows = DB::all(
             'SELECT r.*, v.sku, v.name AS vname, i.name AS item_name, i.id AS item_id, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode
              FROM supplier_rates r JOIN item_variants v ON v.id = r.variant_id JOIN items i ON i.id = v.item_id
-             LEFT JOIN supplier_items sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
-             WHERE r.tenant_id = ? AND r.supplier_id = ? ORDER BY i.name, v.name, r.valid_from DESC, r.id DESC', [self::tid(), $supplierId]);
+             LEFT JOIN supplier_items sp ON sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
+             WHERE r.supplier_id = ? ORDER BY i.name, v.name, r.valid_from DESC, r.id DESC', [$supplierId]);
         $today = date('Y-m-d');
         $seen = [];
         foreach ($rows as &$r) {
@@ -302,9 +293,9 @@ final class Purchase
         $today = date('Y-m-d');
         $rows = DB::all(
             'SELECT r.*, s.name AS supplier_name, v.sku, v.name AS vname, sp.supplier_name AS sname, COALESCE(sp.supplier_code, r.supplier_code) AS scode FROM supplier_rates r JOIN suppliers s ON s.id = r.supplier_id JOIN item_variants v ON v.id = r.variant_id
-             LEFT JOIN supplier_items sp ON sp.tenant_id = r.tenant_id AND sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
-             WHERE r.tenant_id = ? AND v.item_id = ? AND s.is_active = 1 AND r.valid_from <= ? AND (r.valid_to IS NULL OR r.valid_to >= ?)
-             ORDER BY r.variant_id, r.valid_from DESC, r.id DESC', [self::tid(), $itemId, $today, $today]);
+             LEFT JOIN supplier_items sp ON sp.supplier_id = r.supplier_id AND sp.variant_id = r.variant_id
+             WHERE v.item_id = ? AND s.is_active = 1 AND r.valid_from <= ? AND (r.valid_to IS NULL OR r.valid_to >= ?)
+             ORDER BY r.variant_id, r.valid_from DESC, r.id DESC', [$itemId, $today, $today]);
         $out = [];
         foreach ($rows as $r) {
             $k = $r['variant_id'] . '-' . $r['supplier_id'];

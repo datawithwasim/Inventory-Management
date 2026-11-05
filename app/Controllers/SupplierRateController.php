@@ -66,7 +66,7 @@ final class SupplierRateController extends PurchaseBase
         $s = $this->supplier($id);
         $d = $this->input();
         $vid = (int)($d['variant_id'] ?? 0);
-        if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ? AND i.is_bundle = 0', [$this->tid(), $vid])) $this->fail('Pick an item from the list.', (int)$s['id']);
+        if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.id = ? AND i.is_bundle = 0', [$vid])) $this->fail('Pick an item from the list.', (int)$s['id']);
         $row = $this->clean($d, $s);
         if (is_string($row)) $this->fail($row, (int)$s['id']);
         Purchase::addRate((int)$s['id'], $vid, $row);
@@ -79,7 +79,7 @@ final class SupplierRateController extends PurchaseBase
     public function destroy(string $id, string $rateId): void
     {
         $s = $this->supplier($id);
-        DB::run('DELETE FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND id = ?', [$this->tid(), $s['id'], (int)$rateId]);
+        DB::run('DELETE FROM supplier_rates WHERE supplier_id = ? AND id = ?', [$s['id'], (int)$rateId]);
         Audit::log('supplier_rate_delete', 'supplier', (int)$s['id'], 'rate ' . (int)$rateId);
         flash('success', 'Rate removed.');
         $this->back((int)$s['id']);
@@ -106,10 +106,9 @@ final class SupplierRateController extends PurchaseBase
         if (!$head) $this->fail('The file is empty.', $sid);
         $head = array_map(fn($x) => strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string)$x))), $head);
         if (!in_array('sku', $head, true) || (!in_array('rate', $head, true) && !in_array('roll_rate', $head, true))) $this->fail('The first row must contain the columns "sku" and "roll_rate" (or "rate").', $sid);
-        $t = $this->tid();
         $ok = 0; $bad = [];
         $line = 1;
-        DB::transaction(function () use ($h, $head, $t, $sid, $s, &$ok, &$bad, &$line) {
+        DB::transaction(function () use ($h, $head, $sid, $s, &$ok, &$bad, &$line) {
             while (($r = fgetcsv($h, 0, ',', '"', '\\')) !== false) {
                 $line++;
                 if ($line > 2001) { $bad[] = 'Stopped at 2000 rows.'; break; }
@@ -117,7 +116,7 @@ final class SupplierRateController extends PurchaseBase
                 $d = [];
                 foreach ($head as $i => $k) $d[$k] = $r[$i] ?? '';
                 $sku = trim((string)($d['sku'] ?? ''));
-                $vid = (int)DB::val('SELECT v.id FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.sku = ? AND i.is_bundle = 0', [$t, $sku]);
+                $vid = (int)DB::val('SELECT v.id FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.sku = ? AND i.is_bundle = 0', [$sku]);
                 if (!$vid) { $bad[] = "Row $line: SKU \"$sku\" not found."; continue; }
                 $row = $this->clean($d, $s);
                 if (is_string($row)) { $bad[] = "Row $line: $row"; continue; }

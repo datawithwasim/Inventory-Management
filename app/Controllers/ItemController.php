@@ -16,33 +16,21 @@ final class ItemController extends Controller
 {
     private const PER_PAGE = 25;
 
-    private function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     private function load(string $id): array
     {
         return DB::one(
             'SELECT i.*, u.short_name AS unit, u.name AS unit_name, u.allow_decimal FROM items i JOIN units u ON u.id = i.unit_id
-             WHERE i.tenant_id = ? AND i.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE i.id = ?', [(int)$id]) ?? $this->notFound();
     }
 
     private function lookups(): array
     {
-        $t = $this->tid();
         return [
-            'categories' => DB::all('SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY name', [$t]),
-            'brands'     => DB::all('SELECT id, name FROM brands WHERE tenant_id = ? ORDER BY name', [$t]),
-            'units'      => DB::all('SELECT id, name, short_name FROM units WHERE tenant_id = ? ORDER BY name', [$t]),
-            'taxes'      => DB::all('SELECT id, name, rate FROM taxes WHERE tenant_id = ? ORDER BY name', [$t]),
+            'categories' => DB::all('SELECT id, name FROM categories ORDER BY name'),
+            'brands'     => DB::all('SELECT id, name FROM brands ORDER BY name'),
+            'units'      => DB::all('SELECT id, name, short_name FROM units ORDER BY name'),
+            'taxes'      => DB::all('SELECT id, name, rate FROM taxes ORDER BY name'),
         ];
-    }
-
-    private function limitReached(): bool
-    {
-        $max = (int)Auth::user()['max_items'];
-        return $max > 0 && (int)DB::val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$this->tid()]) >= $max;
     }
 
     /** Everything that points at a variant, as plain words ('supplier items', 'purchase orders'…). Empty when nothing does. */
@@ -68,22 +56,21 @@ final class ItemController extends Controller
     private function hasMovements(int $itemId): bool
     {
         return (bool)DB::val(
-            'SELECT 1 FROM stock_ledger l JOIN item_variants v ON v.id = l.variant_id WHERE v.tenant_id = ? AND v.item_id = ? LIMIT 1',
-            [$this->tid(), $itemId]);
+            'SELECT 1 FROM stock_ledger l JOIN item_variants v ON v.id = l.variant_id WHERE v.item_id = ? LIMIT 1',
+            [$itemId]);
     }
 
     /* ---------- list ---------- */
 
     public function index(): void
     {
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $cat = (int)($_GET['category'] ?? 0);
         $low = !empty($_GET['low']);
         $page = max(1, (int)($_GET['page'] ?? 1));
 
-        $where = 'i.tenant_id = ?';
-        $params = [$t];
+        $where = '1=1';
+        $params = [];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (i.name LIKE ? OR EXISTS (SELECT 1 FROM item_variants v WHERE v.item_id = i.id AND (v.sku LIKE ? OR v.barcode = ?))
@@ -115,9 +102,8 @@ final class ItemController extends Controller
 
         $this->view('app/items/index', [
             'title' => term('items'), 'cols' => $cols, 'rows' => $rows, 'q' => $q, 'cat' => $cat, 'low' => $low,
-            'categories' => DB::all('SELECT id, name FROM categories WHERE tenant_id = ? ORDER BY name', [$t]),
-            'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'total' => $total,
-            'limitReached' => $this->limitReached(), 'cfList' => $cfList,
+            'categories' => DB::all('SELECT id, name FROM categories ORDER BY name'),
+            'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'total' => $total, 'cfList' => $cfList,
         ]);
     }
 
@@ -126,17 +112,16 @@ final class ItemController extends Controller
     public function show(string $id): void
     {
         $item = $this->load($id);
-        $t = $this->tid();
-        $variants = DB::all('SELECT * FROM item_variants WHERE tenant_id = ? AND item_id = ? ORDER BY id', [$t, $item['id']]);
+        $variants = DB::all('SELECT * FROM item_variants WHERE item_id = ? ORDER BY id', [$item['id']]);
         foreach ($variants as &$v) {
             $v['by_wh'] = DB::all(
                 'SELECT w.name, SUM(s.qty) AS qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
-                 WHERE s.tenant_id = ? AND s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name HAVING qty <> 0 ORDER BY w.name', [$t, $v['id']]);
+                 WHERE s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name HAVING qty <> 0 ORDER BY w.name', [$v['id']]);
             $v['by_rack'] = DB::all(
                 'SELECT w.name AS warehouse, COALESCE(l.code, \'\') AS rack, SUM(s.qty) AS qty FROM stock_balances s
                  JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
-                 WHERE s.tenant_id = ? AND s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
-                 ORDER BY w.name, l.code', [$t, $v['id']]);
+                 WHERE s.variant_id = ?' . Scope::sql('s.warehouse_id') . ' GROUP BY w.id, w.name, s.location_id, l.code HAVING qty > 0.0005
+                 ORDER BY w.name, l.code', [$v['id']]);
             $v['total'] = array_sum(array_column($v['by_wh'], 'qty'));
             $v['in_transit'] = Stock::transitByVariant([(int)$v['id']], Scope::warehouse() ?? 0)[(int)$v['id']] ?? 0;
             $v['batches'] = $item['track_batch'] ? Stock::batchesFor((int)$v['id'], Scope::warehouse(), false) : [];
@@ -145,16 +130,16 @@ final class ItemController extends Controller
         unset($v);
         $components = $item['is_bundle'] ? DB::all(
             'SELECT bc.qty, v.sku, v.name AS vname, i.name AS iname, u.short_name AS unit,
-                    COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.tenant_id = bc.tenant_id AND s.variant_id = v.id' . Scope::sql('s.warehouse_id') . '),0) AS have
+                    COALESCE((SELECT SUM(s.qty) FROM stock_balances s WHERE s.variant_id = v.id' . Scope::sql('s.warehouse_id') . '),0) AS have
              FROM bundle_components bc JOIN item_variants v ON v.id = bc.component_variant_id
              JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE bc.tenant_id = ? AND bc.bundle_item_id = ?', [$t, $item['id']]) : [];
+             WHERE bc.bundle_item_id = ?', [$item['id']]) : [];
         $history = DB::all(
             'SELECT l.*, w.name AS warehouse, b.batch_no, v.sku, rk.code AS rack FROM stock_ledger l
              JOIN item_variants v ON v.id = l.variant_id JOIN warehouses w ON w.id = l.warehouse_id
              LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
              LEFT JOIN batches b ON b.id = l.batch_id
-             WHERE l.tenant_id = ? AND v.item_id = ?' . Scope::sql('l.warehouse_id') . ' ORDER BY l.id DESC LIMIT 20', [$t, $item['id']]);
+             WHERE v.item_id = ?' . Scope::sql('l.warehouse_id') . ' ORDER BY l.id DESC LIMIT 20', [$item['id']]);
         $meta = DB::one(
             'SELECT c.name AS category, b.name AS brand, x.name AS tax, x.rate FROM items i
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands b ON b.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id
@@ -164,7 +149,7 @@ final class ItemController extends Controller
             'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::values('item', (int)$item['id']),
             'rates' => \App\Models\Purchase::suppliersForItem((int)$item['id']),
             'products' => can('products.view') ? DB::all('SELECT p.id, p.name, p.price, p.is_active, p.catalogue_id, c.name AS catalogue FROM products p JOIN item_variants v ON v.id = p.variant_id LEFT JOIN catalogues c ON c.id = p.catalogue_id
-                WHERE p.tenant_id = ? AND v.item_id = ? ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', [$t, $item['id']]) : [],
+                WHERE v.item_id = ? ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', [$item['id']]) : [],
             'history' => $history, 'bundleAvailable' => $item['is_bundle'] ? Stock::bundleAvailable((int)$item['id']) : null,
         ]);
     }
@@ -179,16 +164,12 @@ final class ItemController extends Controller
             'cfFields' => CustomFields::fields('item'), 'cfValues' => CustomFields::formValues('item', $item ? (int)$item['id'] : null),
             'pickable' => DB::all(
                 'SELECT v.id, v.sku, v.name, i.name AS item_name FROM item_variants v JOIN items i ON i.id = v.item_id
-                 WHERE v.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 ORDER BY i.name, v.name', [$this->tid()]),
+                 WHERE i.is_bundle = 0 AND i.is_active = 1 ORDER BY i.name, v.name', []),
         ]);
     }
 
     public function create(): void
     {
-        if ($this->limitReached()) {
-            flash('warning', "Your plan's item limit is reached. Upgrade your plan to add more items.");
-            redirect('items');
-        }
         $old = $_SESSION['_old'] ?? null;
         $this->form('New item', null, $old['variants'] ?? [['id' => '', 'name' => '', 'sku' => '', 'barcode' => '', 'cost_price' => '', 'sale_price' => '']], $old['components'] ?? []);
     }
@@ -197,8 +178,8 @@ final class ItemController extends Controller
     {
         $item = $this->load($id);
         $old = $_SESSION['_old'] ?? null;
-        $variants = $old['variants'] ?? DB::all('SELECT * FROM item_variants WHERE tenant_id = ? AND item_id = ? ORDER BY id', [$this->tid(), $item['id']]);
-        $components = $old['components'] ?? DB::all('SELECT component_variant_id AS variant_id, qty FROM bundle_components WHERE tenant_id = ? AND bundle_item_id = ?', [$this->tid(), $item['id']]);
+        $variants = $old['variants'] ?? DB::all('SELECT * FROM item_variants WHERE item_id = ? ORDER BY id', [$item['id']]);
+        $components = $old['components'] ?? DB::all('SELECT component_variant_id AS variant_id, qty FROM bundle_components WHERE bundle_item_id = ?', [$item['id']]);
         $this->form('Edit item', $item, $variants, $components);
     }
 
@@ -206,7 +187,6 @@ final class ItemController extends Controller
     private function collect(?array $item, string $back): array
     {
         $d = \Core\FormFields::strip('item', $this->input());
-        $t = $this->tid();
         $bounce = function (string $msg) use ($d, $back): never {
             flash('danger', $msg);
             with_old($d);
@@ -215,12 +195,12 @@ final class ItemController extends Controller
 
         $name = trim((string)($d['name'] ?? ''));
         if ($name === '' || mb_strlen($name) > 190) $bounce('Item name is required (max 190 characters).');
-        $unit = DB::one('SELECT * FROM units WHERE tenant_id = ? AND id = ?', [$t, (int)($d['unit_id'] ?? 0)]);
+        $unit = DB::one('SELECT * FROM units WHERE id = ?', [(int)($d['unit_id'] ?? 0)]);
         if (!$unit) $bounce('Choose a unit.');
-        $own = function (string $table, $id) use ($t, $bounce) {
+        $own = function (string $table, $id) use ($bounce) {
             $id = (int)$id;
             if ($id === 0) return null;
-            if (!DB::val("SELECT 1 FROM `$table` WHERE tenant_id = ? AND id = ?", [$t, $id])) $bounce('Invalid selection.');
+            if (!DB::val("SELECT 1 FROM `$table` WHERE id = ?", [$id])) $bounce('Invalid selection.');
             return $id;
         };
         $isBundle = $item ? (int)$item['is_bundle'] : (empty($d['is_bundle']) ? 0 : 1);
@@ -258,15 +238,15 @@ final class ItemController extends Controller
         $rows = array_values(array_filter((array)($d['variants'] ?? []), fn($v) => is_array($v) && implode('', array_map('trim', array_map('strval', array_diff_key($v, ['id' => 1])))) !== ''));
         if (count($rows) > 1) $bounce('An item has one SKU. Make a separate item for each colour, design or size.');
         $v = $one + ($rows[0] ?? []);
-        $vid = $item ? (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ? ORDER BY is_active DESC, id LIMIT 1', [$t, $item['id']]) : 0;
+        $vid = $item ? (int)DB::val('SELECT id FROM item_variants WHERE item_id = ? ORDER BY is_active DESC, id LIMIT 1', [$item['id']]) : 0;
         $sku = trim((string)($v['sku'] ?? ''));
         $bar = trim((string)($v['barcode'] ?? ''));
         foreach (['cost_price', 'sale_price'] as $f) {
             if (($v[$f] ?? '') !== '' && (!is_numeric($v[$f]) || (float)$v[$f] < 0)) $bounce('Prices must be zero or more.');
         }
         if (mb_strlen($sku) > 60 || mb_strlen($bar) > 60) $bounce('SKU and barcode are at most 60 characters.');
-        if ($sku !== '' && DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND sku = ? AND id <> ?', [$t, $sku, $vid])) $bounce("SKU $sku already exists.");
-        if ($bar !== '' && DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND barcode = ? AND id <> ?', [$t, $bar, $vid])) $bounce("Barcode $bar already exists.");
+        if ($sku !== '' && DB::val('SELECT 1 FROM item_variants WHERE sku = ? AND id <> ?', [$sku, $vid])) $bounce("SKU $sku already exists.");
+        if ($bar !== '' && DB::val('SELECT 1 FROM item_variants WHERE barcode = ? AND id <> ?', [$bar, $vid])) $bounce("Barcode $bar already exists.");
         $variants = [['id' => $vid, 'name' => null, 'sku' => $sku, 'barcode' => $bar ?: null, 'colour' => null, 'size' => null,
             'cost_price' => (float)($v['cost_price'] ?? 0), 'sale_price' => (float)($v['sale_price'] ?? 0)]];
 
@@ -281,7 +261,7 @@ final class ItemController extends Controller
                 if ($qty <= 0) $bounce('Each bundle component needs a quantity above zero.');
                 if (isset($seen[$vid])) $bounce('A component is listed twice.');
                 $seen[$vid] = 1;
-                if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ? AND i.is_bundle = 0', [$t, $vid])) $bounce('Invalid bundle component.');
+                if (!DB::val('SELECT 1 FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.id = ? AND i.is_bundle = 0', [$vid])) $bounce('Invalid bundle component.');
                 $components[] = ['variant_id' => $vid, 'qty' => $qty];
             }
             if (!$components) $bounce('Add at least one component to the bundle.');
@@ -293,21 +273,20 @@ final class ItemController extends Controller
 
     private function saveChildren(int $itemId, array $variants, array $components, bool $isBundle): void
     {
-        $t = $this->tid();
         $keep = [];
         foreach ($variants as $v) {
-            $sku = $v['sku'] !== '' ? $v['sku'] : Numbering::next($t, 'SKU');
+            $sku = $v['sku'] !== '' ? $v['sku'] : Numbering::next('SKU');
             $data = ['name' => $v['name'], 'sku' => $sku, 'barcode' => $v['barcode'], 'colour' => $v['colour'], 'size' => $v['size'], 'cost_price' => $v['cost_price'], 'sale_price' => $v['sale_price'], 'is_active' => 1];
             if ($v['id']) {
                 $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
-                DB::run("UPDATE item_variants SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), $t, $v['id']]);
+                DB::run("UPDATE item_variants SET $set WHERE id = ?", [...array_values($data), $v['id']]);
                 $keep[] = $v['id'];
             } else {
-                $keep[] = DB::insert('item_variants', ['tenant_id' => $t, 'item_id' => $itemId] + $data);
+                $keep[] = DB::insert('item_variants', ['item_id' => $itemId] + $data);
             }
         }
         // Variants removed from the form: delete when never used, otherwise just hide them.
-        foreach (DB::all('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ?', [$t, $itemId]) as $r) {
+        foreach (DB::all('SELECT id FROM item_variants WHERE item_id = ?', [$itemId]) as $r) {
             if (in_array((int)$r['id'], $keep, true)) continue;
             // used anywhere (stock, documents, supplier items and rates…) → keep it, hidden, so nothing that points at it disappears
             $used = (bool)$this->variantUses([(int)$r['id']]);
@@ -315,19 +294,18 @@ final class ItemController extends Controller
                   : DB::run('DELETE FROM item_variants WHERE id = ?', [$r['id']]);
         }
         if ($isBundle) {
-            DB::run('DELETE FROM bundle_components WHERE tenant_id = ? AND bundle_item_id = ?', [$t, $itemId]);
+            DB::run('DELETE FROM bundle_components WHERE bundle_item_id = ?', [$itemId]);
             foreach ($components as $c) {
-                DB::insert('bundle_components', ['tenant_id' => $t, 'bundle_item_id' => $itemId, 'component_variant_id' => $c['variant_id'], 'qty' => $c['qty']]);
+                DB::insert('bundle_components', ['bundle_item_id' => $itemId, 'component_variant_id' => $c['variant_id'], 'qty' => $c['qty']]);
             }
         }
     }
 
     public function store(): void
     {
-        if ($this->limitReached()) redirect('items');
         [$fields, $variants, $components, $cf] = $this->collect(null, 'items/create');
         $id = DB::transaction(function () use ($fields, $variants, $components, $cf) {
-            $id = DB::insert('items', ['tenant_id' => $this->tid()] + $fields);
+            $id = DB::insert('items', $fields);
             $this->saveChildren($id, $variants, $components, (bool)$fields['is_bundle']);
             CustomFields::save('item', $id, $cf);
             return $id;
@@ -345,7 +323,7 @@ final class ItemController extends Controller
         DB::transaction(function () use ($item, $fields, $variants, $components, $cf) {
             CustomFields::save('item', (int)$item['id'], $cf);
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($fields)));
-            DB::run("UPDATE items SET $set WHERE tenant_id = ? AND id = ?", [...array_values($fields), $this->tid(), $item['id']]);
+            DB::run("UPDATE items SET $set WHERE id = ?", [...array_values($fields), $item['id']]);
             $this->saveChildren((int)$item['id'], $variants, $components, (bool)$item['is_bundle']);
         });
         Audit::log('item_update', 'item', (int)$item['id']);
@@ -357,15 +335,15 @@ final class ItemController extends Controller
     {
         $item = $this->load($id);
         $asComponent = DB::val(
-            'SELECT 1 FROM bundle_components bc JOIN item_variants v ON v.id = bc.component_variant_id WHERE bc.tenant_id = ? AND v.item_id = ? LIMIT 1',
-            [$this->tid(), $item['id']]);
-        $uses = $this->variantUses(array_map('intval', array_column(DB::all('SELECT id FROM item_variants WHERE tenant_id = ? AND item_id = ?', [$this->tid(), $item['id']]), 'id')));
+            'SELECT 1 FROM bundle_components bc JOIN item_variants v ON v.id = bc.component_variant_id WHERE v.item_id = ? LIMIT 1',
+            [$item['id']]);
+        $uses = $this->variantUses(array_map('intval', array_column(DB::all('SELECT id FROM item_variants WHERE item_id = ?', [$item['id']]), 'id')));
         if ($asComponent || $uses) {
             flash('danger', $asComponent ? 'This item is part of a bundle and cannot be deleted.'
                 : 'This item is used in ' . implode(', ', array_slice($uses, 0, 4)) . ' and cannot be deleted. Mark it inactive instead' . (in_array('supplier items', $uses, true) ? ' (or remove its supplier items first).' : '.'));
             redirect("items/{$item['id']}");
         }
-        DB::run('DELETE FROM items WHERE tenant_id = ? AND id = ?', [$this->tid(), $item['id']]);
+        DB::run('DELETE FROM items WHERE id = ?', [$item['id']]);
         Audit::log('item_delete', 'item', (int)$item['id'], $item['name']);
         flash('success', 'Item deleted.');
         redirect('items');

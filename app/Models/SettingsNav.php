@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-/** The Settings menu: grouped, like a SaaS admin console. */
+/** The Settings menu, grouped. */
 final class SettingsNav
 {
     public const GROUPS = [
@@ -20,6 +20,9 @@ final class SettingsNav
         ],
         'Rules' => [
             'workflow' => ['Rules & workflow', 'diagram-3', 'settings/workflow'],
+        ],
+        'System' => [
+            'system' => ['Updates & backup', 'arrow-repeat', 'settings/system'],
         ],
     ];
 

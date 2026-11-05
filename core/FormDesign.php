@@ -408,7 +408,6 @@ final class FormDesign
      */
     public static function savePayload(array $payload): array
     {
-        $t = (int)Auth::tenantId();
         $cfg = self::all();
         $hidden = $required = [];
         $notes = ['created' => 0, 'deleted' => 0];
@@ -440,7 +439,7 @@ final class FormDesign
                 foreach (CustomFields::fields($entity, false) as $c) $existing[self::cfKey($c)] = $c;
                 foreach ((array)($in['deleted'] ?? []) as $k) {
                     if (isset($existing[$k])) {
-                        DB::run('DELETE FROM custom_fields WHERE tenant_id = ? AND id = ?', [$t, $existing[$k]['id']]);
+                        DB::run('DELETE FROM custom_fields WHERE id = ?', [$existing[$k]['id']]);
                         unset($existing[$k]); $notes['deleted']++;
                     }
                 }
@@ -456,8 +455,8 @@ final class FormDesign
                         if (in_array($c['type'], CustomFields::CHOICE_TYPES, true) && isset($f['options'])) $opts = self::cleanChoices((string)$f['options'], $opts);
                         $dup = false;
                         foreach ($existing as $k2 => $c2) if ($k2 !== $k && mb_strtolower($c2['label']) === mb_strtolower($label)) $dup = true;
-                        DB::run('UPDATE custom_fields SET label = ?, options = ?, is_required = ?, show_in_list = ?, is_active = ?, is_unique = ? WHERE tenant_id = ? AND id = ?',
-                            [$dup ? $c['label'] : $label, $opts, !empty($f['req']) && $c['type'] !== 'checkbox' ? 1 : 0, !empty($f['inList']) ? 1 : 0, !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0, !empty($f['unique']) && in_array($c['type'], CustomFields::UNIQUE_TYPES, true) ? 1 : 0, $t, $c['id']]);
+                        DB::run('UPDATE custom_fields SET label = ?, options = ?, is_required = ?, show_in_list = ?, is_active = ?, is_unique = ? WHERE id = ?',
+                            [$dup ? $c['label'] : $label, $opts, !empty($f['req']) && $c['type'] !== 'checkbox' ? 1 : 0, !empty($f['inList']) ? 1 : 0, !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0, !empty($f['unique']) && in_array($c['type'], CustomFields::UNIQUE_TYPES, true) ? 1 : 0, $c['id']]);
                         $map[$k] = $k;
                     } elseif (!empty($f['isNew'])) {
                         $type = (string)($f['type'] ?? 'text');
@@ -468,7 +467,7 @@ final class FormDesign
                         $opts = null;
                         if (in_array($type, CustomFields::CHOICE_TYPES, true)) $opts = self::cleanChoices((string)($f['options'] ?? ''), "Option 1\nOption 2");
                         if ($type === 'lookup') $opts = \Core\Lookups::valid((string)($f['options'] ?? '')) ? (string)$f['options'] : 'item';
-                        $id = DB::insert('custom_fields', ['tenant_id' => $t, 'entity' => $entity, 'label' => $label, 'type' => $type, 'options' => $opts,
+                        $id = DB::insert('custom_fields', ['entity' => $entity, 'label' => $label, 'type' => $type, 'options' => $opts,
                             'is_required' => !empty($f['req']) && $type !== 'checkbox' ? 1 : 0, 'show_in_list' => !empty($f['inList']) ? 1 : 0, 'sort_order' => 0, 'is_unique' => !empty($f['unique']) && in_array($type, CustomFields::UNIQUE_TYPES, true) ? 1 : 0,
                             'is_active' => !array_key_exists('show', $f) || !empty($f['show']) ? 1 : 0]);
                         $map[$k] = 'cf:' . $id; $notes['created']++;

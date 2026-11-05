@@ -22,11 +22,6 @@ final class SettingsController extends Controller
 {
     private const DATE_FORMATS = ['Y-m-d' => 'YYYY-MM-DD', 'd-m-Y' => 'DD-MM-YYYY', 'd/m/Y' => 'DD/MM/YYYY', 'm/d/Y' => 'MM/DD/YYYY', 'd M Y' => 'DD Mon YYYY'];
 
-    private function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     private function bounce(string $msg, string $tab): never
     {
         flash('danger', $msg);
@@ -67,7 +62,7 @@ final class SettingsController extends Controller
         $data = ['title' => 'Settings'];
         switch ($tab) {
             case 'company':
-                $data['tenantName'] = Auth::user()['tenant_name'];
+                $data['tenantName'] = company_name();
                 $data['values'] = ['name' => $data['tenantName'], 'logo' => company_logo_url()];
                 foreach (['legal_name', 'address', 'phone', 'email', 'website', 'tax_no', 'bank'] as $k) $data['values'][$k] = Settings::get('company.' . $k);
                 break;
@@ -81,8 +76,8 @@ final class SettingsController extends Controller
             case 'numbering':
                 $data['docs'] = [];
                 foreach (Numbering::DOCS as $code => $label) {
-                    $cfg = Numbering::config($this->tid(), $code);
-                    $next = (int)DB::val('SELECT next_no FROM counters WHERE tenant_id = ? AND prefix = ?', [$this->tid(), $code . ($cfg['year'] ? date('y') : '')]) ?: 1;
+                    $cfg = Numbering::config($code);
+                    $next = (int)DB::val('SELECT next_no FROM counters WHERE prefix = ?', [$code . ($cfg['year'] ? date('y') : '')]) ?: 1;
                     $data['docs'][$code] = ['label' => $label, 'cfg' => $cfg, 'next' => $next, 'sample' => Numbering::format($cfg, $next)];
                 }
                 break;
@@ -105,6 +100,12 @@ final class SettingsController extends Controller
                 $data['terms'] = TERMS;
                 $data['saved'] = Settings::json('labels', []);
                 break;
+            case 'system':
+                if (!Auth::user()['is_owner']) $this->forbidden();
+                $data += ['pending' => \Core\Migrator::pending(), 'applied' => DB::all('SELECT name, applied_at FROM migrations ORDER BY name'),
+                    'info' => ['PHP' => PHP_VERSION, 'Database' => DB::pdo()->getAttribute(\PDO::ATTR_SERVER_VERSION), 'Server' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'],
+                    'logs' => DB::all('SELECT a.id, a.created_at, a.action, a.entity, a.details, a.ip, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id AND a.actor_type = \'user\' ORDER BY a.id DESC LIMIT 200')];
+                break;
             case 'templates':
                 $doc = (string)($_GET['doc'] ?? 'invoice');
                 if (!isset(PrintTemplate::DOCS[$doc])) $doc = 'invoice';
@@ -116,11 +117,10 @@ final class SettingsController extends Controller
 
     private function previewUrl(string $doc): ?string
     {
-        $t = $this->tid();
         $id = match ($doc) {
-            'invoice' => DB::val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$t]),
-            'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$t]),
-            'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$t]),
+            'invoice' => DB::val('SELECT MAX(id) FROM sales_invoices'),
+            'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries'),
+            'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders'),
         };
         if (!$id) return null;
         return match ($doc) {
@@ -262,7 +262,7 @@ final class SettingsController extends Controller
             $this->removeLogo();
             $logoNote = ' Logo removed.';
         }
-        DB::run('UPDATE tenants SET name = ? WHERE id = ?', [$name, $this->tid()]);
+        Settings::set('company.name', $name);
         foreach ($vals as $k => $v) Settings::set('company.' . $k, $v);
         Audit::log('settings_company', 'settings');
         flash('success', 'Company profile saved.' . $logoNote);
@@ -279,7 +279,7 @@ final class SettingsController extends Controller
         if ($info[0] > 3000 || $info[1] > 3000) return 'The logo is too large (max 3000 × 3000 pixels).';
         $dir = ROOT . '/storage/uploads';
         if (!is_dir($dir) && !@mkdir($dir, 0755, true)) return 'The server could not create the upload folder.';
-        $name = 'logo-' . $this->tid() . '-' . bin2hex(random_bytes(6)) . '.' . $types[$info[2]];
+        $name = 'logo-' . bin2hex(random_bytes(6)) . '.' . $types[$info[2]];
         if (!move_uploaded_file($f['tmp_name'], "$dir/$name")) return 'The logo could not be saved on the server.';
         $this->removeLogo();
         Settings::set('company.logo', $name);
@@ -289,16 +289,48 @@ final class SettingsController extends Controller
     private function removeLogo(): void
     {
         $old = Settings::get('company.logo');
-        if ($old !== '' && preg_match('/^logo-\d+-[a-f0-9]+\.(png|jpg|gif|webp)$/', $old)) @unlink(ROOT . '/storage/uploads/' . $old);
+        if ($old !== '' && preg_match('/^logo-(\d+-)?[a-f0-9]+\.(png|jpg|gif|webp)$/', $old)) @unlink(ROOT . '/storage/uploads/' . $old);
         Settings::set('company.logo', '');
     }
 
-    /** Streams the company logo (only ever the signed-in company's own file). */
+    /** Applies the waiting database updates (owner only; no terminal on shared hosting). */
+    public function migrate(): void
+    {
+        if (!Auth::user()['is_owner']) $this->forbidden();
+        try {
+            $done = \Core\Migrator::run();
+        } catch (\Throwable $e) {
+            flash('danger', 'Update failed: ' . $e->getMessage());
+            redirect('settings/system');
+        }
+        Settings::flush();
+        if ($done) Audit::log('db_migrate', 'system', null, implode(', ', $done));
+        flash('success', $done ? 'Database updated: ' . implode(', ', $done) : 'Already up to date.');
+        redirect('settings/system');
+    }
+
+    /** Full database backup as a download (POST so it needs the CSRF token and cannot be triggered by a link). */
+    public function backup(): void
+    {
+        if (!Auth::user()['is_owner']) $this->forbidden();
+        @set_time_limit(0);
+        header('Content-Type: application/sql; charset=utf-8');
+        header('Content-Disposition: attachment; filename="inventory-backup-' . date('Ymd-His') . '.sql"');
+        header('Cache-Control: no-store');
+        $rows = \Core\Backup::stream(function (string $chunk) {
+            echo $chunk;
+            if (PHP_SAPI !== 'cli') { @ob_flush(); flush(); }
+        });
+        Audit::log('db_backup', 'system', null, "$rows rows");
+        exit;
+    }
+
+    /** Streams the company logo. */
     public function logo(): void
     {
         $name = Settings::get('company.logo');
         $file = ROOT . '/storage/uploads/' . $name;
-        if ($name === '' || !preg_match('/^logo-' . $this->tid() . '-[a-f0-9]+\.(png|jpg|gif|webp)$/', $name) || !is_file($file)) $this->notFound();
+        if ($name === '' || !preg_match('/^logo-(\d+-)?[a-f0-9]+\.(png|jpg|gif|webp)$/', $name) || !is_file($file)) $this->notFound();
         $mime = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'gif' => 'image/gif', 'webp' => 'image/webp'][pathinfo($name, PATHINFO_EXTENSION)];
         header('Content-Type: ' . $mime);
         header('X-Content-Type-Options: nosniff');

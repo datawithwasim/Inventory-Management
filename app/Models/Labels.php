@@ -75,17 +75,11 @@ final class Labels
         ['key' => 'a4-105x74', 'name' => 'A4 sheet · 105 × 74 mm (2 × 4 = 8)', 'w' => 105, 'h' => 74, 'page' => ['mode' => 'sheet', 'paper' => 'A4', 'cols' => 2, 'rows' => 4]],
     ];
 
-    private static function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     /* ------------------------------------------------------------ what a label can show */
 
     /** The resolved values of one item (variant) or roll (batch), or null when it is not the company's / not visible to the user. */
     public static function values(string $type, int $id): ?array
     {
-        $t = self::tid();
         $dec = max(0, min(3, (int)Settings::get('currency.decimals')));
         if ($type === 'rolls') {
             $w = Scope::warehouse();
@@ -94,15 +88,15 @@ final class Labels
                         c.name AS category, br.name AS brand, u.short_name AS unit, COALESCE(x.rate, 0) AS tax_rate
                  FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
                  LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands br ON br.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id
-                 WHERE b.tenant_id = ? AND b.id = ?', [$t, $id]);
+                 WHERE b.id = ?', [$id]);
             if (!$r) return null;
             if ($w !== null && !DB::val('SELECT 1 FROM stock_ledger WHERE batch_id = ? AND warehouse_id = ? LIMIT 1', [$id, $w])) return null;
             $where = $w !== null ? ' AND s.warehouse_id = ' . (int)$w : '';
-            $bal = (float)DB::val("SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s WHERE s.batch_id = ? AND s.tenant_id = ?$where", [$id, $t]);
+            $bal = (float)DB::val("SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s WHERE s.batch_id = ?$where", [$id]);
             $racks = (string)DB::val("SELECT GROUP_CONCAT(DISTINCT l.code ORDER BY l.code SEPARATOR ', ') FROM stock_balances s JOIN locations l ON l.id = s.location_id
-                                      WHERE s.batch_id = ? AND s.tenant_id = ? AND s.qty > 0.0005 AND s.location_id > 0$where", [$id, $t]);
+                                      WHERE s.batch_id = ? AND s.qty > 0.0005 AND s.location_id > 0$where", [$id]);
             $whs = (string)DB::val("SELECT GROUP_CONCAT(DISTINCT wh.name ORDER BY wh.name SEPARATOR ', ') FROM stock_balances s JOIN warehouses wh ON wh.id = s.warehouse_id
-                                    WHERE s.batch_id = ? AND s.tenant_id = ? AND s.qty > 0.0005$where", [$id, $t]);
+                                    WHERE s.batch_id = ? AND s.qty > 0.0005$where", [$id]);
             $out = self::itemValues($r, (int)$r['variant_id'], $dec) + [
                 'roll_no' => (string)$r['batch_no'], 'supplier_lot' => (string)($r['supplier_lot'] ?? ''), 'received_date' => $r['received_date'] ? fdate($r['received_date']) : '',
                 'roll_qty' => qty($bal) . ' ' . $r['unit'], 'roll_qty_num' => qty($bal), 'received_qty' => qty($r['received_qty']), 'rack' => $racks, 'warehouse' => $whs,
@@ -114,7 +108,7 @@ final class Labels
             'SELECT v.id AS variant_id, v.sku, v.barcode, v.sale_price, i.name AS item_name, i.item_type, i.hsn_code, i.description, c.name AS category, br.name AS brand, u.short_name AS unit, COALESCE(x.rate, 0) AS tax_rate
              FROM item_variants v JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands br ON br.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id
-             WHERE v.tenant_id = ? AND v.id = ?', [$t, $id]);
+             WHERE v.id = ?', [$id]);
         if (!$r) return null;
         return self::general(self::itemValues($r, (int)$r['variant_id'], $dec));
     }
@@ -123,8 +117,8 @@ final class Labels
     {
         $sp = DB::one(
             'SELECT p.supplier_name, p.supplier_code, p.design_no, p.composition, p.width, p.gsm, p.pattern, p.finish, s.name AS supplier
-             FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id WHERE p.tenant_id = ? AND p.variant_id = ? AND p.is_active = 1
-             ORDER BY p.is_preferred DESC, p.id LIMIT 1', [self::tid(), $variantId]) ?? [];
+             FROM supplier_items p JOIN suppliers s ON s.id = p.supplier_id WHERE p.variant_id = ? AND p.is_active = 1
+             ORDER BY p.is_preferred DESC, p.id LIMIT 1', [$variantId]) ?? [];
         $code = (string)($r['barcode'] ?? '') !== '' ? (string)$r['barcode'] : (string)$r['sku'];
         $types = \App\Models\ItemTypes::LABELS;
         return [
@@ -242,7 +236,7 @@ final class Labels
     /** Saved templates (newest edits first by name). */
     public static function saved(): array
     {
-        return array_map([self::class, 'fromRow'], DB::all('SELECT * FROM label_templates WHERE tenant_id = ? ORDER BY name', [self::tid()]));
+        return array_map([self::class, 'fromRow'], DB::all('SELECT * FROM label_templates ORDER BY name'));
     }
 
     /** A template by id: a number for a saved one, "b:…" for a ready-made one. */
@@ -250,14 +244,14 @@ final class Labels
     {
         if (str_starts_with($id, 'b:')) return self::builtin()[$id] ?? null;
         if (!ctype_digit($id)) return null;
-        $r = DB::one('SELECT * FROM label_templates WHERE tenant_id = ? AND id = ?', [self::tid(), (int)$id]);
+        $r = DB::one('SELECT * FROM label_templates WHERE id = ?', [(int)$id]);
         return $r ? self::fromRow($r) : null;
     }
 
     /** The template to open for items / rolls: the saved default for that kind, else a ready-made one. */
     public static function defaultFor(string $type): array
     {
-        $r = DB::one("SELECT * FROM label_templates WHERE tenant_id = ? AND is_default = 1 AND for_type IN (?, 'any') ORDER BY for_type = ? DESC, id LIMIT 1", [self::tid(), $type, $type]);
+        $r = DB::one("SELECT * FROM label_templates WHERE is_default = 1 AND for_type IN (?, 'any') ORDER BY for_type = ? DESC, id LIMIT 1", [$type, $type]);
         if ($r) return self::fromRow($r);
         return self::builtin()[$type === 'rolls' ? 'b:roll-50x25' : 'b:item-50x25'];
     }

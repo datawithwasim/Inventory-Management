@@ -13,11 +13,6 @@ use Core\Settings;
 /** Shared helpers for the purchase screens. */
 abstract class PurchaseBase extends Controller
 {
-    protected function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     protected function bounce(string $msg, string $back): never
     {
         flash('danger', $msg);
@@ -71,23 +66,23 @@ abstract class PurchaseBase extends Controller
     protected function rackRequired(int $warehouseId, int $rackId): bool
     {
         return $rackId === 0 && Settings::bool('require_rack')
-            && (bool)DB::val('SELECT 1 FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND is_active = 1 LIMIT 1', [$this->tid(), $warehouseId]);
+            && (bool)DB::val('SELECT 1 FROM locations WHERE warehouse_id = ? AND is_active = 1 LIMIT 1', [$warehouseId]);
     }
 
     protected function suppliers(bool $onlyActive = true): array
     {
-        return DB::all('SELECT id, name, origin, currency FROM suppliers WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
+        return DB::all('SELECT id, name, origin, currency FROM suppliers WHERE 1=1' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', []);
     }
 
     protected function warehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . \Core\Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE is_active = 1' . \Core\Scope::sql('id') . ' ORDER BY is_default DESC, name', []);
     }
 
     protected function racksByWarehouse(): array
     {
         $out = [];
-        foreach (DB::all('SELECT id, warehouse_id, code FROM locations WHERE tenant_id = ? AND is_active = 1 ORDER BY code', [$this->tid()]) as $r) {
+        foreach (DB::all('SELECT id, warehouse_id, code FROM locations WHERE is_active = 1 ORDER BY code') as $r) {
             $out[$r['warehouse_id']][] = ['id' => (int)$r['id'], 'code' => $r['code']];
         }
         return $out;

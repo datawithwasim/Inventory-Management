@@ -14,11 +14,6 @@ use Core\Settings;
  */
 final class Stock
 {
-    private static function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     public static function round(float $q): float
     {
         return round($q, 3);
@@ -31,7 +26,7 @@ final class Stock
             'SELECT v.*, i.name AS item_name, i.track_batch, i.is_bundle, i.unit_id, i.is_active AS item_active,
                     u.short_name AS unit, u.allow_decimal
              FROM item_variants v JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE v.tenant_id = ? AND v.id = ?', [self::tid(), $variantId]);
+             WHERE v.id = ?', [$variantId]);
     }
 
     public static function label(array $v): string
@@ -41,26 +36,26 @@ final class Stock
 
     public static function warehouse(int $id): ?array
     {
-        return DB::one('SELECT * FROM warehouses WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
+        return DB::one('SELECT * FROM warehouses WHERE id = ?', [$id]);
     }
 
     public static function batch(int $id): ?array
     {
-        return DB::one('SELECT * FROM batches WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
+        return DB::one('SELECT * FROM batches WHERE id = ?', [$id]);
     }
 
     public static function location(int $id): ?array
     {
-        return DB::one('SELECT * FROM locations WHERE tenant_id = ? AND id = ?', [self::tid(), $id]);
+        return DB::one('SELECT * FROM locations WHERE id = ?', [$id]);
     }
 
     /** Stock of a variant in a warehouse/batch; in one rack when $locationId is given, else across all racks. */
     public static function balance(int $variantId, int $warehouseId, int $batchId = 0, ?int $locationId = null): float
     {
         return (float)DB::val(
-            'SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ?'
+            'SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ? AND warehouse_id = ? AND batch_id = ?'
             . ($locationId === null ? '' : ' AND location_id = ?'),
-            $locationId === null ? [self::tid(), $variantId, $warehouseId, $batchId] : [self::tid(), $variantId, $warehouseId, $batchId, $locationId]);
+            $locationId === null ? [$variantId, $warehouseId, $batchId] : [$variantId, $warehouseId, $batchId, $locationId]);
     }
 
     /** Where a variant (optionally one batch) sits in a warehouse: racks with stock, biggest first. */
@@ -69,9 +64,9 @@ final class Stock
         return DB::all(
             'SELECT s.location_id, COALESCE(l.code, \'\') AS code, SUM(s.qty) AS qty
              FROM stock_balances s LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
-             WHERE s.tenant_id = ? AND s.variant_id = ? AND s.warehouse_id = ?' . ($batchId === null ? '' : ' AND s.batch_id = ?') . '
+             WHERE s.variant_id = ? AND s.warehouse_id = ?' . ($batchId === null ? '' : ' AND s.batch_id = ?') . '
              GROUP BY s.location_id, l.code HAVING qty > 0.0005 ORDER BY qty DESC',
-            $batchId === null ? [self::tid(), $variantId, $warehouseId] : [self::tid(), $variantId, $warehouseId, $batchId]);
+            $batchId === null ? [$variantId, $warehouseId] : [$variantId, $warehouseId, $batchId]);
     }
 
     public static function rackName(?string $code): string
@@ -84,12 +79,12 @@ final class Stock
     {
         $v = self::variant($variantId) ?? throw new StockException('Item not found.');
         if (!$v['track_batch']) throw new StockException($v['item_name'] . ' is not batch tracked.');
-        $n = (int)DB::val('SELECT COUNT(*) FROM batches WHERE tenant_id = ? AND variant_id = ?', [self::tid(), $variantId]);
+        $n = (int)DB::val('SELECT COUNT(*) FROM batches WHERE variant_id = ?', [$variantId]);
         do {
             $no = sprintf('%s-B%04d', $v['sku'], ++$n);
-        } while (DB::val('SELECT 1 FROM batches WHERE tenant_id = ? AND batch_no = ?', [self::tid(), $no]));
+        } while (DB::val('SELECT 1 FROM batches WHERE batch_no = ?', [$no]));
         return DB::insert('batches', [
-            'tenant_id' => self::tid(), 'variant_id' => $variantId, 'batch_no' => $no,
+            'variant_id' => $variantId, 'batch_no' => $no,
             'supplier_lot' => $lot !== null && $lot !== '' ? $lot : null,
             'received_date' => $date ?: date('Y-m-d'), 'received_qty' => self::round($qty),
             'unit_cost' => $cost, 'note' => $note,
@@ -100,7 +95,6 @@ final class Stock
         int $variantId, int $warehouseId, int $batchId, float $qty, string $type,
         ?string $refType = null, ?int $refId = null, ?float $cost = null, ?string $note = null, int $locationId = 0
     ): void {
-        $tid = self::tid();
         $qty = self::round($qty);
         if ($qty == 0.0) throw new StockException('Quantity cannot be zero.');
 
@@ -131,11 +125,11 @@ final class Stock
             $batchId = 0;
         }
 
-        DB::run('INSERT IGNORE INTO stock_balances (tenant_id, variant_id, warehouse_id, batch_id, location_id, qty) VALUES (?,?,?,?,?,0)',
-            [$tid, $variantId, $warehouseId, $batchId, $locationId]);
+        DB::run('INSERT IGNORE INTO stock_balances (variant_id, warehouse_id, batch_id, location_id, qty) VALUES (?,?,?,?,0)',
+            [$variantId, $warehouseId, $batchId, $locationId]);
         $have = (float)DB::val(
-            'SELECT qty FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ? FOR UPDATE',
-            [$tid, $variantId, $warehouseId, $batchId, $locationId]);
+            'SELECT qty FROM stock_balances WHERE variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ? FOR UPDATE',
+            [$variantId, $warehouseId, $batchId, $locationId]);
         // "Negative stock" (Settings → Rules) lets ordinary items go below zero; rolls (batch-tracked) never can.
         $mayGoNegative = $qty < 0 && !$v['track_batch'] && Settings::bool('negative_stock');
         if ($have + $qty < -0.0005 && !$mayGoNegative) {
@@ -146,10 +140,10 @@ final class Stock
             throw new StockException('Not enough stock for ' . self::label($v) . $where . ': only '
                 . self::fmt($have) . ' ' . $v['unit'] . ' available' . $elsewhere . '.');
         }
-        DB::run('UPDATE stock_balances SET qty = qty + ? WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?',
-            [$qty, $tid, $variantId, $warehouseId, $batchId, $locationId]);
+        DB::run('UPDATE stock_balances SET qty = qty + ? WHERE variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?',
+            [$qty, $variantId, $warehouseId, $batchId, $locationId]);
         DB::insert('stock_ledger', [
-            'tenant_id' => $tid, 'variant_id' => $variantId, 'warehouse_id' => $warehouseId, 'batch_id' => $batchId, 'location_id' => $locationId,
+            'variant_id' => $variantId, 'warehouse_id' => $warehouseId, 'batch_id' => $batchId, 'location_id' => $locationId,
             'qty_change' => $qty, 'type' => $type, 'ref_type' => $refType, 'ref_id' => $refId,
             'unit_cost' => $cost, 'note' => $note, 'user_id' => Auth::user()['id'] ?? null,
         ]);
@@ -162,10 +156,10 @@ final class Stock
         return DB::all(
             'SELECT v.id, v.sku, v.name, i.name AS item_name, i.track_batch, u.short_name AS unit, u.allow_decimal
              FROM item_variants v JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE v.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 AND v.is_active = 1
+             WHERE i.is_bundle = 0 AND i.is_active = 1 AND v.is_active = 1
                AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?)
              ORDER BY i.name, v.name LIMIT ' . (int)$limit,
-            [self::tid(), $like, $like, $like, $q]);
+            [$like, $like, $like, $q]);
     }
 
     /** Batches of a variant with their balance (in one warehouse, or all). */
@@ -173,28 +167,28 @@ final class Stock
     {
         $sql = 'SELECT b.id, b.batch_no, b.supplier_lot, b.received_date, b.received_qty,
                        COALESCE(SUM(s.qty), 0) AS balance,
-                       (SELECT COALESCE(SUM' . self::TRANSIT_PENDING . ', 0) ' . self::TRANSIT_FROM . ' WHERE l.tenant_id = b.tenant_id AND l.batch_id = b.id' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ') AS in_transit
+                       (SELECT COALESCE(SUM' . self::TRANSIT_PENDING . ', 0) ' . self::TRANSIT_FROM . ' WHERE l.batch_id = b.id' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ') AS in_transit
                 FROM batches b LEFT JOIN stock_balances s
-                  ON s.batch_id = b.id AND s.tenant_id = b.tenant_id' . ($warehouseId ? ' AND s.warehouse_id = ?' : '') . '
-                WHERE b.tenant_id = ? AND b.variant_id = ?
+                  ON s.batch_id = b.id' . ($warehouseId ? ' AND s.warehouse_id = ?' : '') . '
+                WHERE b.variant_id = ?
                 GROUP BY b.id' . ($onlyInStock ? ' HAVING balance > 0' : '') . ' ORDER BY b.received_date, b.id';
-        $params = $warehouseId ? [$warehouseId, self::tid(), $variantId] : [self::tid(), $variantId];
+        $params = $warehouseId ? [$warehouseId, $variantId] : [$variantId];
         return DB::all($sql, $params);
     }
 
     /** What is on the road: dispatched between warehouses, not yet received, written off or sent back. */
     public const TRANSIT_PENDING = '(l.qty - l.qty_received - l.qty_lost - l.qty_returned)';
-    private const TRANSIT_FROM = "FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial')";
+    private const TRANSIT_FROM = "FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial')";
 
     /** In transit per variant: [variant_id => qty]. With $toWarehouse only what is on its way to that warehouse. */
     public static function transitByVariant(array $variantIds, int $toWarehouse = 0): array
     {
         if (!$variantIds) return [];
         $in = implode(',', array_fill(0, count($variantIds), '?'));
-        $params = [self::tid(), ...array_map('intval', $variantIds)];
+        $params = [...array_map('intval', $variantIds)];
         if ($toWarehouse) $params[] = $toWarehouse;
         $out = [];
-        foreach (DB::all('SELECT l.variant_id, SUM' . self::TRANSIT_PENDING . ' AS q ' . self::TRANSIT_FROM . " WHERE l.tenant_id = ? AND l.variant_id IN ($in)" . ($toWarehouse ? ' AND d.to_warehouse_id = ?' : '') . ' GROUP BY l.variant_id', $params) as $r) {
+        foreach (DB::all('SELECT l.variant_id, SUM' . self::TRANSIT_PENDING . ' AS q ' . self::TRANSIT_FROM . " WHERE l.variant_id IN ($in)" . ($toWarehouse ? ' AND d.to_warehouse_id = ?' : '') . ' GROUP BY l.variant_id', $params) as $r) {
             if ((float)$r['q'] > 0.0005) $out[(int)$r['variant_id']] = round((float)$r['q'], 3);
         }
         return $out;
@@ -204,7 +198,7 @@ final class Stock
     public static function transitOfBatch(int $batchId): array
     {
         return DB::all('SELECT d.id, d.doc_no, d.expected_date, w1.name AS from_warehouse, w2.name AS to_warehouse, ' . self::TRANSIT_PENDING . ' AS qty ' . self::TRANSIT_FROM
-            . ' JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id WHERE l.tenant_id = ? AND l.batch_id = ? AND ' . self::TRANSIT_PENDING . ' > 0.0005' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ' ORDER BY d.id', [self::tid(), $batchId]);
+            . ' JOIN warehouses w1 ON w1.id = d.warehouse_id JOIN warehouses w2 ON w2.id = d.to_warehouse_id WHERE l.batch_id = ? AND ' . self::TRANSIT_PENDING . ' > 0.0005' . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ' ORDER BY d.id', [$batchId]);
     }
 
     public static function batchStatus(float $balance, float $received, float $transit = 0.0): string
@@ -219,8 +213,8 @@ final class Stock
     {
         $rows = DB::all(
             'SELECT bc.qty, COALESCE((SELECT SUM(s.qty) FROM stock_balances s
-                    WHERE s.tenant_id = bc.tenant_id AND s.variant_id = bc.component_variant_id' . Scope::sql('s.warehouse_id') . '), 0) AS have
-             FROM bundle_components bc WHERE bc.tenant_id = ? AND bc.bundle_item_id = ?', [self::tid(), $itemId]);
+                    WHERE s.variant_id = bc.component_variant_id' . Scope::sql('s.warehouse_id') . '), 0) AS have
+             FROM bundle_components bc WHERE bc.bundle_item_id = ?', [$itemId]);
         if (!$rows) return 0;
         return (int)min(array_map(fn($r) => floor((float)$r['have'] / max((float)$r['qty'], 0.001)), $rows));
     }

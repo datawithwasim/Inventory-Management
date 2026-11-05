@@ -16,7 +16,7 @@ final class RequisitionController extends PurchaseBase
     {
         return DB::one(
             'SELECT r.*, u.name AS user_name, p.po_no FROM purchase_requisitions r LEFT JOIN users u ON u.id = r.created_by
-             LEFT JOIN purchase_orders p ON p.id = r.po_id WHERE r.tenant_id = ? AND r.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+             LEFT JOIN purchase_orders p ON p.id = r.po_id WHERE r.id = ?', [(int)$id]) ?? $this->notFound();
     }
 
     private function items(int $id): array
@@ -24,17 +24,15 @@ final class RequisitionController extends PurchaseBase
         return DB::all(
             'SELECT l.*, v.sku, v.name AS vname, v.cost_price, i.name AS item_name, u.short_name AS unit, COALESCE(x.rate,0) AS tax_rate
              FROM purchase_requisition_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id
-             JOIN units u ON u.id = i.unit_id LEFT JOIN taxes x ON x.id = i.tax_id WHERE l.tenant_id = ? AND l.requisition_id = ? ORDER BY l.id', [$this->tid(), $id]);
+             JOIN units u ON u.id = i.unit_id LEFT JOIN taxes x ON x.id = i.tax_id WHERE l.requisition_id = ? ORDER BY l.id', [$id]);
     }
 
     public function index(): void
     {
-        $t = $this->tid();
-        [$page, $pages, $limit] = $this->pageOf('purchase_requisitions', 'tenant_id = ?', [$t]);
+        [$page, $pages, $limit] = $this->pageOf('purchase_requisitions', '1=1', []);
         $rows = DB::all(
             "SELECT r.*, u.name AS user_name, p.po_no, (SELECT COUNT(*) FROM purchase_requisition_items i WHERE i.requisition_id = r.id) AS line_count
-             FROM purchase_requisitions r LEFT JOIN users u ON u.id = r.created_by LEFT JOIN purchase_orders p ON p.id = r.po_id
-             WHERE r.tenant_id = ? ORDER BY r.id DESC $limit", [$t]);
+             FROM purchase_requisitions r LEFT JOIN users u ON u.id = r.created_by LEFT JOIN purchase_orders p ON p.id = r.po_id ORDER BY r.id DESC $limit", []);
         $this->view('app/purchase/req_index', ['title' => 'Purchase requisitions', 'rows' => $rows, 'page' => $page, 'pages' => $pages]);
     }
 
@@ -47,8 +45,8 @@ final class RequisitionController extends PurchaseBase
                     (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s JOIN item_variants v2 ON v2.id = s.variant_id WHERE v2.item_id = i.id) AS stock,
                     (SELECT v.id FROM item_variants v WHERE v.item_id = i.id AND v.is_active = 1 ORDER BY v.id LIMIT 1) AS variant_id
              FROM items i JOIN units u ON u.id = i.unit_id
-             WHERE i.tenant_id = ? AND i.is_bundle = 0 AND i.is_active = 1 AND i.reorder_level > 0
-             HAVING stock <= i.reorder_level AND variant_id IS NOT NULL ORDER BY i.name', [$this->tid()]) as $r) {
+             WHERE i.is_bundle = 0 AND i.is_active = 1 AND i.reorder_level > 0
+             HAVING stock <= i.reorder_level AND variant_id IS NOT NULL ORDER BY i.name', []) as $r) {
             $need = (float)$r['reorder_qty'] > 0 ? (float)$r['reorder_qty'] : max(1.0, (float)$r['reorder_level'] - (float)$r['stock']);
             $v = \App\Models\Stock::variant((int)$r['variant_id']);
             $out[] = ['variant_id' => $r['variant_id'], 'label' => \App\Models\Stock::label($v), 'unit' => $r['unit'], 'dec' => (int)$r['allow_decimal'],
@@ -85,9 +83,8 @@ final class RequisitionController extends PurchaseBase
             $lines[] = ['variant_id' => (int)$v['id'], 'qty' => $this->qtyFor($v, $l['qty'] ?? '', $prefix, $back), 'note' => $this->text($l['note'] ?? '', 150, "$prefix note", $back)];
         }
         $id = DB::transaction(function () use ($note, $lines, $cf) {
-            $t = $this->tid();
-            $id = DB::insert('purchase_requisitions', ['tenant_id' => $t, 'req_no' => Numbering::next($t, 'REQ'), 'note' => $note, 'created_by' => Auth::user()['id']]);
-            foreach ($lines as $l) DB::insert('purchase_requisition_items', ['tenant_id' => $t, 'requisition_id' => $id] + $l);
+            $id = DB::insert('purchase_requisitions', ['req_no' => Numbering::next('REQ'), 'note' => $note, 'created_by' => Auth::user()['id']]);
+            foreach ($lines as $l) DB::insert('purchase_requisition_items', ['requisition_id' => $id] + $l);
             \App\Models\CustomFields::save('requisition', $id, $cf);
             return $id;
         });
@@ -114,15 +111,14 @@ final class RequisitionController extends PurchaseBase
         $items = $this->items((int)$r['id']);
         [$cur, $ex] = \App\Models\Currencies::forSupplier($supplier);
         $poId = DB::transaction(function () use ($r, $supplier, $wh, $items, $cur, $ex) {
-            $t = $this->tid();
-            $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $supplier['id'], 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh['id'],
+            $poId = DB::insert('purchase_orders', ['po_no' => Numbering::next('PO'), 'supplier_id' => $supplier['id'], 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh['id'],
                 'order_date' => date('Y-m-d'), 'status' => 'draft', 'notes' => 'From requisition ' . $r['req_no'], 'created_by' => Auth::user()['id']]);
             foreach ($items as $l) {
-                DB::insert('purchase_order_items', ['tenant_id' => $t, 'po_id' => $poId, 'variant_id' => $l['variant_id'], 'qty_ordered' => $l['qty'],
+                DB::insert('purchase_order_items', ['po_id' => $poId, 'variant_id' => $l['variant_id'], 'qty_ordered' => $l['qty'],
                     'unit_price' => Purchase::priceFor((int)$supplier['id'], (int)$l['variant_id'], (float)$l['cost_price'], (float)$l['qty'], $cur, $ex), 'tax_rate' => $l['tax_rate']]);
             }
             Purchase::recalcPo($poId);
-            DB::run("UPDATE purchase_requisitions SET status = 'converted', po_id = ? WHERE tenant_id = ? AND id = ?", [$poId, $t, $r['id']]);
+            DB::run("UPDATE purchase_requisitions SET status = 'converted', po_id = ? WHERE id = ?", [$poId, $r['id']]);
             return $poId;
         });
         Audit::log('requisition_convert', 'requisition', (int)$r['id'], "PO #$poId");
@@ -134,7 +130,7 @@ final class RequisitionController extends PurchaseBase
     {
         $r = $this->load($id);
         if ($r['status'] === 'open') {
-            DB::run("UPDATE purchase_requisitions SET status = 'cancelled' WHERE tenant_id = ? AND id = ?", [$this->tid(), $r['id']]);
+            DB::run("UPDATE purchase_requisitions SET status = 'cancelled' WHERE id = ?", [$r['id']]);
             flash('success', 'Requisition cancelled.');
         }
         redirect("purchase/requisitions/{$r['id']}");

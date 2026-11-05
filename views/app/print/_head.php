@@ -2,7 +2,7 @@
 /** Company letterhead + document title. Needs: $tpl (template), $docNo, $docDate, optional $meta [label => value]. */
 use Core\Settings;
 $S = fn($k) => Settings::get('company.' . $k);
-$companyName = $S('legal_name') !== '' ? $S('legal_name') : Core\Auth::user()['tenant_name'];
+$companyName = $S('legal_name') !== '' ? $S('legal_name') : company_name();
 $logo = !empty($tpl['show_logo']) ? company_logo_url() : null;
 $accent = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tpl['accent'] ?? '')) ? $tpl['accent'] : '#1f2937';
 ?>

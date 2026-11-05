@@ -21,7 +21,7 @@ final class PurchaseOrderController extends PurchaseBase
             'SELECT p.*, s.name AS supplier, w.name AS warehouse, u1.name AS created_name, u2.name AS approved_name
              FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id JOIN warehouses w ON w.id = p.warehouse_id
              LEFT JOIN users u1 ON u1.id = p.created_by LEFT JOIN users u2 ON u2.id = p.approved_by
-             WHERE p.tenant_id = ? AND p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     private function items(int $poId): array
@@ -29,21 +29,20 @@ final class PurchaseOrderController extends PurchaseBase
         return DB::all(
             'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.hsn_code, i.track_batch, u.short_name AS unit' . Purchase::theirCols('SELECT supplier_id FROM purchase_orders WHERE id = l.po_id') . '
              FROM purchase_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE l.tenant_id = ? AND l.po_id = ? ORDER BY l.id', [$this->tid(), $poId]);
+             WHERE l.po_id = ? ORDER BY l.id', [$poId]);
     }
 
     /* ---------- list ---------- */
 
     public function index(): void
     {
-        $t = $this->tid();
         $status = (string)($_GET['status'] ?? '');
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'p.tenant_id = ?' . \Core\Scope::sql('p.warehouse_id');
-        $params = [$t];
+        $where = '1=1' . \Core\Scope::sql('p.warehouse_id');
+        $params = [];
         if (isset(Purchase::PO_STATUS[$status])) { $where .= ' AND p.status = ?'; $params[] = $status; }
-        if ($status === 'open') { $where = 'p.tenant_id = ?' . \Core\Scope::sql('p.warehouse_id') . ' AND p.status IN (\'pending_approval\',\'approved\',\'partial\')'; }
+        if ($status === 'open') { $where = '1=1' . \Core\Scope::sql('p.warehouse_id') . ' AND p.status IN (\'pending_approval\',\'approved\',\'partial\')'; }
         if ($supplier) { $where .= ' AND p.supplier_id = ?'; $params[] = $supplier; }
         if ($q !== '') { $where .= ' AND p.po_no LIKE ?'; $params[] = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; }
         [$page, $pages, $limit] = $this->pageOf('purchase_orders p', $where, $params);
@@ -127,8 +126,7 @@ final class PurchaseOrderController extends PurchaseBase
         [$cf, $cfErr] = CustomFields::validate('purchase_order', $this->input());
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         $id = DB::transaction(function () use ($head, $lines, $cf) {
-            $t = $this->tid();
-            $id = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'status' => 'draft',
+            $id = DB::insert('purchase_orders', ['po_no' => Numbering::next('PO'), 'status' => 'draft',
                 'created_by' => Auth::user()['id']] + $head);
             $this->saveLines($id, $lines);
             CustomFields::save('purchase_order', $id, $cf);
@@ -141,9 +139,9 @@ final class PurchaseOrderController extends PurchaseBase
 
     private function saveLines(int $poId, array $lines): void
     {
-        DB::run('DELETE FROM purchase_order_items WHERE tenant_id = ? AND po_id = ?', [$this->tid(), $poId]);
+        DB::run('DELETE FROM purchase_order_items WHERE po_id = ?', [$poId]);
         foreach ($lines as $l) {
-            DB::insert('purchase_order_items', ['tenant_id' => $this->tid(), 'po_id' => $poId, 'variant_id' => $l['variant_id'],
+            DB::insert('purchase_order_items', ['po_id' => $poId, 'variant_id' => $l['variant_id'],
                 'qty_ordered' => $l['qty'], 'unit_price' => $l['price'], 'rate_kind' => $l['rate_kind'] ?? null, 'tax_rate' => $l['tax']]);
         }
         Purchase::recalcPo($poId);
@@ -175,7 +173,7 @@ final class PurchaseOrderController extends PurchaseBase
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         DB::transaction(function () use ($po, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
-            DB::run("UPDATE purchase_orders SET $set WHERE tenant_id = ? AND id = ?", [...array_values($head), $this->tid(), $po['id']]);
+            DB::run("UPDATE purchase_orders SET $set WHERE id = ?", [...array_values($head), $po['id']]);
             $this->saveLines((int)$po['id'], $lines);
             CustomFields::save('purchase_order', (int)$po['id'], $cf);
         });
@@ -189,20 +187,19 @@ final class PurchaseOrderController extends PurchaseBase
     public function show(string $id): void
     {
         $po = $this->load($id);
-        $t = $this->tid();
         $items = $this->items((int)$po['id']);
         $remaining = array_sum(array_map(fn($l) => max(0, (float)$l['qty_ordered'] - (float)$l['qty_received']), $items));
         $this->view('app/purchase/po_show', [
             'title' => $po['po_no'], 'po' => $po, 'items' => $items, 'remaining' => $remaining, 'approval' => Settings::bool('po_approval'),
             'cfFields' => CustomFields::fields('purchase_order'), 'cfValues' => CustomFields::values('purchase_order', (int)$po['id']),
-            'grns' => DB::all('SELECT g.id, g.grn_no, g.received_date FROM grn_pos gp JOIN grns g ON g.id = gp.grn_id WHERE gp.tenant_id = ? AND gp.po_id = ? ORDER BY g.id', [$t, $po['id']]),
+            'grns' => DB::all('SELECT g.id, g.grn_no, g.received_date FROM grn_pos gp JOIN grns g ON g.id = gp.grn_id WHERE gp.po_id = ? ORDER BY g.id', [$po['id']]),
         ]);
     }
 
     public function print(string $id): void
     {
         $po = $this->load($id);
-        $s = DB::one('SELECT address, phone, tax_no FROM suppliers WHERE tenant_id = ? AND id = ?', [$this->tid(), $po['supplier_id']]);
+        $s = DB::one('SELECT address, phone, tax_no FROM suppliers WHERE id = ?', [$po['supplier_id']]);
         $po += ['sup_address' => $s['address'] ?? null, 'sup_phone' => $s['phone'] ?? null, 'sup_tax' => $s['tax_no'] ?? null];
         $items = array_map(function ($l) {
             [$net, , $tot] = \App\Models\Purchase::line((float)$l['qty_ordered'], (float)$l['unit_price'], (float)$l['tax_rate']);
@@ -218,7 +215,7 @@ final class PurchaseOrderController extends PurchaseBase
             flash('danger', 'This purchase order cannot be changed that way right now.');
             redirect("purchase/orders/{$po['id']}");
         }
-        DB::run('UPDATE purchase_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$to, $this->tid(), $po['id']]);
+        DB::run('UPDATE purchase_orders SET status = ? WHERE id = ?', [$to, $po['id']]);
         if ($extra) $extra($po);
         Audit::log('po_' . $to, 'purchase_order', (int)$po['id'], $po['po_no']);
         if ($msg) flash('success', $msg);
@@ -228,7 +225,7 @@ final class PurchaseOrderController extends PurchaseBase
     public function submit(string $id): void
     {
         $po = $this->load($id);
-        if (!DB::val('SELECT 1 FROM purchase_order_items WHERE tenant_id = ? AND po_id = ? LIMIT 1', [$this->tid(), $po['id']])) {
+        if (!DB::val('SELECT 1 FROM purchase_order_items WHERE po_id = ? LIMIT 1', [$po['id']])) {
             flash('danger', 'Add at least one item first.');
             redirect("purchase/orders/{$po['id']}/edit");
         }
@@ -236,14 +233,14 @@ final class PurchaseOrderController extends PurchaseBase
             $this->transition($id, ['draft'], 'pending_approval', 'Submitted for approval.');
         }
         $this->transition($id, ['draft'], 'approved', 'Purchase order confirmed. You can now receive goods against it.', function ($po) {
-            DB::run('UPDATE purchase_orders SET approved_by = ?, approved_at = NOW() WHERE tenant_id = ? AND id = ?', [Auth::user()['id'], $this->tid(), $po['id']]);
+            DB::run('UPDATE purchase_orders SET approved_by = ?, approved_at = NOW() WHERE id = ?', [Auth::user()['id'], $po['id']]);
         });
     }
 
     public function approve(string $id): void
     {
         $this->transition($id, ['pending_approval'], 'approved', 'Purchase order approved.', function ($po) {
-            DB::run('UPDATE purchase_orders SET approved_by = ?, approved_at = NOW() WHERE tenant_id = ? AND id = ?', [Auth::user()['id'], $this->tid(), $po['id']]);
+            DB::run('UPDATE purchase_orders SET approved_by = ?, approved_at = NOW() WHERE id = ?', [Auth::user()['id'], $po['id']]);
         });
     }
 
@@ -255,7 +252,7 @@ final class PurchaseOrderController extends PurchaseBase
     public function cancel(string $id): void
     {
         $po = $this->load($id);
-        if (DB::val('SELECT 1 FROM grn_pos WHERE tenant_id = ? AND po_id = ? LIMIT 1', [$this->tid(), $po['id']])) {
+        if (DB::val('SELECT 1 FROM grn_pos WHERE po_id = ? LIMIT 1', [$po['id']])) {
             flash('danger', 'Goods were already received against this order. Close it instead.');
             redirect("purchase/orders/{$po['id']}");
         }
@@ -274,7 +271,7 @@ final class PurchaseOrderController extends PurchaseBase
             flash('danger', 'Only drafts can be deleted. Cancel the order instead.');
             redirect("purchase/orders/{$po['id']}");
         }
-        DB::run('DELETE FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$this->tid(), $po['id']]);
+        DB::run('DELETE FROM purchase_orders WHERE id = ?', [$po['id']]);
         Audit::log('po_delete', 'purchase_order', (int)$po['id'], $po['po_no']);
         flash('success', 'Draft deleted.');
         redirect('purchase/orders');

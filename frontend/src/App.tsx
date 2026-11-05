@@ -47,11 +47,10 @@ import { DeliveryList, DeliveryForm, DeliveryDetail } from './pages/sales/Delive
 import { InvoiceList, InvoiceDetail, InvoiceForm } from './pages/sales/InvoicePages';
 import { SalesReturnList, SalesReturnCreate, SalesReturnDetail } from './pages/sales/ReturnPages';
 import { ReportIndex, ReportShow } from './pages/reports/Reports';
-import { SettingsLayout, SettingsHome, CompanyTab, PreferencesTab, NumberingTab, AppearanceTab, ModulesTab, LabelsTab, WorkflowTab, TemplatesTab } from './pages/settings/Settings';
+import { SettingsLayout, SettingsHome, CompanyTab, PreferencesTab, NumberingTab, AppearanceTab, ModulesTab, LabelsTab, WorkflowTab, TemplatesTab, SystemTab } from './pages/settings/Settings';
 import { UserList, UserForm, RoleList, RoleForm } from './pages/settings/Team';
 import { MasterList, MasterForm } from './pages/settings/Masters';
 import Profile from './pages/settings/Profile';
-import { AdminLogin, AdminLayout, AdminDashboard, TenantList, TenantForm, PlanList, PlanForm, AdminSystem, AdminAudit } from './pages/admin/Admin';
 import { TransferList, TransferDetail } from './pages/stock/TransferPages';
 import LabelsPage, { LabelTemplates } from './pages/labels/LabelsPage';
 import LabelDesigner from './pages/labels/Designer';
@@ -71,20 +70,6 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
-      <Route path="/admin/forgot-password" element={<ForgotPassword admin />} />
-      <Route path="/admin/reset-password/:token" element={<ResetPassword admin />} />
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<AdminDashboard />} />
-        <Route path="tenants" element={<TenantList />} />
-        <Route path="tenants/create" element={<TenantForm />} />
-        <Route path="tenants/:id/edit" element={<TenantForm />} />
-        <Route path="plans" element={<PlanList />} />
-        <Route path="plans/create" element={<PlanForm />} />
-        <Route path="plans/:id/edit" element={<PlanForm />} />
-        <Route path="system" element={<AdminSystem />} />
-        <Route path="audit" element={<AdminAudit />} />
-      </Route>
       <Route element={<Protected bare />}>
         <Route path="/settings/formdesign" element={<FormDesigner />} />
         <Route path="/settings/templates/design" element={<PrintDesigner />} />
@@ -207,6 +192,7 @@ export default function App() {
           <Route path="labels" element={<LabelsTab />} />
           <Route path="templates" element={<TemplatesTab />} />
           <Route path="workflow" element={<WorkflowTab />} />
+          <Route path="system" element={<SystemTab />} />
           <Route path="*" element={<NotBuilt />} />
         </Route>
         <Route path="/users" element={<UserList />} />

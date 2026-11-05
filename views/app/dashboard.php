@@ -49,6 +49,3 @@ document.getElementById('widgetList').addEventListener('click', function (e) {
   if (b.classList.contains('w-down') && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
 });
 </script>
-<div class="text-muted small mt-4">
-  Plan <strong><?= e($u['plan_name']) ?></strong> · Users <?= (int)$userCount ?>/<?= (int)$u['max_users'] === 0 ? 'Unlimited' : (int)$u['max_users'] ?> · Roles <?= (int)$roleCount ?>
-</div>

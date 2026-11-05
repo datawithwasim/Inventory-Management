@@ -38,7 +38,7 @@ final class RoleController extends Controller
     {
         $d = $this->validate(['name' => 'required|max:80'], 'roles/create');
         $name = trim($d['name']);
-        if (DB::val('SELECT 1 FROM roles WHERE tenant_id = ? AND name = ?', [\Core\Auth::tenantId(), $name])) {
+        if (DB::val('SELECT 1 FROM roles WHERE name = ?', [$name])) {
             flash('danger', 'A role with that name already exists.');
             with_old($d);
             redirect('roles/create');
@@ -68,7 +68,7 @@ final class RoleController extends Controller
         $name = trim($d['name']);
         // System roles keep their names so the defaults stay recognisable.
         if (!$role['is_system'] && $name !== $role['name']) {
-            if (DB::val('SELECT 1 FROM roles WHERE tenant_id = ? AND name = ? AND id <> ?', [\Core\Auth::tenantId(), $name, $role['id']])) {
+            if (DB::val('SELECT 1 FROM roles WHERE name = ? AND id <> ?', [$name, $role['id']])) {
                 flash('danger', 'A role with that name already exists.');
                 redirect("roles/$id/edit");
             }

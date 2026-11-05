@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Core;
 
-/** Per-company running document numbers. Prefix, digits and yearly restart are set in Settings → Numbering. */
+/** Running document numbers. Prefix, digits and yearly restart are set in Settings → Numbering. */
 final class Numbering
 {
     /** Internal code => label shown in Settings. */
@@ -15,9 +15,9 @@ final class Numbering
     ];
 
     /** @return array{prefix:string, pad:int, year:bool} */
-    public static function config(int $tenantId, string $code): array
+    public static function config(string $code): array
     {
-        $saved = Settings::json('numbering.' . $code, [], $tenantId);
+        $saved = Settings::json('numbering.' . $code, []);
         return [
             'prefix' => (string)($saved['prefix'] ?? $code),
             'pad' => max(3, min(8, (int)($saved['pad'] ?? 4))),
@@ -31,13 +31,13 @@ final class Numbering
     }
 
     /** Call inside a transaction. */
-    public static function next(int $tenantId, string $code): string
+    public static function next(string $code): string
     {
-        $cfg = self::config($tenantId, $code);
+        $cfg = self::config($code);
         $key = $code . ($cfg['year'] ? date('y') : '');           // a yearly series restarts with the year
-        DB::run('INSERT IGNORE INTO counters (tenant_id, prefix, next_no) VALUES (?, ?, 1)', [$tenantId, $key]);
-        $n = (int)DB::val('SELECT next_no FROM counters WHERE tenant_id = ? AND prefix = ? FOR UPDATE', [$tenantId, $key]);
-        DB::run('UPDATE counters SET next_no = next_no + 1 WHERE tenant_id = ? AND prefix = ?', [$tenantId, $key]);
+        DB::run('INSERT IGNORE INTO counters (prefix, next_no) VALUES (?, 1)', [$key]);
+        $n = (int)DB::val('SELECT next_no FROM counters WHERE prefix = ? FOR UPDATE', [$key]);
+        DB::run('UPDATE counters SET next_no = next_no + 1 WHERE prefix = ?', [$key]);
         return self::format($cfg, $n);
     }
 }

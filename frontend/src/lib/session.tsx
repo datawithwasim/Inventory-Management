@@ -6,10 +6,11 @@ export type MenuItem = { label: string; icon: string; path: string; href: string
 export type Session = {
   authenticated: boolean; csrf: string; base: string;
   user?: { name: string; email: string; role: string; owner: boolean; warehouse: { id: number; name: string } | null };
-  tenant?: { name: string; plan: string; status: string; expires: string | null; logo: string | null };
+  company?: { name: string; logo: string | null };
+  updates?: number;
   perms?: string[]; menu?: { dashboard: MenuItem; groups: Record<string, { label: string; icon: string; items: MenuItem[] }>; account: MenuItem[] };
   fmt?: { decimals: number; grouping: string; symbol: string; position: string; date: string };
-  stockTypes?: Record<string, string>; poStatus?: Record<string, [string, string]>; soStatus?: Record<string, [string, string]>; payStatus?: Record<string, [string, string]>; payMethods?: Record<string, string>; quick?: MenuItem[]; terms?: Record<string, [string, string]>; supportMode?: boolean; themeCss?: string;
+  stockTypes?: Record<string, string>; poStatus?: Record<string, [string, string]>; soStatus?: Record<string, [string, string]>; payStatus?: Record<string, [string, string]>; payMethods?: Record<string, string>; quick?: MenuItem[]; terms?: Record<string, [string, string]>; themeCss?: string;
   theme?: { brand: string; sidebar: string; density: string; mode: string };
 };
 

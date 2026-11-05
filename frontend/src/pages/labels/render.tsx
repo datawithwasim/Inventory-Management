@@ -92,7 +92,7 @@ export function ElementBody({ el, values, scale }: { el: El; values: Values; sca
   if (el.type === 'box') {
     return <div style={{ width: '100%', height: '100%', boxSizing: 'border-box', border: `${(el.border ?? 0) * scale}px solid ${el.color ?? '#000'}`, background: el.fill || undefined, borderRadius: (el.radius ?? 0) * scale }} />;
   }
-  const logo = session?.tenant?.logo;
+  const logo = session?.company?.logo;
   return logo ? <img src={logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ width: '100%', height: '100%', border: '1px dashed #aaa', color: '#888', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Logo</div>;
 }
 

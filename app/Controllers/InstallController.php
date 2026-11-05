@@ -78,7 +78,7 @@ final class InstallController extends Controller
 
         try {
             Migrator::run();
-            Seeder::run(trim($d['admin_name']), strtolower(trim($d['admin_email'])), $d['admin_password']);
+            Seeder::run(trim($d['app_name']), trim($d['admin_name']), strtolower(trim($d['admin_email'])), $d['admin_password']);
         } catch (\Throwable $e) {
             flash('danger', 'Setting up the database failed: ' . $e->getMessage());
             with_old($d);
@@ -105,7 +105,7 @@ final class InstallController extends Controller
         @chmod(ROOT . '/.env', 0640);
         file_put_contents(ROOT . '/storage/installed.lock', date('c'));
 
-        flash('success', 'Installation complete. Sign in as Super Admin to create your first company.');
-        redirect('admin/login');
+        flash('success', 'Installation complete. Sign in with the email and password you just chose.');
+        redirect('login');
     }
 }

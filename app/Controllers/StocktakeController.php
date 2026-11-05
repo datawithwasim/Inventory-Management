@@ -33,18 +33,17 @@ final class StocktakeController extends StockDocController
         if ($note !== null && mb_strlen($note) > 255) $this->bounce('Note is too long.', $back);
 
         $docId = DB::transaction(function () use ($wh, $note, $cf) {
-            $t = $this->tid();
             $docId = DB::insert('stock_docs', [
-                'tenant_id' => $t, 'type' => 'stocktake', 'doc_no' => Numbering::next($t, 'STK'),
+                'type' => 'stocktake', 'doc_no' => Numbering::next('STK'),
                 'warehouse_id' => $wh['id'], 'note' => $note, 'status' => 'draft', 'created_by' => Auth::user()['id'],
             ]);
             \App\Models\CustomFields::save('stocktake', $docId, $cf);
             $snap = DB::all(
                 'SELECT s.variant_id, s.batch_id, s.location_id, s.qty FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id
                  JOIN items i ON i.id = v.item_id
-                 WHERE s.tenant_id = ? AND s.warehouse_id = ? AND s.qty > 0 ORDER BY i.name, v.name, s.batch_id, s.location_id', [$t, $wh['id']]);
+                 WHERE s.warehouse_id = ? AND s.qty > 0 ORDER BY i.name, v.name, s.batch_id, s.location_id', [$wh['id']]);
             foreach ($snap as $s) {
-                DB::insert('stock_doc_lines', ['tenant_id' => $t, 'doc_id' => $docId, 'variant_id' => $s['variant_id'],
+                DB::insert('stock_doc_lines', ['doc_id' => $docId, 'variant_id' => $s['variant_id'],
                     'batch_id' => $s['batch_id'], 'location_id' => $s['location_id'], 'qty' => $s['qty'], 'expected_qty' => $s['qty']]);
             }
             return $docId;
@@ -70,14 +69,13 @@ final class StocktakeController extends StockDocController
 
         try {
             $changes = DB::transaction(function () use ($doc, $counts, $post) {
-                $t = $this->tid();
                 $changes = 0;
                 foreach ($this->docLines((int)$doc['id']) as $l) {
                     $raw = $counts[$l['id']] ?? null;
                     if ($raw === null || trim((string)$raw) === '') continue;
                     if (!is_numeric($raw) || (float)$raw < 0) throw new StockException($l['item_name'] . ': counted quantity must be zero or more.');
                     $counted = Stock::round((float)$raw);
-                    DB::run('UPDATE stock_doc_lines SET qty = ? WHERE tenant_id = ? AND id = ?', [$counted, $t, $l['id']]);
+                    DB::run('UPDATE stock_doc_lines SET qty = ? WHERE id = ?', [$counted, $l['id']]);
                     if (!$post) continue;
                     // The count is the truth: correct whatever the system holds right now.
                     $now = Stock::balance((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id'], (int)$l['location_id']);
@@ -88,7 +86,7 @@ final class StocktakeController extends StockDocController
                         $changes++;
                     }
                 }
-                if ($post) DB::run("UPDATE stock_docs SET status = 'posted', posted_at = NOW() WHERE tenant_id = ? AND id = ?", [$t, $doc['id']]);
+                if ($post) DB::run("UPDATE stock_docs SET status = 'posted', posted_at = NOW() WHERE id = ?", [$doc['id']]);
                 return $changes;
             });
         } catch (StockException $e) {
@@ -107,7 +105,7 @@ final class StocktakeController extends StockDocController
     {
         $doc = $this->loadDoc($id, 'stocktake');
         if ($doc['status'] !== 'draft') $this->bounce('Posted stock-takes cannot be deleted.', "stock/takes/{$doc['id']}");
-        DB::run('DELETE FROM stock_docs WHERE tenant_id = ? AND id = ?', [$this->tid(), $doc['id']]);
+        DB::run('DELETE FROM stock_docs WHERE id = ?', [$doc['id']]);
         flash('success', 'Draft stock-take deleted.');
         redirect('stock/takes');
     }

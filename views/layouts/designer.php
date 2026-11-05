@@ -3,7 +3,7 @@
 <head>
   <?php require __DIR__ . '/head.php'; ?>
   <meta name="csrf" content="<?= e(csrf_token()) ?>">
-  <title><?= e(($title ?? 'Form designer') . ' · ' . Core\Auth::user()['tenant_name']) ?></title>
+  <title><?= e(($title ?? 'Form designer') . ' · ' . company_name()) ?></title>
 </head>
 <body class="app dz-page">
 <?= $content ?>

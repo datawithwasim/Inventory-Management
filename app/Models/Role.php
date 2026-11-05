@@ -17,7 +17,7 @@ final class Role extends Model
 
     public static function savePermissions(int $roleId, array $perms): void
     {
-        $valid = array_intersect($perms, Tenants::allPermissions());
+        $valid = array_intersect($perms, \Core\Seeder::allPermissions());
         DB::transaction(function () use ($roleId, $valid) {
             DB::run('DELETE FROM role_permissions WHERE role_id = ?', [$roleId]);
             foreach (array_unique($valid) as $p) DB::insert('role_permissions', ['role_id' => $roleId, 'permission' => $p]);
@@ -28,6 +28,6 @@ final class Role extends Model
     {
         return DB::all(
             'SELECT r.*, (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS user_count
-             FROM roles r WHERE r.tenant_id = ? ORDER BY r.is_owner DESC, r.name', [static::tenantId()]);
+             FROM roles r ORDER BY r.is_owner DESC, r.name', []);
     }
 }

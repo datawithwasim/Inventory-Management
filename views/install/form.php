@@ -17,10 +17,10 @@
     <div class="col-md-6 mb-3"><label class="form-label">Database password</label><input type="password" name="db_pass" class="form-control"></div>
   </div>
   <hr>
-  <h3 class="h6">Your Super Admin account</h3>
-  <div class="mb-3"><label class="form-label">App name</label><input name="app_name" class="form-control" value="<?= e(old('app_name', config('name'))) ?>" required></div>
+  <h3 class="h6">Your company and your owner account</h3>
+  <div class="mb-3"><label class="form-label">Company name</label><input name="app_name" class="form-control" value="<?= e(old('app_name', config('name'))) ?>" required></div>
   <div class="mb-3"><label class="form-label">Your name</label><input name="admin_name" class="form-control" value="<?= e(old('admin_name')) ?>" required></div>
-  <div class="mb-3"><label class="form-label">Email</label><input type="email" name="admin_email" class="form-control" value="<?= e(old('admin_email')) ?>" required></div>
+  <div class="mb-3"><label class="form-label">Email (you sign in with it)</label><input type="email" name="admin_email" class="form-control" value="<?= e(old('admin_email')) ?>" required></div>
   <div class="mb-3"><label class="form-label">Password (min 8 characters)</label><input type="password" name="admin_password" class="form-control" minlength="8" required></div>
   <button class="btn btn-primary w-100">Install</button>
 </form>

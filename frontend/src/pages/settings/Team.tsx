@@ -16,7 +16,7 @@ export function UserList() {
   const act = async (path: string, ask?: string) => { if (ask && !confirm(ask)) return; const r = await post(path); setMsgs(r.messages ?? []); qc.invalidateQueries({ queryKey: ['users'] }); };
   return (
     <>
-      <PageHead title="Users">{can('users.create') && (d.limitReached ? <span className="text-warning">User limit reached for your plan</span> : <Link className="btn btn-primary" to="/users/create"><i className="bi bi-plus-lg" /> Add user</Link>)}</PageHead>
+      <PageHead title="Users">{can('users.create') && <Link className="btn btn-primary" to="/users/create"><i className="bi bi-plus-lg" /> Add user</Link>}</PageHead>
       <Messages items={msgs} onClose={() => setMsgs([])} />
       <div className="text-muted mb-2">{d.users.length} user(s)</div>
       <div className="card"><div className="table-responsive"><table className="table table-hover mb-0 align-middle">

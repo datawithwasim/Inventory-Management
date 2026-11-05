@@ -12,63 +12,51 @@ require __DIR__ . '/lib.php';
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '',
-        'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Buyco');
-[$b, $tB] = $mk('Other');
+[$a] = fresh_company($base, "Buyco $sfx", "buyco-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
 
 $val = fn(string $sql, array $p = []) => DB::val($sql, $p);
-$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE tenant_id = ? AND name = ?', [$GLOBALS['tA'], $n]);
-$bal = fn(int $v, int $w, int $batch, int $loc) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?', [$GLOBALS['tA'], $v, $w, $batch, $loc]);
-$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ?', [$GLOBALS['tA']]);
-$count = fn(string $table) => (int)DB::val("SELECT COUNT(*) FROM `$table` WHERE tenant_id = ?", [$GLOBALS['tA']]);
+$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE name = ?', [$n]);
+$bal = fn(int $v, int $w, int $batch, int $loc) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?', [$v, $w, $batch, $loc]);
+$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger');
+$count = fn(string $table) => (int)DB::val("SELECT COUNT(*) FROM `$table`");
 $near = fn($x, $y, $eps = 0.011) => abs((float)$x - (float)$y) < $eps;
-$owed = fn(int $supplier) => (float)DB::val('SELECT COALESCE(SUM(total - returned_amount - paid_amount),0) FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ?', [$GLOBALS['tA'], $supplier]);
+$owed = fn(int $supplier) => (float)DB::val('SELECT COALESCE(SUM(total - returned_amount - paid_amount),0) FROM purchase_bills WHERE supplier_id = ?', [$supplier]);
 
-$main = (int)$val("SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1", [$tA]);
+$main = (int)$val("SELECT id FROM warehouses WHERE is_default = 1");
 $a->post('/warehouses', ['name' => 'Showroom', 'code' => 'SHW'], '/warehouses/create');
-$show = (int)$val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Showroom'", [$tA]);
-foreach ([[$main, 'A-01'], [$main, 'B-01'], [$show, 'S-01']] as [$w, $code]) DB::insert('locations', ['tenant_id' => $tA, 'warehouse_id' => $w, 'code' => $code]);
-$rackId = fn(int $w, string $c) => (int)DB::val('SELECT id FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code = ?', [$GLOBALS['tA'], $w, $c]);
+$show = (int)$val("SELECT id FROM warehouses WHERE name = 'Showroom'");
+foreach ([[$main, 'A-01'], [$main, 'B-01'], [$show, 'S-01']] as [$w, $code]) DB::insert('locations', ['warehouse_id' => $w, 'code' => $code]);
+$rackId = fn(int $w, string $c) => (int)DB::val('SELECT id FROM locations WHERE warehouse_id = ? AND code = ?', [$w, $c]);
 [$A1, $B1, $S1] = [$rackId($main, 'A-01'), $rackId($main, 'B-01'), $rackId($show, 'S-01')];
 
 $a->post('/masters/taxes', ['name' => 'GST 12', 'rate' => '12'], '/masters/taxes/create');
-$tax = (int)$val("SELECT id FROM taxes WHERE tenant_id = ? AND name = 'GST 12'", [$tA]);
+$tax = (int)$val("SELECT id FROM taxes WHERE name = 'GST 12'");
 $a->post('/items', ['name' => 'Velvet', 'unit_id' => $unit('Meter'), 'tax_id' => $tax, 'track_batch' => 1, 'variants' => [['sku' => 'VEL', 'cost_price' => 400]]], '/items/create');
 $a->post('/items', ['name' => 'Side Table', 'unit_id' => $unit('Piece'), 'tax_id' => $tax, 'reorder_level' => 5, 'reorder_qty' => 12, 'variants' => [['sku' => 'TBL', 'cost_price' => 2500]]], '/items/create');
-$vel = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'VEL'", [$tA]);
-$tbl = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'TBL'", [$tA]);
+$vel = (int)$val("SELECT id FROM item_variants WHERE sku = 'VEL'");
+$tbl = (int)$val("SELECT id FROM item_variants WHERE sku = 'TBL'");
 
 echo "Suppliers\n";
 $a->post('/suppliers', ['name' => 'Shree Textiles', 'contact_person' => 'Mr Shah', 'phone' => '99999', 'email' => 'shree@example.com', 'payment_terms_days' => 30], '/suppliers/create');
-$sup = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Shree Textiles'", [$tA]);
+$sup = (int)$val("SELECT id FROM suppliers WHERE name = 'Shree Textiles'");
 check('supplier created with payment terms', $sup > 0 && (int)$val('SELECT payment_terms_days FROM suppliers WHERE id = ?', [$sup]) === 30);
 $a->post('/suppliers', ['name' => 'Shree Textiles'], '/suppliers/create');
-check('duplicate supplier name refused', (int)$val("SELECT COUNT(*) FROM suppliers WHERE tenant_id = ? AND name = 'Shree Textiles'", [$tA]) === 1);
+check('duplicate supplier name refused', (int)$val("SELECT COUNT(*) FROM suppliers WHERE name = 'Shree Textiles'") === 1);
 $a->post('/suppliers', ['name' => 'Bad Email', 'email' => 'nope'], '/suppliers/create');
-check('invalid email refused', !$val("SELECT 1 FROM suppliers WHERE tenant_id = ? AND name = 'Bad Email'", [$tA]));
+check('invalid email refused', !$val("SELECT 1 FROM suppliers WHERE name = 'Bad Email'"));
 $a->post('/suppliers', ['name' => 'Wood Works'], '/suppliers/create');
-$sup2 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Wood Works'", [$tA]);
+$sup2 = (int)$val("SELECT id FROM suppliers WHERE name = 'Wood Works'");
 check('supplier pages load', $a->get('/suppliers')['status'] === 200 && $a->get("/suppliers/$sup")['status'] === 200 && $a->get("/suppliers/$sup/edit")['status'] === 200 && str_contains($a->get('/suppliers?q=shree')['body'], 'Shree Textiles'));
 
 echo "Requisition\n";
 $page = $a->get('/purchase/requisitions/create?low=1')['body'];
 check('low-stock requisition is pre-filled with the table (reorder qty 12)', str_contains($page, 'Side Table') && str_contains($page, '"qty":12'));
 $a->post('/purchase/requisitions', ['note' => 'Festival stock', 'lines' => [['variant_id' => $tbl, 'qty' => 12, 'note' => 'low'], ['variant_id' => $vel, 'qty' => 80]]], '/purchase/requisitions/create');
-$req = (int)$val('SELECT id FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$req = (int)$val('SELECT id FROM purchase_requisitions');
 check('requisition saved with 2 lines', $req > 0 && (int)$val('SELECT COUNT(*) FROM purchase_requisition_items WHERE requisition_id = ?', [$req]) === 2);
 $a->post('/purchase/requisitions', ['lines' => [['variant_id' => $tbl, 'qty' => 1.5]]], '/purchase/requisitions/create');
-check('decimal quantity for whole-number item refused', (int)$val('SELECT COUNT(*) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]) === 1);
+check('decimal quantity for whole-number item refused', (int)$val('SELECT COUNT(*) FROM purchase_requisitions') === 1);
 $a->post("/purchase/requisitions/$req/convert", ['supplier_id' => $sup, 'warehouse_id' => $main], "/purchase/requisitions/$req");
 $poFromReq = (int)$val("SELECT po_id FROM purchase_requisitions WHERE id = ?", [$req]);
 check('converted into a draft PO', $poFromReq > 0 && $val('SELECT status FROM purchase_orders WHERE id = ?', [$poFromReq]) === 'draft' && $val('SELECT status FROM purchase_requisitions WHERE id = ?', [$req]) === 'converted');
@@ -81,7 +69,7 @@ echo "Purchase orders\n";
 $po = fn(array $lines, array $over = []) => $a->post('/purchase/orders', $over + ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => $lines], '/purchase/orders/create');
 $n0 = $count('purchase_orders');
 $po([['variant_id' => $vel, 'qty' => 100, 'unit_price' => 400, 'tax_rate' => 12], ['variant_id' => $tbl, 'qty' => 10, 'unit_price' => 2500, 'tax_rate' => 12]]);
-$po1 = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$po1 = (int)$val('SELECT MAX(id) FROM purchase_orders');
 check('PO saved as draft with its number', $count('purchase_orders') === $n0 + 1 && $val('SELECT status FROM purchase_orders WHERE id = ?', [$po1]) === 'draft' && str_starts_with((string)$val('SELECT po_no FROM purchase_orders WHERE id = ?', [$po1]), 'PO-'));
 check('PO totals: 65000 + 7800 tax = 72800', $near($val('SELECT subtotal FROM purchase_orders WHERE id = ?', [$po1]), 65000) && $near($val('SELECT tax_total FROM purchase_orders WHERE id = ?', [$po1]), 7800) && $near($val('SELECT total FROM purchase_orders WHERE id = ?', [$po1]), 72800));
 $n = $count('purchase_orders');
@@ -114,12 +102,12 @@ $a->post("/purchase/orders/$po1", ['supplier_id' => $sup, 'warehouse_id' => $mai
 check('an approved PO can no longer be edited', (int)$val('SELECT COUNT(*) FROM purchase_order_items WHERE po_id = ?', [$po1]) === 2);
 
 $a->post('/purchase/orders/approval-setting', ['po_approval' => 1], '/purchase/orders');
-check('approval can be switched on', $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'po_approval'", [$tA]) === '1');
+check('approval can be switched on', $val("SELECT svalue FROM settings WHERE skey = 'po_approval'") === '1');
 $po([['variant_id' => $tbl, 'qty' => 4, 'unit_price' => 2500, 'tax_rate' => 12]]);
-$poA = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$poA = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $a->post("/purchase/orders/$poA/submit", [], "/purchase/orders/$poA");
 check('with approval on, submit waits for approval', $val('SELECT status FROM purchase_orders WHERE id = ?', [$poA]) === 'pending_approval');
-$staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
+$staffRole = (int)DB::val("SELECT id FROM roles WHERE name = 'Staff'");
 $a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
@@ -133,9 +121,9 @@ check('approver approves', $val('SELECT status FROM purchase_orders WHERE id = ?
 $a->post("/purchase/orders/$poA/cancel", [], "/purchase/orders/$poA");
 check('an approved PO with no receipts can be cancelled', $val('SELECT status FROM purchase_orders WHERE id = ?', [$poA]) === 'cancelled');
 $a->post('/purchase/orders/approval-setting', [], '/purchase/orders');
-check('approval can be switched off', $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'po_approval'", [$tA]) === '0');
+check('approval can be switched off', $val("SELECT svalue FROM settings WHERE skey = 'po_approval'") === '0');
 $po([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]);
-$poD = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$poD = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $a->post("/purchase/orders/$poD/delete", [], '/purchase/orders');
 check('a draft PO can be deleted', !$val('SELECT 1 FROM purchase_orders WHERE id = ?', [$poD]));
 
@@ -163,9 +151,9 @@ $grn($po1, [
     ['po_item_id' => $piVel, 'qty' => 52, 'lot_no' => 'L2', 'location_id' => $A1],
     ['po_item_id' => $piTbl, 'qty' => 10, 'location_id' => $A1],
 ], ['supplier_ref' => 'CH-77', 'extra_cost' => 650, 'extra_cost_note' => 'Freight']);
-$g1 = (int)$val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
+$g1 = (int)$val('SELECT MAX(id) FROM grns');
 check('receipt created and numbered', $g1 > 0 && str_starts_with((string)$val('SELECT grn_no FROM grns WHERE id = ?', [$g1]), 'GRN-'));
-$rolls = DB::all('SELECT * FROM batches WHERE tenant_id = ? AND variant_id = ? ORDER BY id', [$tA, $vel]);
+$rolls = DB::all('SELECT * FROM batches WHERE variant_id = ? ORDER BY id', [$vel]);
 check('each roll became its own batch (50 m and 52 m)', count($rolls) === 2 && $near($rolls[0]['received_qty'], 50) && $near($rolls[1]['received_qty'], 52));
 check('supplier lots are kept on the batches', $rolls[0]['supplier_lot'] === 'L1' && $rolls[1]['supplier_lot'] === 'L2');
 check('rolls are on the racks chosen (B-01 / A-01)', $bal($vel, $main, (int)$rolls[0]['id'], $B1) === 50.0 && $bal($vel, $main, (int)$rolls[1]['id'], $A1) === 52.0);
@@ -175,7 +163,7 @@ $gi = DB::all('SELECT * FROM grn_items WHERE grn_id = ? ORDER BY id', [$g1]);
 $spread = 0.0;
 foreach ($gi as $row) $spread += ((float)$row['landed_unit_cost'] - (float)$row['unit_price']) * (float)$row['qty'];
 check('freight 650 is spread into stock cost (by value)', $near($spread, 650, 0.05) && (float)$gi[0]['landed_unit_cost'] > 400 && $near($gi[2]['landed_unit_cost'] - 2500, 650 * 25000 / 65800 / 10, 0.01));
-check('ledger rows are "purchase" with the landed cost and rack', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND type = 'purchase' AND ref_type = 'grn' AND ref_id = ? AND unit_cost > 0", [$tA, $g1]) === 3 && (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND ref_id = ? AND location_id = ?", [$tA, $g1, $A1]) === 2);
+check('ledger rows are "purchase" with the landed cost and rack', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE type = 'purchase' AND ref_type = 'grn' AND ref_id = ? AND unit_cost > 0", [$g1]) === 3 && (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE ref_id = ? AND location_id = ?", [$g1, $A1]) === 2);
 check("batch cost is the landed cost", $near($rolls[0]['unit_cost'], $gi[0]['landed_unit_cost'], 0.01));
 $n = $ledger();
 $grn($po1, [['po_item_id' => $piTbl, 'qty' => 1]]);
@@ -184,7 +172,7 @@ check('receipt, stock-by-rack and batch pages show the new roll', $a->get("/purc
 
 echo "Partial receipts and closing\n";
 $po([['variant_id' => $vel, 'qty' => 100, 'unit_price' => 410, 'tax_rate' => 12]]);
-$po2 = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$po2 = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $a->post("/purchase/orders/$po2/submit", [], "/purchase/orders/$po2");
 $pi2 = (int)$val('SELECT id FROM purchase_order_items WHERE po_id = ?', [$po2]);
 $grn($po2, [['po_item_id' => $pi2, 'qty' => 40, 'lot_no' => 'M1', 'location_id' => $B1]]);
@@ -202,7 +190,7 @@ check('a closed PO accepts no more goods', $ledger() === $n);
 echo "Receiving without a PO\n";
 check('direct receipt form loads', $a->get('/purchase/grns/create')['status'] === 200);
 $a->post('/purchase/grns', ['supplier_id' => $sup2, 'warehouse_id' => $main, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'W-1', 'lines' => [['variant_id' => $tbl, 'qty' => 5, 'unit_price' => 2400, 'tax_rate' => 12, 'location_id' => $B1]]], '/purchase/grns/create');
-$g2 = (int)$val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
+$g2 = (int)$val('SELECT MAX(id) FROM grns');
 check('direct receipt adds stock without a PO', $g2 !== $g1 && $val('SELECT po_id FROM grns WHERE id = ?', [$g2]) === null && $bal($tbl, $main, 0, $B1) === 5.0);
 $n = $ledger();
 $a->post('/purchase/grns', ['supplier_id' => $sup2, 'warehouse_id' => $main, 'received_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 5, 'unit_price' => 2400], ['variant_id' => $vel, 'qty' => 5, 'unit_price' => 400, 'location_id' => $S1]]], '/purchase/grns/create');
@@ -250,13 +238,13 @@ check('a return needs at least one quantity', $count('purchase_returns') === $r0
 $ret($g1, [$giTbl => ['qty' => 1.5, 'location_id' => $A1]]);
 check('whole-number item refuses decimals on return', $count('purchase_returns') === $r0);
 $ret($g1, [$giVel1 => ['qty' => 10, 'location_id' => $B1], $giTbl => ['qty' => 3, 'location_id' => $A1]]);
-$rt = (int)$val('SELECT MAX(id) FROM purchase_returns WHERE tenant_id = ?', [$tA]);
+$rt = (int)$val('SELECT MAX(id) FROM purchase_returns');
 check('return posted and numbered', $count('purchase_returns') === $r0 + 1 && str_starts_with((string)$val('SELECT return_no FROM purchase_returns WHERE id = ?', [$rt]), 'PRT-'));
 check('roll balance 50 → 40, table 10 → 7', $bal($vel, $main, (int)$rolls[0]['id'], $B1) === 40.0 && $bal($tbl, $main, 0, $A1) === 7.0);
 check('return value = 10×400×1.12 + 3×2500×1.12 = 12880', $near($val('SELECT total FROM purchase_returns WHERE id = ?', [$rt]), 12880));
 check('bill reduced by the return; linked to the bill', $near($val('SELECT returned_amount FROM purchase_bills WHERE id = ?', [$bill]), 12880) && (int)$val('SELECT bill_id FROM purchase_returns WHERE id = ?', [$rt]) === $bill);
 check('returned quantities are tracked on the receipt', $near($val('SELECT qty_returned FROM grn_items WHERE id = ?', [$giVel1]), 10) && $near($val('SELECT qty_returned FROM grn_items WHERE id = ?', [$giTbl]), 3));
-check('ledger rows are "purchase_return" (negative)', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND type = 'purchase_return' AND qty_change < 0", [$tA]) === 2);
+check('ledger rows are "purchase_return" (negative)', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE type = 'purchase_return' AND qty_change < 0") === 2);
 $ret($g1, [$giVel1 => ['qty' => 45, 'location_id' => $B1]]);
 check('only what is left can be returned (40 left, 40 returnable → 45 refused)', $count('purchase_returns') === $r0 + 1);
 // use up part of the roll elsewhere, then try to return more than is physically left
@@ -264,7 +252,7 @@ $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'damage', '
 $ret($g1, [$giVel1 => ['qty' => 20, 'location_id' => $B1]]);
 check('cannot return stock that is no longer there (5 m left)', $count('purchase_returns') === $r0 + 1 && $bal($vel, $main, (int)$rolls[0]['id'], $B1) === 5.0);
 $ret($g2, [(int)$val('SELECT id FROM grn_items WHERE grn_id = ?', [$g2]) => ['qty' => 2, 'location_id' => $B1]]);
-$rt2 = (int)$val('SELECT MAX(id) FROM purchase_returns WHERE tenant_id = ?', [$tA]);
+$rt2 = (int)$val('SELECT MAX(id) FROM purchase_returns');
 check('return before billing is picked up when the bill is made later', $rt2 !== $rt && !$val('SELECT bill_id FROM purchase_returns WHERE id = ?', [$rt2]));
 $a->post("/purchase/grns/$g2/bill", [], "/purchase/grns/$g2");
 $bill2 = (int)$val('SELECT id FROM purchase_bills WHERE grn_id = ?', [$g2]);
@@ -276,9 +264,9 @@ check('return detail page loads', $a->get("/purchase/returns/$rt")['status'] ===
 echo "Stock stays consistent\n";
 $bad = DB::all(
     'SELECT b.variant_id FROM stock_balances b
-     LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger WHERE tenant_id = ? GROUP BY variant_id, warehouse_id, batch_id, location_id) l
+     LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger GROUP BY variant_id, warehouse_id, batch_id, location_id) l
        ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id
-     WHERE b.tenant_id = ? AND ABS(b.qty - COALESCE(l.s, 0)) > 0.0005', [$tA, $tA]);
+     WHERE ABS(b.qty - COALESCE(l.s, 0)) > 0.0005', []);
 check('every balance equals the sum of its ledger rows', !$bad);
 check('supplier page shows what we owe', $a->get("/suppliers/$sup2")['status'] === 200);
 
@@ -289,33 +277,20 @@ $n = $count('supplier_payments');
 $s->post("/purchase/bills/$bill/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/purchase/bills');
 check('staff cannot record payments', $count('supplier_payments') === $n);
 $s->post('/purchase/orders/approval-setting', ['po_approval' => 1], '/purchase/orders');
-check('staff cannot change the approval setting', $val("SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = 'po_approval'", [$tA]) === '0');
+check('staff cannot change the approval setting', $val("SELECT svalue FROM settings WHERE skey = 'po_approval'") === '0');
 
 echo "Tenant isolation\n";
-check("company B cannot open A's supplier / PO / receipt / bill / requisition / return (404)",
-    $b->get("/suppliers/$sup")['status'] === 404 && $b->get("/purchase/orders/$po1")['status'] === 404 && $b->get("/purchase/grns/$g1")['status'] === 404
-    && $b->get("/purchase/bills/$bill")['status'] === 404 && $b->get("/purchase/requisitions/$req")['status'] === 404 && $b->get("/purchase/returns/$rt")['status'] === 404);
-$bMain = (int)$val("SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1", [$tB]);
-$nPo = (int)$val('SELECT COUNT(*) FROM purchase_orders WHERE tenant_id = ?', [$tB]);
-$b->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $bMain, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-check("B cannot create a PO with A's supplier or items", (int)$val('SELECT COUNT(*) FROM purchase_orders WHERE tenant_id = ?', [$tB]) === $nPo);
+$nPo = (int)$val('SELECT COUNT(*) FROM purchase_orders');
 $nL = $ledger();
-$b->post('/purchase/grns', ['po_id' => $po2, 'warehouse_id' => $bMain, 'received_date' => date('Y-m-d'), 'lines' => [['po_item_id' => $pi2, 'qty' => 1]]], '/purchase/grns/create');
-check("B cannot receive against A's PO", $ledger() === $nL && (int)$val('SELECT COUNT(*) FROM grns WHERE tenant_id = ?', [$tB]) === 0);
-$b->post("/purchase/bills/$bill/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/purchase/bills');
-check("B cannot pay A's bill", $near($val('SELECT paid_amount FROM purchase_bills WHERE id = ?', [$bill]), 30000));
-check("item lookup shows nothing of A to B", !str_contains($b->get('/lookup/items?q=velvet')['body'], 'Velvet') && str_contains($a->get('/lookup/items?q=velvet')['body'], 'Velvet'));
-$b->post("/suppliers/$sup/delete", [], '/suppliers');
-check("B cannot delete A's supplier", (bool)$val('SELECT 1 FROM suppliers WHERE id = ?', [$sup]));
 $a->post("/suppliers/$sup/delete", [], '/suppliers');
 check('a supplier with purchase history cannot be deleted', (bool)$val('SELECT 1 FROM suppliers WHERE id = ?', [$sup]));
 $a->post('/suppliers', ['name' => 'Temp Supplier'], '/suppliers/create');
-$tmp = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Temp Supplier'", [$tA]);
+$tmp = (int)$val("SELECT id FROM suppliers WHERE name = 'Temp Supplier'");
 $a->post("/suppliers/$tmp/delete", [], '/suppliers');
 check('an unused supplier can be deleted', !$val('SELECT 1 FROM suppliers WHERE id = ?', [$tmp]));
 
 echo "Record pages (Zoho-style) for purchase documents\n";
-$rp = fn(string $table, string $path, string $nofield) => (function () use ($a, $val, $tA, $table, $path) { $id = (int)$val("SELECT MAX(id) FROM `$table` WHERE tenant_id = ?", [$tA]); return [$id, $a->get("/$path/$id")['body']]; })();
+$rp = fn(string $table, string $path, string $nofield) => (function () use ($a, $val, $table, $path) { $id = (int)$val("SELECT MAX(id) FROM `$table`"); return [$id, $a->get("/$path/$id")['body']]; })();
 [$id, $h] = $rp('purchase_orders', 'purchase/orders', '');
 $t = preg_replace('/\s+/', ' ', strip_tags($h));
 check('PO page: record header, summary (supplier, dates), sections, items, timeline tab and notes', str_contains($h, 'class="rec-top"') && str_contains($h, 'rec-summary') && str_contains($h, 'Purchase order information') && str_contains($h, 'id="items"') && str_contains($h, 'data-tab="recTimeline"') && str_contains($h, 'id="notes"'));
@@ -329,15 +304,13 @@ check('bill page: shell, amounts card, payments and the payment form', str_conta
 check('purchase return page: shell + items', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Total (incl. tax)'));
 [$id, $h] = $rp('purchase_requisitions', 'purchase/requisitions', '');
 if ($id) check('requisition page: shell, status badge, items, layout link', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="items"') && str_contains($h, 'Edit page layout'));
-check('documents with a layout offer "Edit page layout" in the menu', str_contains($a->get('/purchase/orders/' . (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]))['body'], 'Edit page layout'));
-$pid = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+check('documents with a layout offer "Edit page layout" in the menu', str_contains($a->get('/purchase/orders/' . (int)$val('SELECT MAX(id) FROM purchase_orders'))['body'], 'Edit page layout'));
+$pid = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $a->post("/records/purchase_order/$pid/notes", ['body' => 'Chase the mill on Monday'], "/purchase/orders/$pid");
 check('a note can be added on a purchase order and shows with the Timeline tab', str_contains(preg_replace('/\s+/', ' ', strip_tags($a->get("/purchase/orders/$pid")['body'])), 'Chase the mill on Monday'));
-$b->post("/records/purchase_order/$pid/notes", ['body' => 'intruder'], '/suppliers');
-check("another company cannot add a note to A's purchase order", !$val("SELECT 1 FROM record_notes WHERE body = 'intruder'"));
 foreach (['purchase/orders', 'purchase/grns', 'purchase/bills', 'purchase/returns', 'purchase/requisitions'] as $pth) {
     $tb = ['purchase/orders' => 'purchase_orders', 'purchase/grns' => 'grns', 'purchase/bills' => 'purchase_bills', 'purchase/returns' => 'purchase_returns', 'purchase/requisitions' => 'purchase_requisitions'][$pth];
-    $id = (int)$val("SELECT MAX(id) FROM `$tb` WHERE tenant_id = ?", [$tA]);
+    $id = (int)$val("SELECT MAX(id) FROM `$tb`");
     if ($id) check("$pth/$id renders without notices and one h1", ($r = $a->get("/$pth/$id"))['status'] === 200 && !preg_match('/Warning:|Notice:|Fatal error|Deprecated:/', $r['body']) && substr_count($r['body'], '<h1') === 1);
 }
 

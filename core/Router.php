@@ -79,12 +79,6 @@ final class Router
             case 'guest':
                 if (Auth::check()) { if (Api::on()) Api::send(['ok' => true, 'redirect' => 'dashboard', 'messages' => []]); redirect('dashboard'); }
                 return true;
-            case 'admin':
-                if (!Auth::admin()) { if (Api::on()) Api::error(401, 'Please sign in.'); redirect('admin/login'); }
-                return true;
-            case 'admin_guest':
-                if (Auth::admin()) redirect('admin');
-                return true;
             case 'perm':
                 if (!Auth::can((string)$arg)) {
                     if (Api::on()) Api::error(403, 'You do not have permission for this.');

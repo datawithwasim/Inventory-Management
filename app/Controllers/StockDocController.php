@@ -12,20 +12,15 @@ use Core\Scope;
 /** Shared helpers for stock documents (adjustments, transfers, stock-takes). */
 abstract class StockDocController extends Controller
 {
-    protected function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     protected function activeWarehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', []);
     }
 
     /** Every active warehouse (the receiving side of a transfer may be anyone's). */
     protected function allActiveWarehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE is_active = 1 ORDER BY is_default DESC, name');
     }
 
     protected function bounce(string $msg, string $back): never
@@ -59,8 +54,8 @@ abstract class StockDocController extends Controller
         $doc = DB::one(
             'SELECT d.*, w.name AS warehouse, w2.name AS to_warehouse, u.name AS user_name
              FROM stock_docs d JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN warehouses w2 ON w2.id = d.to_warehouse_id
-             LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.id = ? AND d.type = ?',
-            [$this->tid(), (int)$id, $type]) ?? $this->notFound();
+             LEFT JOIN users u ON u.id = d.created_by WHERE d.id = ? AND d.type = ?',
+            [(int)$id, $type]) ?? $this->notFound();
         $own = Scope::warehouse();
         // a warehouse user sees documents of their warehouse; a transfer also when it is on its way to / from them
         if ($own !== null && (int)$doc['warehouse_id'] !== $own && !($type === 'transfer' && (int)$doc['to_warehouse_id'] === $own)) $this->notFound();
@@ -76,19 +71,19 @@ abstract class StockDocController extends Controller
              JOIN units u ON u.id = i.unit_id LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0
              LEFT JOIN locations r1 ON r1.id = l.location_id AND l.location_id > 0
              LEFT JOIN locations r2 ON r2.id = l.to_location_id AND l.to_location_id > 0
-             WHERE l.tenant_id = ? AND l.doc_id = ? ORDER BY l.id', [$this->tid(), $docId]);
+             WHERE l.doc_id = ? ORDER BY l.id', [$docId]);
     }
 
     protected function docList(string $type, string $title, string $view): void
     {
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $total = (int)DB::val('SELECT COUNT(*) FROM stock_docs d WHERE d.tenant_id = ? AND d.type = ?' . Scope::sql('d.warehouse_id'), [$this->tid(), $type]);
+        $total = (int)DB::val('SELECT COUNT(*) FROM stock_docs d WHERE d.type = ?' . Scope::sql('d.warehouse_id'), [$type]);
         $rows = DB::all(
             'SELECT d.*, w.name AS warehouse, w2.name AS to_warehouse, u.name AS user_name,
                     (SELECT COUNT(*) FROM stock_doc_lines l WHERE l.doc_id = d.id) AS line_count
              FROM stock_docs d JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN warehouses w2 ON w2.id = d.to_warehouse_id
-             LEFT JOIN users u ON u.id = d.created_by WHERE d.tenant_id = ? AND d.type = ?' . Scope::sql('d.warehouse_id') . ' ORDER BY d.id DESC LIMIT 30 OFFSET ' . (($page - 1) * 30),
-            [$this->tid(), $type]);
+             LEFT JOIN users u ON u.id = d.created_by WHERE d.type = ?' . Scope::sql('d.warehouse_id') . ' ORDER BY d.id DESC LIMIT 30 OFFSET ' . (($page - 1) * 30),
+            [$type]);
         $this->view($view, ['title' => $title, 'rows' => $rows, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30))]);
     }
 
@@ -96,7 +91,7 @@ abstract class StockDocController extends Controller
     protected function racksByWarehouse(): array
     {
         $out = [];
-        foreach (DB::all('SELECT id, warehouse_id, code FROM locations WHERE tenant_id = ? AND is_active = 1 ORDER BY code', [$this->tid()]) as $r) {
+        foreach (DB::all('SELECT id, warehouse_id, code FROM locations WHERE is_active = 1 ORDER BY code') as $r) {
             $out[$r['warehouse_id']][] = ['id' => (int)$r['id'], 'code' => $r['code']];
         }
         return $out;

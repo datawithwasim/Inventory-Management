@@ -34,7 +34,7 @@ final class RecordView
     {
         $k = "$table:$id";
         if (!isset(self::$lookups[$k])) {
-            $r = DB::one("SELECT * FROM `$table` WHERE tenant_id = ? AND id = ?", [Auth::tenantId(), $id]);
+            $r = DB::one("SELECT * FROM `$table` WHERE id = ?", [$id]);
             $name = (string)($r['name'] ?? '');
             if ($table === 'taxes' && $r) $name .= ' (' . rtrim(rtrim((string)$r['rate'], '0'), '.') . '%)';
             if ($table === 'units' && $r) $name .= ' (' . $r['short_name'] . ')';
@@ -56,7 +56,7 @@ final class RecordView
         if (str_ends_with($key, '_date') || $key === 'valid_until') return fdate((string)$v);
         $tables = ['supplier_id' => 'suppliers', 'customer_id' => 'customers', 'warehouse_id' => 'warehouses', 'to_warehouse_id' => 'warehouses', 'category_id' => 'categories', 'brand_id' => 'brands', 'unit_id' => 'units', 'tax_id' => 'taxes', 'group_id' => 'customer_groups'];
         if ($key === 'variant_id' && $entity === 'supplier_item') {
-            $o = DB::one('SELECT v.name, v.sku, i.name AS item_name FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND v.id = ?', [Auth::tenantId(), (int)$v]);
+            $o = DB::one('SELECT v.name, v.sku, i.name AS item_name FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.id = ?', [(int)$v]);
             return $o ? $o['item_name'] . ($o['name'] ? ' — ' . $o['name'] : '') . ' (' . $o['sku'] . ')' : '';
         }
         if (isset($tables[$key])) return self::lookup($tables[$key], (int)$v);
@@ -137,7 +137,7 @@ final class RecordView
         $facts = [];
         if ($entity === 'supplier_item') {
             $vid = (int)($row['variant_id'] ?? 0);
-            $row['item_id'] = $vid ? (int)DB::val('SELECT item_id FROM item_variants WHERE tenant_id = ? AND id = ?', [Auth::tenantId(), $vid]) : 0;
+            $row['item_id'] = $vid ? (int)DB::val('SELECT item_id FROM item_variants WHERE id = ?', [$vid]) : 0;
             $cur = $vid ? Purchase::currentRate((int)$row['supplier_id'], $vid) : null;
             $last = $vid ? Purchase::lastPaid((int)$row['supplier_id'], $vid) : null;
             $facts = ['rate' => ['Current rate', $cur ? e(\App\Models\Currencies::format(Purchase::netRate($cur), (string)$cur['currency'])) . (Purchase::netKinds($cur)['cut'] !== null || Purchase::netKinds($cur)['moq'] !== null ? ' (roll)' : '') : ''], 'last_paid' => ['Last paid', $last ? e(money($last['unit_price'])) . ' on ' . e(fdate($last['received_date'])) : ''],
@@ -145,48 +145,47 @@ final class RecordView
         }
         $name = fn(string $sql, array $a) => (string)DB::val($sql, $a);
         $link = fn(string $path, int $id, string $label) => $id > 0 && $label !== '' ? '<a href="' . e(url($path . '/' . $id)) . '">' . e($label) . '</a>' : '';
-        $t = Auth::tenantId();
         if ($entity === 'purchase_order') {
             $creator = $row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '';
             $approver = $row['approved_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['approved_by']]) : '';
             $facts = ['created_by' => ['Created by', e($creator ?: '—')], 'approved_by' => ['Approved by', $approver ? e($approver) . ' on ' . e(substr((string)$row['approved_at'], 0, 10)) : ''], 'total' => ['Total', e(\App\Models\Currencies::format((float)$row['total'], (string)($row['currency'] ?? 'INR')))]];
             if (($row['currency'] ?? 'INR') !== 'INR') $facts['exchange'] = ['Exchange rate', e('1 ' . $row['currency'] . ' = ' . money($row['exchange_rate']))];
         } elseif ($entity === 'grn') {
-            $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.tenant_id = ? AND gp.grn_id = ? ORDER BY p.id', [$t, $row['id']]);
-            $bill = DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $row['id']]);
+            $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.grn_id = ? ORDER BY p.id', [$row['id']]);
+            $bill = DB::one('SELECT id, bill_no FROM purchase_bills WHERE grn_id = ?', [$row['id']]);
             $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
                 'po' => [count($pos) > 1 ? 'Purchase orders' : 'Purchase order', implode(', ', array_map(fn($p) => $link('purchase/orders', (int)$p['id'], $p['po_no']), $pos))], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
                 'received_by' => ['Received by', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
         } elseif ($entity === 'bill') {
-            $grn = $row['grn_id'] ? DB::one('SELECT id, grn_no FROM grns WHERE tenant_id = ? AND id = ?', [$t, $row['grn_id']]) : null;
+            $grn = $row['grn_id'] ? DB::one('SELECT id, grn_no FROM grns WHERE id = ?', [$row['grn_id']]) : null;
             $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
                 'grn' => ['Goods receipt', $grn ? $link('purchase/grns', (int)$grn['id'], $grn['grn_no']) : ''], 'balance_due' => ['Balance due', e(money(max(0, Purchase::outstanding($row))))]];
         } elseif ($entity === 'purchase_return') {
-            $grn = DB::one('SELECT id, grn_no FROM grns WHERE tenant_id = ? AND id = ?', [$t, $row['grn_id']]);
-            $bill = $row['bill_id'] ? DB::one('SELECT id, bill_no FROM purchase_bills WHERE tenant_id = ? AND id = ?', [$t, $row['bill_id']]) : null;
+            $grn = DB::one('SELECT id, grn_no FROM grns WHERE id = ?', [$row['grn_id']]);
+            $bill = $row['bill_id'] ? DB::one('SELECT id, bill_no FROM purchase_bills WHERE id = ?', [$row['bill_id']]) : null;
             $facts = ['supplier' => [term('supplier'), $link('suppliers', (int)$row['supplier_id'], $name('SELECT name FROM suppliers WHERE id = ?', [$row['supplier_id']]))],
                 'grn' => ['Goods receipt', $grn ? $link('purchase/grns', (int)$grn['id'], $grn['grn_no']) : ''], 'bill' => ['Bill', $bill ? $link('purchase/bills', (int)$bill['id'], $bill['bill_no']) : ''],
                 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total (incl. tax)', e(money($row['total']))]];
         } elseif ($entity === 'requisition') {
-            $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE tenant_id = ? AND id = ?', [$t, $row['po_id']]) : null;
+            $po = $row['po_id'] ? DB::one('SELECT id, po_no FROM purchase_orders WHERE id = ?', [$row['po_id']]) : null;
             $facts = ['raised' => ['Raised', e(fdate(substr((string)$row['created_at'], 0, 10)))], 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')],
                 'po' => ['Purchase order', $po ? $link('purchase/orders', (int)$po['id'], $po['po_no']) : '']];
         } elseif ($entity === 'sales_order') {
             $facts = ['created_by' => ['Created by', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total', e(money($row['total']))]];
         } elseif ($entity === 'delivery') {
-            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE tenant_id = ? AND id = ?', [$t, $row['order_id']]) : null;
-            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$t, $row['id']]);
+            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE id = ?', [$row['order_id']]) : null;
+            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE delivery_id = ?', [$row['id']]);
             $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
                 'order' => ['Order', $o ? $link('sales/orders', (int)$o['id'], $o['order_no']) : ''], 'invoice' => ['Invoice', $inv ? $link('sales/invoices', (int)$inv['id'], $inv['invoice_no']) : ''],
                 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')]];
         } elseif ($entity === 'invoice') {
-            $d = $row['delivery_id'] ? DB::one('SELECT id, delivery_no FROM deliveries WHERE tenant_id = ? AND id = ?', [$t, $row['delivery_id']]) : null;
-            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE tenant_id = ? AND id = ?', [$t, $row['order_id']]) : null;
+            $d = $row['delivery_id'] ? DB::one('SELECT id, delivery_no FROM deliveries WHERE id = ?', [$row['delivery_id']]) : null;
+            $o = $row['order_id'] ? DB::one('SELECT id, order_no FROM sales_orders WHERE id = ?', [$row['order_id']]) : null;
             $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
                 'delivery' => ['Delivery', $d ? $link('sales/deliveries', (int)$d['id'], $d['delivery_no']) : ''], 'order' => ['Order', $o ? $link('sales/orders', (int)$o['id'], $o['order_no']) : ''],
                 'balance_due' => ['Balance due', e(money(max(0, Purchase::outstanding($row))))]];
         } elseif ($entity === 'sales_return') {
-            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE tenant_id = ? AND id = ?', [$t, $row['invoice_id']]);
+            $inv = DB::one('SELECT id, invoice_no FROM sales_invoices WHERE id = ?', [$row['invoice_id']]);
             $facts = ['customer' => [term('customer'), $link('customers', (int)$row['customer_id'], $name('SELECT name FROM customers WHERE id = ?', [$row['customer_id']]))],
                 'invoice' => ['Invoice', $inv ? $link('sales/invoices', (int)$inv['id'], $inv['invoice_no']) : ''],
                 'by' => ['By', e($row['created_by'] ? $name('SELECT name FROM users WHERE id = ?', [$row['created_by']]) : '—')], 'total' => ['Total credit (incl. tax)', e(money($row['total']))]];
@@ -264,7 +263,7 @@ final class RecordView
         $out = [];
         foreach (DB::all(
             "SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON a.actor_type = 'user' AND u.id = a.actor_id
-             WHERE a.tenant_id = ? AND a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [Auth::tenantId(), $audit, $id]) as $a) {
+             WHERE a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [$audit, $id]) as $a) {
             $suffix = preg_replace('/^' . preg_quote($audit, '/') . '_/', '', (string)$a['action']);
             $out[] = ['who' => $a['user_name'] ?: ($a['actor_type'] === 'admin' ? 'Support' : 'System'), 'verb' => self::VERBS[$suffix] ?? str_replace('_', ' ', $suffix),
                 'details' => $a['details'] ? mb_substr((string)$a['details'], 0, 120) : null, 'at' => (string)$a['created_at']];
@@ -277,7 +276,7 @@ final class RecordView
         $audit = self::META[$entity][2] ?? $entity;
         $rows = DB::all(
             "SELECT a.*, u.name AS user_name FROM audit_logs a LEFT JOIN users u ON a.actor_type = 'user' AND u.id = a.actor_id
-             WHERE a.tenant_id = ? AND a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [Auth::tenantId(), $audit, $id]);
+             WHERE a.entity = ? AND a.entity_id = ? ORDER BY a.id DESC LIMIT 100", [$audit, $id]);
         $o = '<ul class="rec-tl">';
         foreach ($rows as $a) {
             $suffix = preg_replace('/^' . preg_quote($audit, '/') . '_/', '', (string)$a['action']);
@@ -296,6 +295,6 @@ final class RecordView
     {
         return DB::all(
             'SELECT n.*, u.name AS user_name FROM record_notes n LEFT JOIN users u ON u.id = n.created_by
-             WHERE n.tenant_id = ? AND n.entity = ? AND n.entity_id = ? ORDER BY n.id DESC LIMIT 200', [Auth::tenantId(), $entity, $id]);
+             WHERE n.entity = ? AND n.entity_id = ? ORDER BY n.id DESC LIMIT 200', [$entity, $id]);
     }
 }

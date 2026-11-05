@@ -13,7 +13,7 @@ final class Spa
     /** Address starts that the app shows. Keep in step with frontend/src/lib/routes.ts. */
     public const PREFIXES = ['/dashboard', '/customers', '/catalogues', '/products', '/launches', '/suppliers', '/purchase/supplier-items', '/purchase/rates', '/items', '/purchase/orders', '/purchase/grns', '/purchase/bills',
         '/purchase/requisitions', '/purchase/returns', '/warehouses', '/locations', '/stock', '/sales/orders', '/sales/deliveries', '/sales/invoices', '/sales/returns', '/reports',
-        '/labels', '/settings', '/users', '/roles', '/masters', '/profile', '/login', '/forgot-password', '/reset-password', '/admin'];
+        '/labels', '/settings', '/users', '/roles', '/masters', '/profile', '/login', '/forgot-password', '/reset-password'];
 
     /** Downloads and little lookups under those prefixes: files, not screens. (Printouts are screens of the app too.) */
     private const KEEP = '~(/(export|template|barcode|data|backup|logo|lookup|placement|batch-options)(/|$))|^/lookup/~';
@@ -24,7 +24,6 @@ final class Spa
         foreach (self::PREFIXES as $p) {
             if ($path !== $p && !str_starts_with($path, $p . '/')) continue;
             if (preg_match(self::KEEP, $path)) return null;
-            if (str_starts_with($path, '/admin/system/backup')) return null;
             return '/app' . $path;
         }
         return null;

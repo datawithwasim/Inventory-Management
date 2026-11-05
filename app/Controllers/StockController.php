@@ -17,14 +17,9 @@ final class StockController extends Controller
         'stocktake' => 'Stock-take', 'purchase' => 'Purchase', 'purchase_return' => 'Purchase return', 'sale' => 'Sale', 'sales_return' => 'Sales return',
     ];
 
-    private function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     private function warehouses(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ?' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE 1=1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', []);
     }
 
     /** The warehouse filter: a warehouse-bound user is always held to their own. */
@@ -47,15 +42,14 @@ final class StockController extends Controller
 
     public function index(): void
     {
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $wh = $this->whFilter();
         $low = !empty($_GET['low']);
         $page = max(1, (int)($_GET['page'] ?? 1));
 
-        $join = 'LEFT JOIN stock_balances s ON s.variant_id = v.id AND s.tenant_id = v.tenant_id' . ($wh ? ' AND s.warehouse_id = ?' : '');
-        $params = $wh ? [$wh, $t] : [$t];
-        $where = 'v.tenant_id = ? AND i.is_bundle = 0 AND v.is_active = 1 AND i.is_active = 1';
+        $join = 'LEFT JOIN stock_balances s ON s.variant_id = v.id' . ($wh ? ' AND s.warehouse_id = ?' : '');
+        $params = $wh ? [$wh] : [];
+        $where = 'i.is_bundle = 0 AND v.is_active = 1 AND i.is_active = 1';
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (i.name LIKE ? OR v.name LIKE ? OR v.sku LIKE ? OR v.barcode = ?)';
@@ -82,12 +76,12 @@ final class StockController extends Controller
         $totalValue = (float)DB::val(
             'SELECT COALESCE(SUM(s.qty * COALESCE(NULLIF(b.unit_cost,0), v.cost_price)),0)
              FROM stock_balances s JOIN item_variants v ON v.id = s.variant_id LEFT JOIN batches b ON b.id = s.batch_id AND s.batch_id > 0
-             WHERE s.tenant_id = ?' . ($wh ? ' AND s.warehouse_id = ?' : ''), $wh ? [$t, $wh] : [$t]);
+             WHERE 1=1' . ($wh ? ' AND s.warehouse_id = ?' : ''), $wh ? [$wh] : []);
 
         $this->view('app/stock/index', [
             'title' => 'Stock', 'rows' => $rows, 'q' => $q, 'wh' => $wh, 'low' => $low, 'warehouses' => $this->warehouses(),
             'page' => $page, 'pages' => max(1, (int)ceil($total / self::PER_PAGE)), 'totalValue' => $totalValue,
-            'transitTotal' => (float)DB::val('SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.tenant_id = ?" . ($wh ? ' AND d.to_warehouse_id = ?' : ''), $wh ? [$t, $wh] : [$t]),
+            'transitTotal' => (float)DB::val('SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE 1=1" . ($wh ? ' AND d.to_warehouse_id = ?' : ''), $wh ? [$wh] : []),
         ]);
     }
 
@@ -97,10 +91,10 @@ final class StockController extends Controller
         if (!$rows) return;
         $ids = array_map(fn($r) => (int)$r['id'], $rows);
         $in = implode(',', array_fill(0, count($ids), '?'));
-        $params = [$this->tid(), ...$ids];
+        $params = [...$ids];
         $sql = "SELECT s.variant_id, w.name AS warehouse, COALESCE(l.code, '') AS code, SUM(s.qty) AS qty
                 FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
-                WHERE s.tenant_id = ? AND s.variant_id IN ($in)" . ($wh ? ' AND s.warehouse_id = ?' : '') . '
+                WHERE s.variant_id IN ($in)" . ($wh ? ' AND s.warehouse_id = ?' : '') . '
                 GROUP BY s.variant_id, w.id, w.name, s.location_id, l.code HAVING qty > 0.0005 ORDER BY qty DESC';
         if ($wh) $params[] = $wh;
         $by = [];
@@ -114,8 +108,8 @@ final class StockController extends Controller
         if (!$rows) return;
         $ids = array_map(fn($r) => (int)$r['id'], $rows);
         $in = implode(',', array_fill(0, count($ids), '?'));
-        $open = "o.tenant_id = ? AND o.status IN ('confirmed','partial') AND i.qty_ordered > i.qty_delivered" . ($wh ? ' AND o.warehouse_id = ?' : '');
-        $base = $wh ? [$this->tid(), $wh] : [$this->tid()];
+        $open = "o.status IN ('confirmed','partial') AND i.qty_ordered > i.qty_delivered" . ($wh ? ' AND o.warehouse_id = ?' : '');
+        $base = $wh ? [$wh] : [];
         $map = [];
         foreach (DB::all("SELECT i.variant_id AS v, SUM(i.qty_ordered - i.qty_delivered) AS q FROM sales_order_items i JOIN sales_orders o ON o.id = i.order_id
                           WHERE $open AND i.variant_id IN ($in) GROUP BY i.variant_id", [...$base, ...$ids]) as $r) $map[$r['v']] = ($map[$r['v']] ?? 0) + (float)$r['q'];
@@ -129,7 +123,6 @@ final class StockController extends Controller
 
     public function ledger(): void
     {
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $type = (string)($_GET['type'] ?? '');
         $wh = $this->whFilter();
@@ -137,8 +130,8 @@ final class StockController extends Controller
         $to = (string)($_GET['to'] ?? '');
         $page = max(1, (int)($_GET['page'] ?? 1));
 
-        $where = 'l.tenant_id = ?';
-        $params = [$t];
+        $where = '1=1';
+        $params = [];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (i.name LIKE ? OR v.sku LIKE ? OR v.name LIKE ? OR b.batch_no LIKE ? OR rk.code LIKE ?)';
@@ -169,19 +162,18 @@ final class StockController extends Controller
 
     public function batches(): void
     {
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $status = (string)($_GET['status'] ?? 'active');
         $page = max(1, (int)($_GET['page'] ?? 1));
 
-        $where = 'b.tenant_id = ?' . $this->rollScope();
-        $params = [$t];
+        $where = '1=1' . $this->rollScope();
+        $params = [];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (b.batch_no LIKE ? OR b.supplier_lot LIKE ? OR i.name LIKE ? OR v.sku LIKE ?)';
             array_push($params, $like, $like, $like, $like);
         }
-        $transitSql = '(SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.tenant_id = l.tenant_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.batch_id = b.id AND l.tenant_id = b.tenant_id" . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ')';
+        $transitSql = '(SELECT COALESCE(SUM' . Stock::TRANSIT_PENDING . ", 0) FROM stock_doc_lines l JOIN stock_docs d ON d.id = l.doc_id AND d.type = 'transfer' AND d.status IN ('in_transit','partial') WHERE l.batch_id = b.id" . Scope::sqlEither('d.warehouse_id', 'd.to_warehouse_id') . ')';
         $having = match ($status) {
             'finished' => "HAVING balance <= 0.0005 AND transit <= 0.0005",
             'transit' => 'HAVING transit > 0.0005',
@@ -189,7 +181,7 @@ final class StockController extends Controller
             default => 'HAVING balance > 0.0005 OR transit > 0.0005',
         };
         $base = "FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-                 LEFT JOIN stock_balances s ON s.batch_id = b.id AND s.tenant_id = b.tenant_id" . Scope::sql('s.warehouse_id') . " WHERE $where GROUP BY b.id $having";
+                 LEFT JOIN stock_balances s ON s.batch_id = b.id" . Scope::sql('s.warehouse_id') . " WHERE $where GROUP BY b.id $having";
         $total = (int)DB::val("SELECT COUNT(*) FROM (SELECT b.id, COALESCE(SUM(s.qty),0) AS balance, $transitSql AS transit $base) x", $params);
         $rows = DB::all(
             "SELECT b.*, i.name AS item_name, v.name AS vname, v.sku, u.short_name AS unit, COALESCE(SUM(s.qty),0) AS balance, $transitSql AS transit
@@ -203,19 +195,18 @@ final class StockController extends Controller
 
     public function batch(string $id): void
     {
-        $t = $this->tid();
         $b = DB::one(
             'SELECT b.*, i.name AS item_name, i.id AS item_id, v.name AS vname, v.sku, u.short_name AS unit
              FROM batches b JOIN item_variants v ON v.id = b.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE b.tenant_id = ? AND b.id = ?' . $this->rollScope(), [$t, (int)$id]) ?? $this->notFound();
+             WHERE b.id = ?' . $this->rollScope(), [(int)$id]) ?? $this->notFound();
         $where = DB::all(
             'SELECT w.name, COALESCE(l.code, \'\') AS rack, s.qty FROM stock_balances s JOIN warehouses w ON w.id = s.warehouse_id
              LEFT JOIN locations l ON l.id = s.location_id AND s.location_id > 0
-             WHERE s.tenant_id = ? AND s.batch_id = ? AND s.qty <> 0' . Scope::sql('s.warehouse_id') . ' ORDER BY w.name, l.code', [$t, $b['id']]);
+             WHERE s.batch_id = ? AND s.qty <> 0' . Scope::sql('s.warehouse_id') . ' ORDER BY w.name, l.code', [$b['id']]);
         $history = DB::all(
             'SELECT l.*, w.name AS warehouse, rk.code AS rack, u.name AS user_name FROM stock_ledger l JOIN warehouses w ON w.id = l.warehouse_id
              LEFT JOIN locations rk ON rk.id = l.location_id AND l.location_id > 0
-             LEFT JOIN users u ON u.id = l.user_id WHERE l.tenant_id = ? AND l.batch_id = ?' . Scope::sql('l.warehouse_id') . ' ORDER BY l.id', [$t, $b['id']]);
+             LEFT JOIN users u ON u.id = l.user_id WHERE l.batch_id = ?' . Scope::sql('l.warehouse_id') . ' ORDER BY l.id', [$b['id']]);
         $this->view('app/stock/batch', [
             'title' => 'Batch ' . $b['batch_no'], 'b' => $b, 'where' => $where, 'history' => $history,
             'balance' => array_sum(array_column($where, 'qty')), 'types' => self::TYPES, 'transit' => Stock::transitOfBatch((int)$b['id']),
@@ -226,12 +217,11 @@ final class StockController extends Controller
 
     public function racks(): void
     {
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $wh = $this->whFilter();
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $where = 's.tenant_id = ? AND s.qty > 0.0005';
-        $params = [$t];
+        $where = 's.qty > 0.0005';
+        $params = [];
         if ($wh) { $where .= ' AND s.warehouse_id = ?'; $params[] = $wh; }
         if ($q === '-') {
             $where .= ' AND s.location_id = 0';
@@ -265,7 +255,6 @@ final class StockController extends Controller
         $batch = isset($_GET['batch']) && ctype_digit((string)$_GET['batch']) ? (int)$_GET['batch'] : null;
         $this->json(Stock::placements($variant, $wh, $batch));
     }
-
 
     private function json(mixed $data): never
     {

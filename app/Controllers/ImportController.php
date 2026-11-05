@@ -18,11 +18,6 @@ final class ImportController extends Controller
     private const ATTRS = ['hsn_code' => 20];
     private const MAX_ROWS = 2000;
 
-    private function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     private function csv(string $filename, array $rows): never
     {
         header('Content-Type: text/csv; charset=utf-8');
@@ -63,7 +58,7 @@ final class ImportController extends Controller
                     i.track_batch, i.reorder_level, v.sku, v.barcode, v.cost_price, v.sale_price
              FROM items i JOIN item_variants v ON v.item_id = i.id AND v.id = (SELECT MIN(v2.id) FROM item_variants v2 WHERE v2.item_id = i.id) JOIN units u ON u.id = i.unit_id
              LEFT JOIN categories c ON c.id = i.category_id LEFT JOIN brands b ON b.id = i.brand_id LEFT JOIN taxes x ON x.id = i.tax_id
-             WHERE i.tenant_id = ? AND i.is_bundle = 0 ORDER BY i.name', [$this->tid()]);
+             WHERE i.is_bundle = 0 ORDER BY i.name', []);
         $out = [self::COLUMNS];
         foreach ($rows as $r) {
             $out[] = [$r['item_name'], $r['item_type'], $r['category'], $r['brand'], $r['unit'], $r['tax'], $r['hsn_code'],
@@ -100,12 +95,11 @@ final class ImportController extends Controller
         fclose($h);
         if (!$rows) $this->fail('The file has no data rows.');
 
-        $t = $this->tid();
         $units = [];
-        foreach (DB::all('SELECT id, name FROM units WHERE tenant_id = ?', [$t]) as $u) $units[strtolower($u['name'])] = (int)$u['id'];
+        foreach (DB::all('SELECT id, name FROM units') as $u) $units[strtolower($u['name'])] = (int)$u['id'];
         $taxes = [];
-        foreach (DB::all('SELECT id, name FROM taxes WHERE tenant_id = ?', [$t]) as $x) $taxes[strtolower($x['name'])] = (int)$x['id'];
-        $existingItems = array_column(DB::all('SELECT LOWER(name) AS n FROM items WHERE tenant_id = ?', [$t]), 'n');
+        foreach (DB::all('SELECT id, name FROM taxes') as $x) $taxes[strtolower($x['name'])] = (int)$x['id'];
+        $existingItems = array_column(DB::all('SELECT LOWER(name) AS n FROM items'), 'n');
 
         // One row = one item with one SKU.
         $items = [];
@@ -140,11 +134,11 @@ final class ImportController extends Controller
                 if (($r[$c] ?? '') !== '' && (!is_numeric($r[$c]) || (float)$r[$c] < 0)) { $errors[] = "Row $L: $c must be a number."; continue 2; }
             }
             if ($sku !== '') {
-                if (isset($seenSku[strtolower($sku)]) || DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND sku = ?', [$t, $sku])) { $errors[] = "Row $L: SKU \"$sku\" already exists."; continue; }
+                if (isset($seenSku[strtolower($sku)]) || DB::val('SELECT 1 FROM item_variants WHERE sku = ?', [$sku])) { $errors[] = "Row $L: SKU \"$sku\" already exists."; continue; }
                 $seenSku[strtolower($sku)] = 1;
             }
             if ($bar !== '') {
-                if (isset($seenBar[$bar]) || DB::val('SELECT 1 FROM item_variants WHERE tenant_id = ? AND barcode = ?', [$t, $bar])) { $errors[] = "Row $L: barcode \"$bar\" already exists."; continue; }
+                if (isset($seenBar[$bar]) || DB::val('SELECT 1 FROM item_variants WHERE barcode = ?', [$bar])) { $errors[] = "Row $L: barcode \"$bar\" already exists."; continue; }
                 $seenBar[$bar] = 1;
             }
             $tbRaw = strtolower($r['track_batch'] ?? '');
@@ -153,9 +147,6 @@ final class ImportController extends Controller
                 'reorder' => (float)($r['reorder_level'] ?? 0), 'sku' => $sku, 'barcode' => $bar, 'cost' => (float)($r['cost_price'] ?? 0), 'sale' => (float)($r['sale_price'] ?? 0)];
         }
 
-        $max = (int)Auth::user()['max_items'];
-        $have = (int)DB::val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$t]);
-        if ($max > 0 && $have + count($items) > $max) $errors[] = "Your plan allows $max items; you have $have and this file adds " . count($items) . '.';
         if ($errors) {
             foreach (array_slice($errors, 0, 15) as $e) flash('danger', $e);
             if (count($errors) > 15) flash('danger', '…and ' . (count($errors) - 15) . ' more problems. Nothing was imported.');
@@ -163,21 +154,21 @@ final class ImportController extends Controller
             redirect('items/import');
         }
 
-        $created = DB::transaction(function () use ($items, $t) {
-            $lookup = function (string $table, string $name) use ($t): ?int {
+        $created = DB::transaction(function () use ($items) {
+            $lookup = function (string $table, string $name): ?int {
                 if ($name === '') return null;
-                $id = DB::val("SELECT id FROM `$table` WHERE tenant_id = ? AND name = ?", [$t, $name]);
-                return $id ? (int)$id : DB::insert($table, ['tenant_id' => $t, 'name' => mb_substr($name, 0, 100)]);
+                $id = DB::val("SELECT id FROM `$table` WHERE name = ?", [$name]);
+                return $id ? (int)$id : DB::insert($table, ['name' => mb_substr($name, 0, 100)]);
             };
             $n = 0;
             foreach ($items as $it) {
                 $itemId = DB::insert('items', $it['attr'] + [
-                    'item_type' => $it['type'], 'tenant_id' => $t, 'name' => $it['name'], 'category_id' => $lookup('categories', $it['category']),
+                    'item_type' => $it['type'], 'name' => $it['name'], 'category_id' => $lookup('categories', $it['category']),
                     'brand_id' => $lookup('brands', $it['brand']), 'unit_id' => $it['unit_id'], 'tax_id' => $it['tax_id'],
                     'track_batch' => $it['track'], 'reorder_level' => $it['reorder'],
                 ]);
                 DB::insert('item_variants', [
-                    'tenant_id' => $t, 'item_id' => $itemId, 'sku' => $it['sku'] !== '' ? $it['sku'] : Numbering::next($t, 'SKU'), 'barcode' => $it['barcode'] ?: null,
+                    'item_id' => $itemId, 'sku' => $it['sku'] !== '' ? $it['sku'] : Numbering::next('SKU'), 'barcode' => $it['barcode'] ?: null,
                     'cost_price' => $it['cost'], 'sale_price' => $it['sale'],
                 ]);
                 $n++;

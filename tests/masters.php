@@ -9,27 +9,16 @@ require __DIR__ . '/lib.php';
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '', 'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Mastr');
-[$b, $tB] = $mk('Rival');
+[$a] = fresh_company($base, "Mastr $sfx", "mastr-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
 $val = fn(string $sql, array $p = []) => DB::val($sql, $p);
-$unit = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
+$unit = (int)$val("SELECT id FROM units WHERE name = 'Meter'");
 
 echo "Supplier master\n";
 $a->post('/suppliers', ['name' => 'Surat Mills', 'supplier_type' => 'manufacturer', 'phone' => '9999911111', 'tax_no' => '24ABCDE1234F1Z5', 'pan' => 'abcde1234f', 'city' => 'Surat', 'state' => 'Gujarat', 'pincode' => '395003',
     'ship_address' => 'Plot 4, Udhna', 'bank_name' => 'SBI', 'bank_account' => '1234567890', 'bank_ifsc' => 'sbin0001234', 'credit_limit' => '50000', 'lead_time_days' => '7', 'transport' => 'VRL', 'payment_terms_days' => '30',
     'contacts' => [['name' => 'Ramesh', 'role' => 'Dispatch', 'phone' => '9888800000', 'email' => 'r@x.com'], ['name' => '', 'role' => '', 'phone' => '', 'email' => ''], ['name' => 'Accounts', 'email' => 'acc@x.com']]], '/suppliers/create');
-$s1 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Surat Mills'", [$tA]);
+$s1 = (int)$val("SELECT id FROM suppliers WHERE name = 'Surat Mills'");
 $row = DB::one('SELECT * FROM suppliers WHERE id = ?', [$s1]);
 echo ($s1 ? '' : "  (supplier not saved)\n");
 check('every new supplier field is saved (type, GST/PAN, place, bank, limits, transport)', $s1 && $row['supplier_type'] === 'manufacturer' && $row['pan'] === 'ABCDE1234F' && $row['city'] === 'Surat' && $row['state'] === 'Gujarat' && $row['bank_ifsc'] === 'SBIN0001234'
@@ -44,21 +33,21 @@ check('editing replaces the contact list', (int)$val('SELECT COUNT(*) FROM suppl
 $a->post('/suppliers', ['name' => 'Bad Type', 'supplier_type' => 'wizard'], '/suppliers/create');
 $a->post('/suppliers', ['name' => 'Bad Limit', 'credit_limit' => '-5'], '/suppliers/create');
 $a->post('/suppliers', ['name' => 'Bad Contact', 'contacts' => [['name' => 'X', 'email' => 'nope']]], '/suppliers/create');
-check('bad type / negative limit / bad contact email are refused', !$val("SELECT 1 FROM suppliers WHERE tenant_id = ? AND name IN ('Bad Type','Bad Limit','Bad Contact')", [$tA]));
+check('bad type / negative limit / bad contact email are refused', !$val("SELECT 1 FROM suppliers WHERE name IN ('Bad Type','Bad Limit','Bad Contact')"));
 $a->post('/suppliers', ['name' => 'Delhi Traders', 'supplier_type' => 'trader'], '/suppliers/create');
-$s2 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Delhi Traders'", [$tA]);
+$s2 = (int)$val("SELECT id FROM suppliers WHERE name = 'Delhi Traders'");
 
 echo "Item master\n";
 $a->post('/items', ['name' => 'Royal Velvet Wine', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'track_batch' => 1, 'sku' => 'RVW', 'cost_price' => 300], '/items/create');
 $a->post('/items', ['name' => 'Royal Velvet Teal', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'track_batch' => 1, 'sku' => 'RVT', 'cost_price' => 310], '/items/create');
-$i1 = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Royal Velvet Wine'", [$tA]);
+$i1 = (int)$val("SELECT id FROM items WHERE name = 'Royal Velvet Wine'");
 $it = DB::one('SELECT * FROM items WHERE id = ?', [$i1]);
 check('item type, HSN and roll tracking saved; each colour is its own item with its own SKU', $i1 && $it['item_type'] === 'fabric' && $it['hsn_code'] === '5407' && (int)$it['track_batch'] === 1 && $val("SELECT sku FROM item_variants WHERE item_id = ?", [$i1]) === 'RVW'
-    && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name LIKE 'Royal Velvet%'", [$tA]) === 2);
+    && (int)$val("SELECT COUNT(*) FROM items WHERE name LIKE 'Royal Velvet%'") === 2);
 check('the item no longer has design / composition / width fields (they belong to the supplier item)', !array_key_exists('design_no', $it) && !array_key_exists('gsm', $it) && !str_contains($a->get('/items/create')['body'], 'name="gsm"') && !str_contains($a->get('/items/create')['body'], 'name="variants[0][colour]"'));
-$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV Wine 54', 'supplier_code' => 'RV-12-W', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RVW'", [$tA]),
+$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV Wine 54', 'supplier_code' => 'RV-12-W', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE sku = 'RVW'"),
     'design_no' => 'RV-12', 'composition' => '100% polyester', 'width' => '54 in', 'gsm' => '280', 'pattern' => 'Plain', 'finish' => 'Soft'], '/purchase/supplier-items/create');
-$sir = DB::one("SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_code = 'RV-12-W'", [$tA]);
+$sir = DB::one("SELECT * FROM supplier_items WHERE supplier_code = 'RV-12-W'");
 check('the supplier item carries the design, composition, width, GSM, pattern and finish', $sir && $sir['design_no'] === 'RV-12' && $sir['composition'] === '100% polyester' && $sir['width'] === '54 in' && $sir['gsm'] === '280' && $sir['pattern'] === 'Plain' && $sir['finish'] === 'Soft');
 $ish = $a->get("/items/$i1")['body'];
 check('the item page shows those details through its supplier item', str_contains($ish, 'Fabric') && str_contains($ish, 'RV-12') && str_contains($ish, '100% polyester') && str_contains($ish, '54 in'));
@@ -66,10 +55,10 @@ $f = $a->get('/items/create')['body'];
 check('the form has the product-type picker with all five kinds and the single SKU & price card', substr_count($f, '<option value="wallpaper"') === 1 && str_contains($f, 'value="carpet"') && str_contains($f, 'value="linen"') && str_contains($f, 'name="sku"') && str_contains($f, 'name="sale_price"'));
 check('items can be found by SKU, or through their supplier item (design number, supplier code)', str_contains($a->get('/items?q=RVW')['body'], 'Royal Velvet Wine') && str_contains($a->get('/items?q=RV-12')['body'], 'Royal Velvet Wine') && str_contains($a->get('/items?q=RV-12-W')['body'], 'Royal Velvet Wine'));
 $a->post('/items', ['name' => 'Bad Type Item', 'item_type' => 'unicorn', 'unit_id' => $unit, 'variants' => [['sku' => 'BT1']]], '/items/create');
-check('an unknown product type is refused', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Bad Type Item'", [$tA]));
+check('an unknown product type is refused', !$val("SELECT 1 FROM items WHERE name = 'Bad Type Item'"));
 $a->post('/items', ['name' => 'Floral Wallpaper', 'item_type' => 'wallpaper', 'unit_id' => $unit, 'sku' => 'WP1', 'cost_price' => 900], '/items/create');
-check('a wallpaper saves too', $val("SELECT item_type FROM items WHERE tenant_id = ? AND name = 'Floral Wallpaper'", [$tA]) === 'wallpaper');
-check('item form can hide a field through the designer settings', (function () use ($a, $tA) {
+check('a wallpaper saves too', $val("SELECT item_type FROM items WHERE name = 'Floral Wallpaper'") === 'wallpaper');
+check('item form can hide a field through the designer settings', (function () use ($a) {
     $a->post('/settings/formdesign', ['payload' => json_encode(['item' => ['fields' => ['hsn_code' => ['show' => false, 'w' => '', 'help' => '']], 'sections' => [['title' => '', 'cols' => 0, 'fields' => ['name']]]]])], '/settings/modules');
     $ok = !str_contains($a->get('/items/create')['body'], 'name="hsn_code"');
     $a->post('/settings/formdesign', ['payload' => json_encode(['item' => ['reset' => true]])], '/settings/modules');
@@ -77,11 +66,11 @@ check('item form can hide a field through the designer settings', (function () u
 })());
 
 echo "Supplier rate list\n";
-$v1 = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RVW'", [$tA]);
-$v2 = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RVT'", [$tA]);
+$v1 = (int)$val("SELECT id FROM item_variants WHERE sku = 'RVW'");
+$v2 = (int)$val("SELECT id FROM item_variants WHERE sku = 'RVT'");
 $a->post("/suppliers/$s1/rates", ['variant_id' => $v1, 'rate' => '280', 'discount_pct' => '5', 'min_qty' => '100', 'valid_from' => '2026-01-01', 'supplier_code' => 'D-77'], "/suppliers/$s1");
 $a->post("/suppliers/$s2/rates", ['variant_id' => $v1, 'rate' => '290', 'valid_from' => '2026-01-01'], "/suppliers/$s2");
-check('rates saved per supplier (same item, two suppliers)', (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE tenant_id = ? AND variant_id = ?', [$tA, $v1]) === 2);
+check('rates saved per supplier (same item, two suppliers)', (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE variant_id = ?', [$v1]) === 2);
 $cur = App\Models\Purchase::class;
 check('net rate = rate less discount', abs(280 * 0.95 - 266.0) < 0.001 && (float)$val('SELECT ROUND(rate * (1 - discount_pct / 100), 2) FROM supplier_rates WHERE supplier_id = ?', [$s1]) === 266.0);
 $a->post("/suppliers/$s1/rates", ['variant_id' => $v1, 'rate' => '300', 'valid_from' => '2026-06-01'], "/suppliers/$s1");
@@ -97,10 +86,7 @@ foreach ([['rate' => '-1'], ['rate' => 'abc'], ['rate' => '10', 'discount_pct' =
 check('bad rates (negative, text, discount > 100, bad dates, negative min qty, huge lead time) are refused', !$val('SELECT 1 FROM supplier_rates WHERE variant_id = ?', [$v2]));
 $a->post("/suppliers/$s1/rates", ['variant_id' => 999999, 'rate' => '5'], "/suppliers/$s1");
 check('a made-up item is refused', !$val('SELECT 1 FROM supplier_rates WHERE variant_id = 999999'));
-$b->post("/suppliers/$s1/rates", ['variant_id' => $v2, 'rate' => '1'], '/suppliers');
-check("another company cannot touch A's supplier rates", !$val('SELECT 1 FROM supplier_rates WHERE variant_id = ?', [$v2]));
 $rid = (int)$val('SELECT id FROM supplier_rates WHERE supplier_id = ? ORDER BY id LIMIT 1', [$s1]);
-$b->post("/suppliers/$s1/rates/$rid/delete", [], '/suppliers');
 check("…or delete them", (bool)$val('SELECT 1 FROM supplier_rates WHERE id = ?', [$rid]));
 
 // lookup used by the purchase forms
@@ -113,17 +99,15 @@ $l3 = json_decode($a->get('/lookup/items?q=RVW')['body'], true);
 check('without a supplier there is no rate (item cost is used)', !isset($l3[0]['rate']));
 $l4 = json_decode($a->get("/lookup/items?variant=$v1&supplier=$s1")['body'], true);
 check('lookup by variant id works (used when the supplier changes)', count($l4) === 1 && (float)$l4[0]['rate'] === 305.0);
-$l5 = json_decode($b->get("/lookup/items?variant=$v1&supplier=$s1")['body'], true);
-check("another company sees nothing of A's items or rates", $l5 === []);
 // discount applied
 $a->post("/suppliers/$s2/rates", ['variant_id' => $v2, 'rate' => '200', 'discount_pct' => '10', 'valid_from' => '2026-01-01'], "/suppliers/$s2");
 $l6 = json_decode($a->get("/lookup/items?variant=$v2&supplier=$s2")['body'], true);
 check('discount is applied in the lookup (200 less 10% = 180)', (float)($l6[0]['rate'] ?? 0) === 180.0);
 // last paid
-DB::run("INSERT INTO grns (tenant_id, grn_no, supplier_id, warehouse_id, received_date) SELECT ?, 'G-T1', ?, id, '2026-04-01' FROM warehouses WHERE tenant_id = ? LIMIT 1", [$tA, $s1, $tA]);
-$g = (int)DB::val("SELECT id FROM grns WHERE tenant_id = ? AND grn_no = 'G-T1'", [$tA]);
+DB::run("INSERT INTO grns (grn_no, supplier_id, warehouse_id, received_date) SELECT 'G-T1', ?, id, '2026-04-01' FROM warehouses LIMIT 1", [$s1]);
+$g = (int)DB::val("SELECT id FROM grns WHERE grn_no = 'G-T1'");
 $cols = DB::all('SHOW COLUMNS FROM grn_items');
-DB::run('INSERT INTO grn_items (tenant_id, grn_id, variant_id, qty, unit_price, tax_rate) VALUES (?,?,?,?,?,?)', [$tA, $g, $v1, 40, 275, 5]);
+DB::run('INSERT INTO grn_items (grn_id, variant_id, qty, unit_price, tax_rate) VALUES (?,?,?,?,?)', [$g, $v1, 40, 275, 5]);
 $l7 = json_decode($a->get("/lookup/items?variant=$v1&supplier=$s1")['body'], true);
 check('lookup also reports what we last paid this supplier', (float)($l7[0]['last_paid'] ?? 0) === 275.0 && str_contains((string)($l7[0]['last_note'] ?? ''), 'Last bought'));
 
@@ -167,7 +151,7 @@ $p = $a->get('/reports/supplier-dues/export/csv?from=2026-01-01&to=2026-12-31')[
 check('supplier dues report opens; supplier with no bills and nothing owed is left out', str_contains($txt($a->get('/reports/supplier-dues')['body']), 'Supplier purchases') && !str_contains($p, 'Delhi Traders'));
 // give Surat Mills a bill so it has dues
 $wh = (int)DB::val('SELECT warehouse_id FROM grns WHERE id = ?', [$g]);
-DB::run("INSERT INTO purchase_bills (tenant_id, bill_no, supplier_id, grn_id, bill_date, due_date, subtotal, tax_total, total, paid_amount, returned_amount) VALUES (?, 'PB-T1', ?, ?, '2026-04-02', '2026-04-20', 10000, 500, 10500, 2500, 0)", [$tA, $s1, $g]);
+DB::run("INSERT INTO purchase_bills (bill_no, supplier_id, grn_id, bill_date, due_date, subtotal, tax_total, total, paid_amount, returned_amount) VALUES ('PB-T1', ?, ?, '2026-04-02', '2026-04-20', 10000, 500, 10500, 2500, 0)", [$s1, $g]);
 $p = $a->get('/reports/supplier-dues/export/csv?from=2026-01-01&to=2026-12-31')['body'];
 check('supplier dues: purchased 10,500, owe 8,000, all overdue', str_contains($p, '"Surat Mills","Manufacturer / mill",Surat,1,10500,8000,8000'));
 $a->post('/suppliers/' . $s1, ['name' => 'Surat Mills', 'credit_limit' => '50000', 'is_active' => 1], "/suppliers/$s1/edit");
@@ -178,37 +162,30 @@ check('supplier dues: over the credit limit is flagged', str_contains($p, 'over 
 check('only-where-we-owe filter works and outside-period purchases show 0 bills', str_contains($txt($a->get('/reports/supplier-dues?from=2025-01-01&to=2025-02-01&status=due')['body']), '8,000.00'));
 $p = $txt($a->get("/reports/price-paid?from=2026-01-01&to=2026-12-31&q=RVW")['body']);
 check('price paid history shows the receipt, price and first purchase', str_contains($p, 'G-T1') && str_contains($p, '275.00') && str_contains($p, 'First purchase'));
-DB::run('INSERT INTO grn_items (tenant_id, grn_id, variant_id, qty, unit_price, tax_rate) VALUES (?,?,?,?,?,?)', [$tA, $g, $v1, 10, 302.5, 5]);
+DB::run('INSERT INTO grn_items (grn_id, variant_id, qty, unit_price, tax_rate) VALUES (?,?,?,?,?)', [$g, $v1, 10, 302.5, 5]);
 $p = $txt($a->get("/reports/price-paid?from=2026-01-01&to=2026-12-31&q=RVW")['body']);
 check('price paid history shows +10% against the previous purchase', str_contains($p, '+10%'));
-foreach (['supplier-dues', 'rate-comparison', 'rate-history', 'price-paid'] as $slug) {
-    $c = $a->get("/reports/$slug/export/csv?from=2026-01-01&to=2026-12-31");
-    check("$slug exports to CSV", $c['status'] === 200 && substr_count($c['body'], "\n") >= 2);
-    check("$slug is empty for another company", !str_contains($txt($b->get("/reports/$slug?from=2026-01-01&to=2026-12-31")['body']), 'Surat Mills'));
-}
 
 echo "Items CSV\n";
 $tpl = $a->get('/items/import/template')['body'];
 check('item template has one row per item and a wallpaper / linen / carpet example', str_contains($tpl, 'item_type') && !str_contains($tpl, 'design_no') && !str_contains($tpl, 'colour') && str_contains($tpl, 'wallpaper') && str_contains($tpl, 'carpet') && str_contains($tpl, 'linen'));
 $hd = "item_name,item_type,category,brand,unit,tax,hsn_code,track_batch,reorder_level,sku,barcode,cost_price,sale_price\n";
 $up = function (string $body) use ($a) { $f = tempnam(sys_get_temp_dir(), 'it') . '.csv'; file_put_contents($f, $body); return $a->post('/items/import', ['file' => new CURLFile($f, 'text/csv', 'i.csv')], '/items/import'); };
-$un = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
+$un = (int)$val("SELECT id FROM units WHERE name = 'Meter'");
 $up($hd . "Silk Curtain Gold,fabric,Fabric,,Meter,,5407,,5,SILK-G,,500,800\nSilk Curtain Ivory,fabric,Fabric,,Meter,,5407,,5,SILK-I,,500,800\nSea Wallpaper Blue,wallpaper,,,Meter,,4814,no,,,,900,1500\nQueen Sheet Pink,linen,,,Meter,,6302,,,,,700,1200\n");
-$si = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Silk Curtain Gold'", [$tA]);
-check('import keeps the type; blank track_batch on a fabric means roll-tracked; one item per row', $si && $si['item_type'] === 'fabric' && $si['hsn_code'] === '5407' && (int)$si['track_batch'] === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name LIKE 'Silk Curtain%'", [$tA]) === 2 && $val('SELECT sku FROM item_variants WHERE item_id = ?', [$si['id']]) === 'SILK-G');
-$wp = DB::one("SELECT * FROM items WHERE tenant_id = ? AND name = 'Sea Wallpaper Blue'", [$tA]);
+$si = DB::one("SELECT * FROM items WHERE name = 'Silk Curtain Gold'");
+check('import keeps the type; blank track_batch on a fabric means roll-tracked; one item per row', $si && $si['item_type'] === 'fabric' && $si['hsn_code'] === '5407' && (int)$si['track_batch'] === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE name LIKE 'Silk Curtain%'") === 2 && $val('SELECT sku FROM item_variants WHERE item_id = ?', [$si['id']]) === 'SILK-G');
+$wp = DB::one("SELECT * FROM items WHERE name = 'Sea Wallpaper Blue'");
 check('an explicit "no" stays untracked', (int)$wp['track_batch'] === 0 && $wp['item_type'] === 'wallpaper');
-check('linen is not roll-tracked by default', (int)$val("SELECT track_batch FROM items WHERE tenant_id = ? AND name = 'Queen Sheet Pink'", [$tA]) === 0);
-$n = (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]);
+check('linen is not roll-tracked by default', (int)$val("SELECT track_batch FROM items WHERE name = 'Queen Sheet Pink'") === 0);
+$n = (int)$val('SELECT COUNT(*) FROM items');
 $up($hd . "Nice One,fabric,,,Meter,,,,,,,1,2\nBad Type,unicorn,,,Meter,,,,,,,1,2\n");
-check('an unknown item_type rejects the whole file', (int)$val('SELECT COUNT(*) FROM items WHERE tenant_id = ?', [$tA]) === $n);
+check('an unknown item_type rejects the whole file', (int)$val('SELECT COUNT(*) FROM items') === $n);
 $up($hd . "Long Attr,fabric,,,Meter,," . str_repeat('9', 30) . ",,,,,1,2\n");
-check('an over-long HSN code rejects the file', !$val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Long Attr'", [$tA]));
+check('an over-long HSN code rejects the file', !$val("SELECT 1 FROM items WHERE name = 'Long Attr'"));
 $exp = $a->get('/items/export')['body'];
 check('export has one row per item with its SKU and prices', str_contains($exp, 'item_type') && str_contains($exp, 'Silk Curtain Gold') && str_contains($exp, 'SILK-G') && !str_contains($exp, 'design_no'));
 $re = tempnam(sys_get_temp_dir(), 'rx') . '.csv'; file_put_contents($re, $exp);
-$b->post('/items/import', ['file' => new CURLFile($re, 'text/csv', 'e.csv')], '/items/import');
-check("another company can import A's exported file as its own (round trip)", (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND name = 'Silk Curtain Gold'", [$tB]) === 1 && (int)$val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND item_type = 'fabric' AND hsn_code = '5407'", [$tB]) >= 1);
 
 echo "Rate lists page (menu)\n";
 $mh = $a->get('/dashboard')['body'];
@@ -222,7 +199,7 @@ check('filtering by supplier shows only that supplier', str_contains($only, 'Del
 check('search by item name / SKU / design works and an empty result says so', str_contains($a->get('/purchase/rates?q=RVW')['body'], 'Royal Velvet') && str_contains($a->get('/purchase/rates?q=zzzzqq')['body'], 'Nothing matches these filters'));
 $allr = $a->get('/purchase/rates?show=all')['body']; $cur = $a->get('/purchase/rates')['body'];
 check('"With earlier rates" adds the older rows that "Current" hides', substr_count($allr, 'class="rl-old"') > substr_count($cur, 'class="rl-old"') && substr_count($cur, 'class="rl-old"') === 0);
-$vv = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'WP1'", [$tA]);
+$vv = (int)$val("SELECT id FROM item_variants WHERE sku = 'WP1'");
 $ra = $a->post("/suppliers/$s2/rates", ['variant_id' => $vv, 'rate' => '777', 'valid_from' => '2026-02-01', 'return' => 'purchase/rates?show=all'], '/purchase/rates');
 check('adding from this page returns to it (same filters)', $ra['status'] === 302 && str_contains((string)$ra['location'], 'purchase/rates?show=all') && (float)$val('SELECT rate FROM supplier_rates WHERE supplier_id = ? AND variant_id = ?', [$s2, $vv]) === 777.0);
 $rid2 = (int)$val('SELECT id FROM supplier_rates WHERE supplier_id = ? AND variant_id = ?', [$s2, $vv]);
@@ -231,46 +208,45 @@ check('deleting from this page also returns to it', $rd['status'] === 302 && str
 $rx = $a->post("/suppliers/$s2/rates", ['variant_id' => $vv, 'rate' => '5', 'return' => 'https://evil.example/x'], '/purchase/rates');
 check('an off-site return address is ignored (falls back to the supplier page)', str_contains((string)$rx['location'], "suppliers/$s2") && !str_contains((string)$rx['location'], 'evil'));
 $a->post("/suppliers/$s2/rates/" . (int)$val('SELECT id FROM supplier_rates WHERE supplier_id = ? AND variant_id = ?', [$s2, $vv]) . '/delete', [], '/purchase/rates');
-check("another company's rate list is empty of A's rates", !str_contains($txt2 = preg_replace('/\s+/', ' ', strip_tags($b->get('/purchase/rates')['body'])), 'Surat Mills') && !str_contains($txt2, 'Royal Velvet'));
 $view = new Client($base);
-$rid = DB::insert('roles', ['tenant_id' => $tA, 'name' => 'RateView ' . $sfx]); DB::insert('role_permissions', ['role_id' => $rid, 'permission' => 'suppliers.view']);
-DB::insert('users', ['tenant_id' => $tA, 'role_id' => $rid, 'name' => 'RV', 'email' => "rv-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
+$rid = DB::insert('roles', ['name' => 'RateView ' . $sfx]); DB::insert('role_permissions', ['role_id' => $rid, 'permission' => 'suppliers.view']);
+DB::insert('users', ['role_id' => $rid, 'name' => 'RV', 'email' => "rv-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
 $view->post('/login', ['email' => "rv-$sfx@test.local", 'password' => 'Password123'], '/login');
 $vb = $view->get('/purchase/rates')['body'];
 check('a view-only user can read the list but gets no Add / Revise / Remove controls', str_contains($vb, 'Supplier rate lists') && !str_contains($vb, 'data-rate-new') && !str_contains($vb, 'data-rate-revise') && !str_contains($vb, 'id="rateModal"'));
 $noPerm = new Client($base);
-$r2 = DB::insert('roles', ['tenant_id' => $tA, 'name' => 'NoSup ' . $sfx]); DB::insert('role_permissions', ['role_id' => $r2, 'permission' => 'customers.view']);
-DB::insert('users', ['tenant_id' => $tA, 'role_id' => $r2, 'name' => 'NS', 'email' => "ns-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
+$r2 = DB::insert('roles', ['name' => 'NoSup ' . $sfx]); DB::insert('role_permissions', ['role_id' => $r2, 'permission' => 'customers.view']);
+DB::insert('users', ['role_id' => $r2, 'name' => 'NS', 'email' => "ns-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
 $noPerm->post('/login', ['email' => "ns-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('a user without supplier permission gets 403 and no menu entry', $noPerm->get('/purchase/rates')['status'] === 403 && !str_contains($noPerm->get('/dashboard')['body'], 'Rate lists'));
 
 echo "Supplier items module (their name / code, linked to our item)\n";
-DB::run('DELETE FROM supplier_items WHERE tenant_id = ?', [$tA]);
+DB::run('DELETE FROM supplier_items');
 $si = fn(array $d, string $to = '/purchase/supplier-items') => $a->post('/purchase/supplier-items', $d, '/purchase/supplier-items/create');
 $r = $si(['supplier_id' => $s1, 'supplier_name' => 'Maroon Royal 54', 'supplier_code' => 'MR-54', 'variant_id' => $v1, 'min_order_qty' => '100', 'lead_time_days' => '7', 'is_preferred' => 1]);
-$row = DB::one('SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND supplier_code = ?', [$tA, $s1, 'MR-54']);
+$row = DB::one('SELECT * FROM supplier_items WHERE supplier_id = ? AND supplier_code = ?', [$s1, 'MR-54']);
 check('a supplier item is created with their name + code, linked to our variant, with min qty, lead time and preferred', $r['status'] === 302 && $row && (int)$row['variant_id'] === $v1 && (float)$row['min_order_qty'] === 100.0 && (int)$row['lead_time_days'] === 7 && (int)$row['is_preferred'] === 1);
 $id1 = (int)($row['id'] ?? 0);
 $si(['supplier_id' => $s1, 'supplier_name' => 'Another', 'supplier_code' => 'MR-54']);
-check('the same supplier cannot use the same code twice', (int)$val('SELECT COUNT(*) FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND supplier_code = ?', [$tA, $s1, 'MR-54']) === 1);
+check('the same supplier cannot use the same code twice', (int)$val('SELECT COUNT(*) FROM supplier_items WHERE supplier_id = ? AND supplier_code = ?', [$s1, 'MR-54']) === 1);
 $si(['supplier_id' => $s1, 'supplier_name' => 'Dup link', 'supplier_code' => 'MR-99', 'variant_id' => $v1]);
-check('and one supplier cannot have two supplier items linked to the same variant', !$val('SELECT 1 FROM supplier_items WHERE tenant_id = ? AND supplier_code = ?', [$tA, 'MR-99']));
+check('and one supplier cannot have two supplier items linked to the same variant', !$val('SELECT 1 FROM supplier_items WHERE supplier_code = ?', ['MR-99']));
 $si(['supplier_id' => $s2, 'supplier_name' => 'Burgundy', 'supplier_code' => 'BG-1', 'variant_id' => $v1, 'is_preferred' => 1]);
-$id2 = (int)$val('SELECT id FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND supplier_code = ?', [$tA, $s2, 'BG-1']);
-check('a second supplier can supply the same item of ours (many suppliers per item)', $id2 > 0 && (int)$val('SELECT COUNT(*) FROM supplier_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $v1]) === 2);
+$id2 = (int)$val('SELECT id FROM supplier_items WHERE supplier_id = ? AND supplier_code = ?', [$s2, 'BG-1']);
+check('a second supplier can supply the same item of ours (many suppliers per item)', $id2 > 0 && (int)$val('SELECT COUNT(*) FROM supplier_items WHERE variant_id = ?', [$v1]) === 2);
 check('only one supplier item is preferred per variant', (int)$val('SELECT is_preferred FROM supplier_items WHERE id = ?', [$id2]) === 1 && (int)$val('SELECT is_preferred FROM supplier_items WHERE id = ?', [$id1]) === 0);
 $si(['supplier_id' => $s2, 'supplier_name' => 'Unlinked thing', 'supplier_code' => 'UL-1']);
-check('an item can wait unlinked (no variant yet)', $val('SELECT variant_id FROM supplier_items WHERE tenant_id = ? AND supplier_code = ?', [$tA, 'UL-1']) === null);
+check('an item can wait unlinked (no variant yet)', $val('SELECT variant_id FROM supplier_items WHERE supplier_code = ?', ['UL-1']) === null);
 $si(['supplier_id' => $s2, 'supplier_name' => '', 'supplier_code' => '']);
 $si(['supplier_id' => $s1, 'supplier_name' => str_repeat('n', 151)]);
 $si(['supplier_id' => $s1, 'supplier_name' => 'Bad link', 'variant_id' => 99999999]);
-check('no name and no code, an over-long name and a bad link are refused', !$val('SELECT 1 FROM supplier_items WHERE tenant_id = ? AND (supplier_name = ? OR supplier_name = ?)', [$tA, 'Bad link', str_repeat('n', 151)]) && (int)$val('SELECT COUNT(*) FROM supplier_items WHERE tenant_id = ? AND supplier_id = ? AND supplier_name IS NULL AND supplier_code IS NULL', [$tA, $s2]) === 0);
+check('no name and no code, an over-long name and a bad link are refused', !$val('SELECT 1 FROM supplier_items WHERE (supplier_name = ? OR supplier_name = ?)', ['Bad link', str_repeat('n', 151)]) && (int)$val('SELECT COUNT(*) FROM supplier_items WHERE supplier_id = ? AND supplier_name IS NULL AND supplier_code IS NULL', [$s2]) === 0);
 $l = $a->get('/purchase/supplier-items')['body'];
 check('the list shows both suppliers\' items, the not-linked warning and the Add / Export / Import controls', str_contains($l, 'Maroon Royal 54') && str_contains($l, 'Burgundy') && str_contains($l, 'Not linked') && str_contains($l, 'purchase/supplier-items/export') && str_contains($l, 'siImport'));
 check('Columns picker includes the company\'s own columns link and the standard optional columns', str_contains($l, 'Add or remove your own columns') && str_contains($l, 'Min order qty') && str_contains($l, 'Our item'));
 check('filters: by supplier, and by "not linked"', !str_contains($a->get("/purchase/supplier-items?supplier=$s1")['body'], 'Burgundy') && str_contains($a->get('/purchase/supplier-items?link=unlinked')['body'], 'Unlinked thing') && !str_contains($a->get('/purchase/supplier-items?link=unlinked')['body'], 'Maroon Royal'));
 $cfs = $a->post('/settings/formdesign', ['payload' => json_encode(['supplier_item' => ['sections' => [['title' => '', 'cols' => 2, 'fields' => ['supplier_id', 'supplier_name', 'supplier_code', 'variant_id', 'min_order_qty', 'lead_time_days', 'note', 'cf:new1']], ], 'fields' => ['cf:new1' => ['isNew' => true, 'name' => 'Composition', 'type' => 'text', 'show' => true, 'inList' => true]]]]), 'current' => 'supplier_item'], '/settings/modules');
-$cfid = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND entity = 'supplier_item' AND label = 'Composition'", [$tA]);
+$cfid = (int)$val("SELECT id FROM custom_fields WHERE entity = 'supplier_item' AND label = 'Composition'");
 check('a user can add their own column (custom field) to supplier items from the layout designer', $cfid > 0);
 $a->post("/purchase/supplier-items/$id1", ['supplier_name' => 'Maroon Royal 54', 'supplier_code' => 'MR-54', 'variant_id' => $v1, 'is_active' => 1, 'cf' => [$cfid => '100% velvet']], "/purchase/supplier-items/$id1/edit");
 $l = $a->get('/purchase/supplier-items')['body'];
@@ -287,19 +263,18 @@ check('with a supplier and no search text its own items come first', ((int)(json
 $ih = $a->get("/items/$i1")['body'];
 check('the item page lists every supplier linked to it, with their names, the preferred one marked', str_contains($ih, 'Suppliers &amp; rates') && str_contains($ih, 'Maroon Royal 54') && str_contains($ih, 'Burgundy') && str_contains($ih, 'Preferred'));
 check('the supplier page lists the supplier\'s items with a link to the master', str_contains($a->get("/suppliers/$s1")['body'], 'Items supplied') && str_contains($a->get("/suppliers/$s1")['body'], "purchase/supplier-items/$id1"));
-$po = DB::insert('purchase_orders', ['tenant_id' => $tA, 'po_no' => 'PO-8001', 'supplier_id' => $s1, 'warehouse_id' => (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]), 'order_date' => date('Y-m-d'), 'status' => 'draft']);
-DB::insert('purchase_order_items', ['tenant_id' => $tA, 'po_id' => $po, 'variant_id' => $v1, 'qty_ordered' => 5, 'unit_price' => 310, 'tax_rate' => 0]);
+$po = DB::insert('purchase_orders', ['po_no' => 'PO-8001', 'supplier_id' => $s1, 'warehouse_id' => (int)$val('SELECT id FROM warehouses LIMIT 1'), 'order_date' => date('Y-m-d'), 'status' => 'draft']);
+DB::insert('purchase_order_items', ['po_id' => $po, 'variant_id' => $v1, 'qty_ordered' => 5, 'unit_price' => 310, 'tax_rate' => 0]);
 check('the PO page and print show "Their: code · name" under the item', str_contains($a->get("/purchase/orders/$po")['body'], 'Their: MR-54 · Maroon Royal 54') && str_contains($a->get("/purchase/orders/$po/print")['body'], 'Their: MR-54 · Maroon Royal 54'));
 check('buying from a supplier with no supplier item for it is still possible (any item, any supplier)', count(json_decode($a->get("/lookup/items?q=Royal&supplier=$s2")['body'], true)) >= 1);
 $csv = $a->get('/purchase/supplier-items/export');
 check('export is a CSV with their name, code, our sku and the current rate', str_contains($csv['body'], 'supplier,supplier_item_name') && str_contains($csv['body'], 'Maroon Royal 54') && str_contains($csv['body'], ',RVW,') && preg_match('/,\d+\.\d\d,[\d.]+,\d{4}-\d{2}-\d{2},/', $csv['body']) === 1);
 $tmp = tempnam(sys_get_temp_dir(), 'si'); file_put_contents($tmp, "supplier,supplier_item_name,supplier_item_code,sku,min_order_qty,lead_time_days,preferred,rate,discount_pct,valid_from\nSurat Mills,Teal Silk,TS-9,RVT,50,5,,420,10,2026-04-01\nNobody Ltd,X,X-1,,,,,,,\nDelhi Traders,Y,Y-1,NOSKU,,,,,,\n");
 $imp = $a->post('/purchase/supplier-items/import', ['file' => new CURLFile($tmp, 'text/csv', 'si.csv')], '/purchase/supplier-items');
-$ts = DB::one('SELECT * FROM supplier_items WHERE tenant_id = ? AND supplier_code = ?', [$tA, 'TS-9']);
-check('CSV import adds a linked item with its rate and skips unknown suppliers / SKUs', $ts && (int)$ts['variant_id'] === $v2 && (float)$val('SELECT rate FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ? ORDER BY valid_from DESC, id DESC LIMIT 1', [$tA, $s1, $v2]) === 420.0 && !$val('SELECT 1 FROM supplier_items WHERE tenant_id = ? AND supplier_code IN (?, ?)', [$tA, 'X-1', 'Y-1']));
-check('another company sees none of it and cannot reach or change it', !str_contains($b->get('/purchase/supplier-items')['body'], 'Maroon Royal 54') && $b->get("/purchase/supplier-items/$id1")['status'] === 404 && $b->post("/purchase/supplier-items/$id1", ['supplier_name' => 'Hacked', 'is_active' => 1], '/purchase/supplier-items')['status'] === 404 && $val('SELECT supplier_name FROM supplier_items WHERE id = ?', [$id1]) === 'Maroon Royal 54');
+$ts = DB::one('SELECT * FROM supplier_items WHERE supplier_code = ?', ['TS-9']);
+check('CSV import adds a linked item with its rate and skips unknown suppliers / SKUs', $ts && (int)$ts['variant_id'] === $v2 && (float)$val('SELECT rate FROM supplier_rates WHERE supplier_id = ? AND variant_id = ? ORDER BY valid_from DESC, id DESC LIMIT 1', [$s1, $v2]) === 420.0 && !$val('SELECT 1 FROM supplier_items WHERE supplier_code IN (?, ?)', ['X-1', 'Y-1']));
 $a->post("/purchase/supplier-items/$id2/delete", [], '/purchase/supplier-items');
-check('deleting a supplier item keeps its rate history', !$val('SELECT 1 FROM supplier_items WHERE id = ?', [$id2]) && (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE tenant_id = ? AND supplier_id = ? AND variant_id = ?', [$tA, $s1, $v1]) >= 1);
+check('deleting a supplier item keeps its rate history', !$val('SELECT 1 FROM supplier_items WHERE id = ?', [$id2]) && (int)$val('SELECT COUNT(*) FROM supplier_rates WHERE supplier_id = ? AND variant_id = ?', [$s1, $v1]) >= 1);
 
 echo $fails ? "\n$fails check(s) FAILED\n" : "\nAll checks passed\n";
 exit($fails ? 1 : 0);

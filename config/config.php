@@ -25,11 +25,14 @@ return [
         'driver' => $get('MAIL_DRIVER', 'log'),
         'from'   => $get('MAIL_FROM', 'noreply@localhost'),
     ],
-    'superadmin' => [
-        'name'     => $get('SUPERADMIN_NAME', 'Super Admin'),
-        'email'    => $get('SUPERADMIN_EMAIL', 'admin@example.com'),
-        'password' => $get('SUPERADMIN_PASSWORD', 'ChangeMe123!'),
+    // the first owner (database/seed.php on a fresh install), and which company stays when an older multi-company database is turned into one company
+    'owner' => [
+        'company'  => $get('COMPANY_NAME', 'My Company'),
+        'name'     => $get('OWNER_NAME', 'Owner'),
+        'email'    => $get('OWNER_EMAIL', 'owner@example.com'),
+        'password' => $get('OWNER_PASSWORD', 'ChangeMe123!'),
     ],
+    'keep_company_id' => (int)$get('KEEP_COMPANY_ID', 0),
     'permissions' => require __DIR__ . '/permissions.php',
     'masters' => require __DIR__ . '/masters.php',
     'menu' => require __DIR__ . '/menu.php',

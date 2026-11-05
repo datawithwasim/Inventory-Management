@@ -19,15 +19,10 @@ final class CustomFields
     /** Types that need a list of choices. */
     public const CHOICE_TYPES = ['dropdown', 'radio', 'multiselect'];
 
-    private static function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     /** @return array<int, array> */
     public static function fields(string $entity, bool $onlyActive = true): array
     {
-        $rows = DB::all('SELECT * FROM custom_fields WHERE tenant_id = ? AND entity = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id', [self::tid(), $entity]);
+        $rows = DB::all('SELECT * FROM custom_fields WHERE entity = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, id', [$entity]);
         foreach ($rows as &$r) {
             $r['choices'] = in_array($r['type'], self::CHOICE_TYPES, true) ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$r['options'])))) : [];
             $r['source'] = $r['type'] === 'lookup' ? (string)$r['options'] : '';
@@ -40,7 +35,7 @@ final class CustomFields
     {
         return array_column(DB::all(
             'SELECT v.field_id, v.value FROM custom_field_values v JOIN custom_fields f ON f.id = v.field_id
-             WHERE v.tenant_id = ? AND v.entity_id = ? AND f.entity = ?', [self::tid(), $id, $entity]), 'value', 'field_id');
+             WHERE v.entity_id = ? AND f.entity = ?', [$id, $entity]), 'value', 'field_id');
     }
 
     /** Values to show in a form: what was just posted (after an error), else what is saved. */
@@ -96,7 +91,7 @@ final class CustomFields
                 $errors[] = "$label is too long (max " . ($f['type'] === 'textarea' ? 1000 : 255) . " characters).";
             }
             if ($v !== '' && !empty($f['is_unique']) && in_array($f['type'], self::UNIQUE_TYPES, true)
-                && DB::val('SELECT 1 FROM custom_field_values WHERE tenant_id = ? AND field_id = ? AND value = ? AND entity_id <> ? LIMIT 1', [self::tid(), $id, $v, (int)$entityId]) !== null) {
+                && DB::val('SELECT 1 FROM custom_field_values WHERE field_id = ? AND value = ? AND entity_id <> ? LIMIT 1', [$id, $v, (int)$entityId]) !== null) {
                 $errors[] = "$label \"$v\" is already used. It must be unique.";
             }
             $values[$id] = $v;
@@ -106,19 +101,18 @@ final class CustomFields
 
     public static function save(string $entity, int $entityId, array $values): void
     {
-        $t = self::tid();
         foreach ($values as $fieldId => $v) {
             if ($v === '' || ($v === '0' && self::isCheckbox((int)$fieldId))) {
-                DB::run('DELETE FROM custom_field_values WHERE field_id = ? AND entity_id = ? AND tenant_id = ?', [$fieldId, $entityId, $t]);
+                DB::run('DELETE FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fieldId, $entityId]);
                 continue;
             }
-            DB::run('INSERT INTO custom_field_values (field_id, entity_id, tenant_id, value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', [$fieldId, $entityId, $t, $v]);
+            DB::run('INSERT INTO custom_field_values (field_id, entity_id, value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', [$fieldId, $entityId, $v]);
         }
     }
 
     private static function isCheckbox(int $fieldId): bool
     {
-        return DB::val("SELECT 1 FROM custom_fields WHERE id = ? AND tenant_id = ? AND type = 'checkbox'", [$fieldId, self::tid()]) !== null;
+        return DB::val("SELECT 1 FROM custom_fields WHERE id = ? AND type = 'checkbox'", [$fieldId]) !== null;
     }
 
     public static function display(array $f, ?string $value): string
@@ -147,8 +141,8 @@ final class CustomFields
         $in = implode(',', array_fill(0, count($ids), '?'));
         $fin = implode(',', array_fill(0, count($fields), '?'));
         $map = [];
-        foreach (DB::all("SELECT entity_id, field_id, value FROM custom_field_values WHERE tenant_id = ? AND entity_id IN ($in) AND field_id IN ($fin)",
-            [self::tid(), ...$ids, ...array_map(fn($f) => (int)$f['id'], $fields)]) as $v) $map[$v['entity_id']][$v['field_id']] = $v['value'];
+        foreach (DB::all("SELECT entity_id, field_id, value FROM custom_field_values WHERE entity_id IN ($in) AND field_id IN ($fin)",
+            [...$ids, ...array_map(fn($f) => (int)$f['id'], $fields)]) as $v) $map[$v['entity_id']][$v['field_id']] = $v['value'];
         foreach ($rows as &$r) $r['cf'] = $map[$r['id']] ?? [];
         // a lookup is stored as an id; the list shows the name
         foreach ($fields as $f) if ($f['type'] === 'lookup') foreach ($rows as &$r) if (isset($r['cf'][$f['id']])) $r['cf'][$f['id']] = self::display($f, (string)$r['cf'][$f['id']]);

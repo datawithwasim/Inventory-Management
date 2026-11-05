@@ -18,18 +18,12 @@ final class Currencies
         'AED' => ['UAE dirham', 'AED', 22.6], 'CNY' => ['Chinese yuan', 'CN¥', 11.5], 'JPY' => ['Japanese yen', 'JP¥', 0.56]];
     public const ORIGINS = ['domestic' => 'Domestic', 'imported' => 'Imported', 'market' => 'Market (local)'];
 
-    private static function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     /** Adds the usual currencies the first time a company needs them. */
     private static function ensure(): void
     {
-        $t = self::tid();
-        if ((int)DB::val('SELECT COUNT(*) FROM currencies WHERE tenant_id = ?', [$t]) > 0) return;
+        if ((int)DB::val('SELECT COUNT(*) FROM currencies') > 0) return;
         foreach (self::DEFAULTS as $code => [$name, $symbol, $rate]) {
-            DB::run('INSERT IGNORE INTO currencies (tenant_id, code, name, symbol, rate_to_inr, is_active) VALUES (?,?,?,?,?,?)', [$t, $code, $name, $symbol, $rate, $code === self::BASE ? 1 : 1]);
+            DB::run('INSERT IGNORE INTO currencies (code, name, symbol, rate_to_inr, is_active) VALUES (?,?,?,?,?)', [$code, $name, $symbol, $rate, $code === self::BASE ? 1 : 1]);
         }
     }
 
@@ -37,13 +31,13 @@ final class Currencies
     public static function all(bool $onlyActive = false): array
     {
         self::ensure();
-        return DB::all('SELECT code, name, symbol, rate_to_inr, is_active, updated_at FROM currencies WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . " ORDER BY code = 'INR' DESC, code", [self::tid()]);
+        return DB::all('SELECT code, name, symbol, rate_to_inr, is_active, updated_at FROM currencies WHERE 1=1' . ($onlyActive ? ' AND is_active = 1' : '') . " ORDER BY code = 'INR' DESC, code", []);
     }
 
     public static function get(string $code): ?array
     {
         self::ensure();
-        return DB::one('SELECT code, name, symbol, rate_to_inr, is_active FROM currencies WHERE tenant_id = ? AND code = ?', [self::tid(), strtoupper($code)]);
+        return DB::one('SELECT code, name, symbol, rate_to_inr, is_active FROM currencies WHERE code = ?', [strtoupper($code)]);
     }
 
     /** Rupees for one unit of $code (1 for rupees, and for a currency the company does not know). */

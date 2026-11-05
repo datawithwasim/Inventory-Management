@@ -141,7 +141,6 @@ export default function Dashboard() {
         {!visible.length && <div className="empty-state span-12"><i className="bi bi-layout-text-window-reverse" />Everything is hidden. Use <strong>Customize</strong> to add widgets back.</div>}
       </div>
       {custom && <Customize layout={layout} names={d.widgetNames} onClose={() => setCustom(false)} onSaved={refresh} />}
-      <div className="text-muted small mt-4">Plan <strong>{d.u.plan_name}</strong> · Users {d.userCount}/{Number(d.u.max_users) === 0 ? 'Unlimited' : d.u.max_users} · Roles {d.roleCount}</div>
     </div>
   );
 }

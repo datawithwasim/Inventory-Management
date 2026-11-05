@@ -21,7 +21,7 @@ export function WarehouseList() {
   };
   return (
     <DocList title={term('warehouse', true)} api="/warehouses" queryKey="warehouses" empty="No warehouses yet."
-      actions={(d) => can('warehouses.create') ? (d.limitReached ? <span className="text-warning">Warehouse limit reached for your plan</span> : <Link className="btn btn-primary" to="/warehouses/create"><i className="bi bi-plus-lg" /> Add {term('warehouse').toLowerCase()}</Link>) : null}
+      actions={(d) => can('warehouses.create') ? <Link className="btn btn-primary" to="/warehouses/create"><i className="bi bi-plus-lg" /> Add {term('warehouse').toLowerCase()}</Link> : null}
       columns={[
         { head: 'Name', cell: (r) => <><Link to={`/warehouses/${r.id}`}>{r.name}</Link> {Number(r.is_default) ? <Badge tone="primary">Default</Badge> : null}</> },
         { head: 'Code', cell: (r) => r.code }, { head: 'Address', cell: (r) => r.address ?? '' },

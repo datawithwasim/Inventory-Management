@@ -16,7 +16,7 @@ final class ProductController extends SalesBase
 {
     private const MAX_ROWS = 5000;
     private const SEL = 'SELECT p.*, c.name AS catalogue, c.code AS catalogue_code, v.sku, i.name AS item_name, i.id AS item_id,
-            (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s WHERE s.tenant_id = p.tenant_id AND s.variant_id = p.variant_id%WH%) AS stock, u.short_name AS unit
+            (SELECT COALESCE(SUM(s.qty),0) FROM stock_balances s WHERE s.variant_id = p.variant_id%WH%) AS stock, u.short_name AS unit
         FROM products p LEFT JOIN catalogues c ON c.id = p.catalogue_id JOIN item_variants v ON v.id = p.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id';
 
     private function sel(): string
@@ -27,12 +27,12 @@ final class ProductController extends SalesBase
 
     private function load(string $id): array
     {
-        return DB::one($this->sel() . ' WHERE p.tenant_id = ? AND p.id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+        return DB::one($this->sel() . ' WHERE p.id = ?', [(int)$id]) ?? $this->notFound();
     }
 
     private function catalogues(bool $onlyActive = false): array
     {
-        return DB::all('SELECT id, name, code, named, is_active FROM catalogues WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', [$this->tid()]);
+        return DB::all('SELECT id, name, code, named, is_active FROM catalogues WHERE 1=1' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY name', []);
     }
 
     public function index(): void
@@ -40,7 +40,7 @@ final class ProductController extends SalesBase
         $q = trim((string)($_GET['q'] ?? ''));
         $cat = (string)($_GET['catalogue'] ?? '');
         $state = (string)($_GET['state'] ?? '');
-        $where = 'p.tenant_id = ?'; $p = [$this->tid()];
+        $where = '1=1'; $p = [];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (p.name LIKE ? OR p.code LIKE ? OR c.name LIKE ? OR c.code LIKE ? OR i.name LIKE ? OR v.sku LIKE ?)'; array_push($p, $like, $like, $like, $like, $like, $like);
@@ -80,21 +80,20 @@ final class ProductController extends SalesBase
     private function fields(string $back, ?int $exceptId, ?array $row = null): array
     {
         $d = $this->input();
-        $t = $this->tid();
         $code = trim((string)($d['code'] ?? ''));
         $name = trim((string)($d['name'] ?? ''));
         if ($code === '' && $name === '') $this->bounce('Give the design a gutt number, or a name.', $back);
         if (mb_strlen($code) > 40) $this->bounce('The gutt number is too long (max 40 characters).', $back);
         $cat = (int)($d['catalogue_id'] ?? 0);
-        $catRow = $cat ? DB::one('SELECT id, name FROM catalogues WHERE tenant_id = ? AND id = ?', [$t, $cat]) : null;
+        $catRow = $cat ? DB::one('SELECT id, name FROM catalogues WHERE id = ?', [$cat]) : null;
         if ($cat && !$catRow) $this->bounce('Choose a valid catalogue, or leave it empty.', $back);
         $generated = $code !== '' ? ($catRow ? $catRow['name'] . '-' : '') . $code : '';
         $named = $name !== '' && $name !== $generated ? 1 : 0;
         if ($name === '') $name = $generated;
         if ($row !== null && $named === 0 && $name === $row['name'] && (int)$row['named'] === 1) $named = 1;
         if (mb_strlen($name) > 150) $this->bounce('Product name is too long (max 150 characters).', $back);
-        if (DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND name = ? AND id <> ?', [$t, $name, $exceptId ?? 0])) $this->bounce('A product with that name already exists.', $back);
-        if ($code !== '' && DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND code = ? AND catalogue_id <=> ? AND id <> ?', [$t, $code, $cat ?: null, $exceptId ?? 0])) $this->bounce('That gutt number is already used in this catalogue.', $back);
+        if (DB::val('SELECT 1 FROM products WHERE name = ? AND id <> ?', [$name, $exceptId ?? 0])) $this->bounce('A product with that name already exists.', $back);
+        if ($code !== '' && DB::val('SELECT 1 FROM products WHERE code = ? AND catalogue_id <=> ? AND id <> ?', [$code, $cat ?: null, $exceptId ?? 0])) $this->bounce('That gutt number is already used in this catalogue.', $back);
         $v = Stock::variant((int)($d['variant_id'] ?? 0));
         if (!$v) $this->bounce('Search and choose the item this product is sold from.', $back);
         return ['name' => $name, 'code' => $code !== '' ? $code : null, 'named' => $named, 'catalogue_id' => $cat ?: null, 'variant_id' => (int)$v['id'], 'price' => $this->money($d['price'] ?? '', 'Price', $back),
@@ -104,7 +103,7 @@ final class ProductController extends SalesBase
     public function store(): void
     {
         $data = $this->fields('products/create', null);
-        $id = DB::insert('products', ['tenant_id' => $this->tid()] + $data);
+        $id = DB::insert('products', $data);
         Audit::log('product_create', 'product', $id, $data['name']);
         flash('success', 'Product created.');
         redirect(!empty($_POST['add_another']) ? 'products/create' . ($data['catalogue_id'] ? '?catalogue=' . $data['catalogue_id'] : '') : ($data['catalogue_id'] ? 'catalogues/' . $data['catalogue_id'] : 'products'));
@@ -114,8 +113,8 @@ final class ProductController extends SalesBase
     {
         $r = $this->load($id);
         $data = $this->fields("products/{$r['id']}/edit", (int)$r['id'], $r);
-        DB::run('UPDATE products SET name = ?, code = ?, named = ?, catalogue_id = ?, variant_id = ?, price = ?, is_active = ? WHERE tenant_id = ? AND id = ?',
-            [$data['name'], $data['code'], $data['named'], $data['catalogue_id'], $data['variant_id'], $data['price'], $data['is_active'], $this->tid(), $r['id']]);
+        DB::run('UPDATE products SET name = ?, code = ?, named = ?, catalogue_id = ?, variant_id = ?, price = ?, is_active = ? WHERE id = ?',
+            [$data['name'], $data['code'], $data['named'], $data['catalogue_id'], $data['variant_id'], $data['price'], $data['is_active'], $r['id']]);
         Audit::log('product_update', 'product', (int)$r['id']);
         flash('success', 'Product updated.');
         redirect($data['catalogue_id'] ? 'catalogues/' . $data['catalogue_id'] : 'products');
@@ -123,11 +122,11 @@ final class ProductController extends SalesBase
 
     public function destroy(string $id): void
     {
-        $r = $this->load($id); $t = $this->tid();
-        if (DB::val('SELECT 1 FROM sales_order_items WHERE tenant_id = ? AND product_id = ? LIMIT 1', [$t, $r['id']]) || DB::val('SELECT 1 FROM delivery_items WHERE tenant_id = ? AND product_id = ? LIMIT 1', [$t, $r['id']])) {
+        $r = $this->load($id);
+        if (DB::val('SELECT 1 FROM sales_order_items WHERE product_id = ? LIMIT 1', [$r['id']]) || DB::val('SELECT 1 FROM delivery_items WHERE product_id = ? LIMIT 1', [$r['id']])) {
             $this->bounce('This product is on sales documents, so it cannot be deleted. Mark it inactive instead: it stops appearing when selling, and the documents keep its name.', "products/{$r['id']}/edit");
         }
-        DB::run('DELETE FROM products WHERE tenant_id = ? AND id = ?', [$t, $r['id']]);
+        DB::run('DELETE FROM products WHERE id = ?', [$r['id']]);
         Audit::log('product_delete', 'product', (int)$r['id'], $r['name']);
         flash('success', 'Product deleted.');
         redirect($r['catalogue_id'] ? 'catalogues/' . $r['catalogue_id'] : 'products');
@@ -154,7 +153,7 @@ final class ProductController extends SalesBase
 
     public function export(): void
     {
-        $rows = DB::all($this->sel() . ' WHERE p.tenant_id = ? ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', [$this->tid()]);
+        $rows = DB::all($this->sel() . ' ORDER BY c.name IS NULL, c.name, LENGTH(p.name), p.name', []);
         $out = [['Catalogue Name', 'Product Name', 'Item Name', 'Price', 'Active', 'Gutt No']];
         foreach ($rows as $r) $out[] = [$r['catalogue'] ?? '', $r['name'], $r['item_name'], $r['price'] + 0, $r['is_active'] ? 'yes' : 'no', $r['code'] ?? ''];
         $this->csvOut('products-' . date('Y-m-d') . '.csv', $out);
@@ -176,7 +175,6 @@ final class ProductController extends SalesBase
         $col = fn(array $names) => (function () use ($head, $names) { foreach ($names as $n) { $i = array_search($n, $head, true); if ($i !== false) return $i; } return null; })();
         $cC = $col(['catalogue_name', 'catalogue']); $cP = $col(['product_name', 'product']); $cI = $col(['item_name', 'item']); $cPr = $col(['price', 'sale_price']); $cG = $col(['gutt_no', 'gutt_number', 'gutt', 'code']);
         if (($cP === null && $cG === null) || $cI === null) $fail('The first row must have the columns "Item Name" and "Product Name" or "Gutt No" (and "Catalogue Name", "Price" if you have them).');
-        $t = $this->tid();
         $rows = []; $line = 1;
         while (($r = fgetcsv($h, 0, ',', '"', '\\')) !== false) {
             $line++;
@@ -187,11 +185,11 @@ final class ProductController extends SalesBase
         fclose($h);
         if (!$rows) $fail('The file has no data rows.');
         $items = [];
-        foreach (DB::all('SELECT v.id, v.sale_price, i.name FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND i.is_active = 1', [$t]) as $x) $items[mb_strtolower($x['name'])][] = $x;
+        foreach (DB::all('SELECT v.id, v.sale_price, i.name FROM item_variants v JOIN items i ON i.id = v.item_id WHERE i.is_active = 1') as $x) $items[mb_strtolower($x['name'])][] = $x;
         $existing = [];
-        foreach (DB::all('SELECT id, name FROM products WHERE tenant_id = ?', [$t]) as $x) $existing[mb_strtolower($x['name'])] = (int)$x['id'];
+        foreach (DB::all('SELECT id, name FROM products') as $x) $existing[mb_strtolower($x['name'])] = (int)$x['id'];
         $cats = [];
-        foreach (DB::all('SELECT id, name FROM catalogues WHERE tenant_id = ?', [$t]) as $x) $cats[mb_strtolower($x['name'])] = (int)$x['id'];
+        foreach (DB::all('SELECT id, name FROM catalogues') as $x) $cats[mb_strtolower($x['name'])] = (int)$x['id'];
         $errors = []; $seen = []; $plan = [];
         foreach ($rows as $r) {
             $L = $r['line'];
@@ -213,22 +211,22 @@ final class ProductController extends SalesBase
             flash('warning', count($errors) > 15 ? '…and ' . (count($errors) - 15) . ' more problems. Nothing was imported.' : 'Nothing was imported. Fix the problems above and upload again.');
             redirect($back);
         }
-        [$added, $updated, $newCats] = DB::transaction(function () use ($plan, $existing, &$cats, $t) {
+        [$added, $updated, $newCats] = DB::transaction(function () use ($plan, $existing, &$cats) {
             $a = $u = $nc = 0;
             foreach ($plan as $r) {
                 $cid = null;
                 if ($r['cat'] !== '') {
                     $k = mb_strtolower($r['cat']);
-                    if (!isset($cats[$k])) { $cats[$k] = DB::insert('catalogues', ['tenant_id' => $t, 'name' => $r['cat']]); $nc++; }
+                    if (!isset($cats[$k])) { $cats[$k] = DB::insert('catalogues', ['name' => $r['cat']]); $nc++; }
                     $cid = $cats[$k];
                 }
                 $k = mb_strtolower($r['name']);
                 if (isset($existing[$k])) {
-                    DB::run('UPDATE products SET catalogue_id = ?, variant_id = ?' . ($r['price'] !== '' ? ', price = ?' : '') . ($r['gutt'] !== '' ? ', code = ?' : '') . ' WHERE tenant_id = ? AND id = ?',
-                        array_merge([$cid, $r['variant']], $r['price'] !== '' ? [round((float)$r['price'], 2)] : [], $r['gutt'] !== '' ? [$r['gutt']] : [], [$t, $existing[$k]]));
+                    DB::run('UPDATE products SET catalogue_id = ?, variant_id = ?' . ($r['price'] !== '' ? ', price = ?' : '') . ($r['gutt'] !== '' ? ', code = ?' : '') . ' WHERE id = ?',
+                        array_merge([$cid, $r['variant']], $r['price'] !== '' ? [round((float)$r['price'], 2)] : [], $r['gutt'] !== '' ? [$r['gutt']] : [], [$existing[$k]]));
                     $u++;
                 } else {
-                    DB::insert('products', ['tenant_id' => $t, 'catalogue_id' => $cid, 'variant_id' => $r['variant'], 'name' => $r['name'], 'code' => $r['gutt'] !== '' ? $r['gutt'] : null, 'named' => $r['gutt'] !== '' && $r['name'] === ($r['cat'] !== '' ? $r['cat'] . '-' : '') . $r['gutt'] ? 0 : 1, 'price' => $r['price'] !== '' ? round((float)$r['price'], 2) : $r['fallback']]);
+                    DB::insert('products', ['catalogue_id' => $cid, 'variant_id' => $r['variant'], 'name' => $r['name'], 'code' => $r['gutt'] !== '' ? $r['gutt'] : null, 'named' => $r['gutt'] !== '' && $r['name'] === ($r['cat'] !== '' ? $r['cat'] . '-' : '') . $r['gutt'] ? 0 : 1, 'price' => $r['price'] !== '' ? round((float)$r['price'], 2) : $r['fallback']]);
                     $a++;
                 }
             }

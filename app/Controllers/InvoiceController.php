@@ -18,7 +18,7 @@ final class InvoiceController extends SalesBase
         return DB::one(
             'SELECT i.*, c.name AS customer, c.address AS cust_address, c.phone AS cust_phone, c.tax_no AS cust_tax, d.delivery_no, d.ship_to, o.order_no
              FROM sales_invoices i JOIN customers c ON c.id = i.customer_id LEFT JOIN deliveries d ON d.id = i.delivery_id LEFT JOIN sales_orders o ON o.id = i.order_id
-             WHERE i.tenant_id = ? AND i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE i.id = ?' . \Core\Scope::sql('d.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
@@ -26,8 +26,8 @@ final class InvoiceController extends SalesBase
         $status = (string)($_GET['status'] ?? '');
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'i.tenant_id = ?' . \Core\Scope::sql('(SELECT dd.warehouse_id FROM deliveries dd WHERE dd.id = i.delivery_id)');
-        $params = [$this->tid()];
+        $where = '1=1' . \Core\Scope::sql('(SELECT dd.warehouse_id FROM deliveries dd WHERE dd.id = i.delivery_id)');
+        $params = [];
         $due = '(i.total - i.returned_amount - i.paid_amount)';
         $where .= match ($status) {
             'unpaid' => " AND i.paid_amount <= 0.004 AND $due > 0.004",
@@ -47,17 +47,16 @@ final class InvoiceController extends SalesBase
 
     private function lines(array $inv): array
     {
-        return $inv['delivery_id'] ? DeliveryController::rows((int)$inv['delivery_id'], $this->tid()) : [];
+        return $inv['delivery_id'] ? DeliveryController::rows((int)$inv['delivery_id']) : [];
     }
 
     public function show(string $id): void
     {
         $i = $this->load($id);
-        $t = $this->tid();
         $this->view('app/sales/invoice_show', [
             'title' => $i['invoice_no'], 'i' => $i, 'due' => Purchase::outstanding($i), 'status' => Purchase::payStatus($i), 'items' => $this->lines($i),
-            'payments' => DB::all('SELECT p.*, u.name AS user_name FROM customer_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.tenant_id = ? AND p.invoice_id = ? ORDER BY p.paid_on, p.id', [$t, $i['id']]),
-            'returns' => DB::all('SELECT id, return_no, return_date, total FROM sales_returns WHERE tenant_id = ? AND invoice_id = ? ORDER BY id', [$t, $i['id']]),
+            'payments' => DB::all('SELECT p.*, u.name AS user_name FROM customer_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.invoice_id = ? ORDER BY p.paid_on, p.id', [$i['id']]),
+            'returns' => DB::all('SELECT id, return_no, return_date, total FROM sales_returns WHERE invoice_id = ? ORDER BY id', [$i['id']]),
         ]);
     }
 
@@ -92,8 +91,8 @@ final class InvoiceController extends SalesBase
         $install = $this->money($d['installation_charge'] ?? '', 'Installation charge', $back);
         $total = round((float)$i['subtotal'] - (float)$i['discount_total'] + (float)$i['tax_total'] + $delivery + $install, 2);
         if ($total + 0.004 < (float)$i['paid_amount']) $this->bounce('The total cannot be less than what is already paid.', $back);
-        DB::run('UPDATE sales_invoices SET invoice_date = ?, due_date = ?, delivery_charge = ?, installation_charge = ?, total = ?, notes = ? WHERE tenant_id = ? AND id = ?',
-            [$date, $dueDate, $delivery, $install, $total, $this->text($d['notes'] ?? '', 255, 'Notes', $back), $this->tid(), $i['id']]);
+        DB::run('UPDATE sales_invoices SET invoice_date = ?, due_date = ?, delivery_charge = ?, installation_charge = ?, total = ?, notes = ? WHERE id = ?',
+            [$date, $dueDate, $delivery, $install, $total, $this->text($d['notes'] ?? '', 255, 'Notes', $back), $i['id']]);
         \App\Models\CustomFields::save('invoice', (int)$i['id'], $cf);
         Audit::log('invoice_update', 'sales_invoice', (int)$i['id']);
         flash('success', 'Invoice updated.');
@@ -112,7 +111,7 @@ final class InvoiceController extends SalesBase
         $method = (string)($d['method'] ?? 'cash');
         if (!isset(Purchase::METHODS[$method])) $this->bounce('Choose a payment method.', $back);
         DB::transaction(function () use ($i, $amount, $method, $d, $back) {
-            DB::insert('customer_payments', ['tenant_id' => $this->tid(), 'customer_id' => $i['customer_id'], 'invoice_id' => $i['id'], 'amount' => $amount,
+            DB::insert('customer_payments', ['customer_id' => $i['customer_id'], 'invoice_id' => $i['id'], 'amount' => $amount,
                 'paid_on' => $this->date($d['paid_on'] ?? '', 'Payment date', $back), 'method' => $method, 'reference' => $this->text($d['reference'] ?? '', 80, 'Reference', $back),
                 'note' => $this->text($d['note'] ?? '', 150, 'Note', $back), 'created_by' => Auth::user()['id']]);
             Sales::refreshPaid((int)$i['id']);
@@ -125,13 +124,13 @@ final class InvoiceController extends SalesBase
     public function deletePayment(string $id, string $payId): void
     {
         $i = $this->load($id);
-        $p = DB::one('SELECT * FROM customer_payments WHERE tenant_id = ? AND id = ? AND invoice_id = ?', [$this->tid(), (int)$payId, $i['id']]) ?? $this->notFound();
+        $p = DB::one('SELECT * FROM customer_payments WHERE id = ? AND invoice_id = ?', [(int)$payId, $i['id']]) ?? $this->notFound();
         DB::transaction(function () use ($p, $i) {
             // Advance money moved onto this invoice goes back to the order's advance.
             if ($p['method'] === 'advance' && $i['order_id']) {
-                DB::run('UPDATE customer_payments SET applied = GREATEST(0, applied - ?) WHERE tenant_id = ? AND order_id = ? AND invoice_id IS NULL AND applied > 0 ORDER BY id DESC LIMIT 1', [$p['amount'], $this->tid(), $i['order_id']]);
+                DB::run('UPDATE customer_payments SET applied = GREATEST(0, applied - ?) WHERE order_id = ? AND invoice_id IS NULL AND applied > 0 ORDER BY id DESC LIMIT 1', [$p['amount'], $i['order_id']]);
             }
-            DB::run('DELETE FROM customer_payments WHERE tenant_id = ? AND id = ?', [$this->tid(), $p['id']]);
+            DB::run('DELETE FROM customer_payments WHERE id = ?', [$p['id']]);
             Sales::refreshPaid((int)$i['id']);
         });
         Audit::log('customer_payment_delete', 'sales_invoice', (int)$i['id'], $p['amount']);

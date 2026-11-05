@@ -18,15 +18,15 @@ final class MasterController extends Controller
 
     private function record(array $def, string $id): array
     {
-        return DB::one("SELECT * FROM `{$def['table']}` WHERE tenant_id = ? AND id = ?", [Auth::tenantId(), (int)$id]) ?? $this->notFound();
+        return DB::one("SELECT * FROM `{$def['table']}` WHERE id = ?", [(int)$id]) ?? $this->notFound();
     }
 
     public function index(string $type): void
     {
         $def = $this->def($type);
         $rows = DB::all(
-            "SELECT m.*, (SELECT COUNT(*) FROM items i WHERE i.tenant_id = m.tenant_id AND i.{$def['used_by']} = m.id) AS used
-             FROM `{$def['table']}` m WHERE m.tenant_id = ? ORDER BY m.name", [Auth::tenantId()]);
+            "SELECT m.*, (SELECT COUNT(*) FROM items i WHERE i.{$def['used_by']} = m.id) AS used
+             FROM `{$def['table']}` m ORDER BY m.name", []);
         $this->view('app/masters/index', ['title' => $def['title'], 'type' => $type, 'def' => $def, 'rows' => $rows, 'tabs' => config('masters')]);
     }
 
@@ -55,7 +55,7 @@ final class MasterController extends Controller
             }
             $data[$col] = $v;
         }
-        if (DB::val("SELECT 1 FROM `{$def['table']}` WHERE tenant_id = ? AND name = ? AND id <> ?", [Auth::tenantId(), $data['name'], $exceptId ?? 0])) {
+        if (DB::val("SELECT 1 FROM `{$def['table']}` WHERE name = ? AND id <> ?", [$data['name'], $exceptId ?? 0])) {
             $this->fail("A {$def['one']} named \"{$data['name']}\" already exists.", $d, $back);
         }
         return $data;
@@ -72,7 +72,7 @@ final class MasterController extends Controller
     {
         $def = $this->def($type);
         $data = $this->collect($def, $type, null, "masters/$type/create");
-        $id = DB::insert($def['table'], ['tenant_id' => Auth::tenantId()] + $data);
+        $id = DB::insert($def['table'], $data);
         Audit::log($type . '_create', $type, $id, $data['name']);
         flash('success', $def['one'] . ' added.');
         redirect("masters/$type");
@@ -90,7 +90,7 @@ final class MasterController extends Controller
         $row = $this->record($def, $id);
         $data = $this->collect($def, $type, (int)$row['id'], "masters/$type/{$row['id']}/edit");
         $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
-        DB::run("UPDATE `{$def['table']}` SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), Auth::tenantId(), $row['id']]);
+        DB::run("UPDATE `{$def['table']}` SET $set WHERE id = ?", [...array_values($data), $row['id']]);
         Audit::log($type . '_update', $type, (int)$row['id']);
         flash('success', $def['one'] . ' updated.');
         redirect("masters/$type");
@@ -100,12 +100,12 @@ final class MasterController extends Controller
     {
         $def = $this->def($type);
         $row = $this->record($def, $id);
-        $used = (int)DB::val("SELECT COUNT(*) FROM items WHERE tenant_id = ? AND {$def['used_by']} = ?", [Auth::tenantId(), $row['id']]);
+        $used = (int)DB::val("SELECT COUNT(*) FROM items WHERE {$def['used_by']} = ?", [$row['id']]);
         if ($used > 0) {
             flash('danger', "Cannot delete: $used item(s) use this {$def['one']}.");
             redirect("masters/$type");
         }
-        DB::run("DELETE FROM `{$def['table']}` WHERE tenant_id = ? AND id = ?", [Auth::tenantId(), $row['id']]);
+        DB::run("DELETE FROM `{$def['table']}` WHERE id = ?", [$row['id']]);
         Audit::log($type . '_delete', $type, (int)$row['id'], $row['name']);
         flash('success', $def['one'] . ' deleted.');
         redirect("masters/$type");

@@ -43,7 +43,7 @@ final class PrintTemplate
     public static function head(): array
     {
         $S = fn(string $k) => (string)Settings::get('company.' . $k);
-        return ['name' => $S('legal_name') !== '' ? $S('legal_name') : (string)\Core\Auth::user()['tenant_name'], 'address' => $S('address'), 'phone' => $S('phone'), 'email' => $S('email'),
+        return ['name' => $S('legal_name') !== '' ? $S('legal_name') : company_name(), 'address' => $S('address'), 'phone' => $S('phone'), 'email' => $S('email'),
             'website' => $S('website'), 'tax_no' => $S('tax_no'), 'bank' => $S('bank'), 'logo' => company_logo_url()];
     }
 

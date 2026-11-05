@@ -42,17 +42,8 @@ final class J
 }
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '', 'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    return [$email, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$emA, $tA] = $mk('Apia');
-[$emB, $tB] = $mk('Apib');
+[, $emA] = fresh_company($base, "Apia $sfx", "apia-$sfx@test.local");
+$emB = 'nobody-' . $sfx . '@test.local';   // someone outside the company
 
 echo "Session and sign-in\n";
 $a = new J($base);
@@ -68,17 +59,17 @@ check('a wrong password is a 422 with the message', $r['status'] === 422 && ($r[
 $r = $a->call('POST', '/login', ['email' => $emA, 'password' => 'Password123']);
 check('the right password signs in (ok + where the page would have gone)', $r['status'] === 200 && ($r['json']['ok'] ?? null) === true && ($r['json']['redirect'] ?? '') === 'dashboard');
 $s = $a->session(); $j = $s['json'];
-check('the session now carries the user, company, permissions, menu, terms and theme', ($j['authenticated'] ?? false) === true && ($j['user']['owner'] ?? false) === true && ($j['perms'][0] ?? '') === '*' && !empty($j['menu']['groups']['purchase']) && ($j['terms']['batch'][0] ?? '') === 'Roll' && ($j['theme']['brand'] ?? '') !== '' && ($j['tenant']['name'] ?? '') === "Apia $sfx");
+check('the session now carries the user, company, permissions, menu, terms and theme', ($j['authenticated'] ?? false) === true && ($j['user']['owner'] ?? false) === true && ($j['perms'][0] ?? '') === '*' && !empty($j['menu']['groups']['purchase']) && ($j['terms']['batch'][0] ?? '') === 'Roll' && ($j['theme']['brand'] ?? '') !== '' && ($j['company']['name'] ?? '') === "Apia $sfx" && !isset($j['tenant']));
 check('no password hash or token anywhere in the session payload', !preg_match('/password|token_hash|\$2y\$/i', json_encode(array_diff_key($j, ['csrf' => 1]))));
 
 echo "Pages as data\n";
 $r = $a->call('POST', '/customers', ['name' => 'Rani Textiles', 'phone' => '999', 'credit_days' => '30']);
-$cid = (int)DB::val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Rani Textiles'", [$tA]);
+$cid = (int)DB::val("SELECT id FROM customers WHERE name = 'Rani Textiles'");
 check('saving a customer through the API runs the page\'s own validation and saves; the reply says where to go next', $r['status'] === 200 && $cid > 0 && ($r['json']['redirect'] ?? '') === "customers/$cid" && in_array('success', array_column($r['json']['messages'] ?? [], 'type'), true));
 $r = $a->call('POST', '/customers', ['name' => '']);
 check('a refused form is a 422 with the reason, nothing saved', $r['status'] === 422 && ($r['json']['ok'] ?? null) === false && str_contains(json_encode($r['json']['messages']), 'required'));
 $r = $a->call('POST', '/customers', ['name' => 'Rani Textiles']);
-check('duplicate name is refused the same way', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND name = 'Rani Textiles'", [$tA]) === 1);
+check('duplicate name is refused the same way', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE name = 'Rani Textiles'") === 1);
 $r = $a->call('GET', '/customers');
 check('the customer list returns its rows and column choices as JSON', $r['status'] === 200 && ($r['json']['view'] ?? '') === 'app/customers/index' && in_array('Rani Textiles', array_column($r['json']['data']['rows'] ?? [], 'name'), true) && isset($r['json']['data']['cols']));
 $r = $a->call('GET', "/customers/$cid");
@@ -96,7 +87,7 @@ $r = $a->call('GET', '/options/units');
 check('pick lists come as {id, name}', $r['status'] === 200 && is_array($r['json']['options']) && isset($r['json']['options'][0]['id']));
 check('an unknown pick list or schema is a 404 JSON', $a->call('GET', '/options/passwords')['status'] === 404 && $a->call('GET', '/schema/nothing')['status'] === 404);
 $r = $a->call('POST', "/records/customer/$cid/notes", ['body' => 'Called today']);
-check('adding a note works through the API', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM record_notes WHERE tenant_id = ? AND entity = ? AND entity_id = ?', [$tA, 'customer', $cid]) === 1);
+check('adding a note works through the API', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM record_notes WHERE entity = ? AND entity_id = ?', ['customer', $cid]) === 1);
 
 echo "Custom fields on more forms\n";
 $ents = ['grn', 'bill', 'delivery', 'invoice', 'purchase_return', 'sales_return', 'requisition', 'adjustment', 'transfer', 'stocktake', 'warehouse'];
@@ -113,19 +104,19 @@ foreach ($mm as $f) {
 check('goods receipts, bills, deliveries, invoices, returns, requisitions, stock documents and warehouses all accept the company\'s own fields', $can === count($ents));
 $a->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'grn', 'close' => '', 'return' => '']);
 $CF = [];
-foreach ($ents as $e) $CF[$e] = (int)DB::val("SELECT id FROM custom_fields WHERE tenant_id = ? AND entity = ? AND label = 'Ref code'", [$tA, $e]);
+foreach ($ents as $e) $CF[$e] = (int)DB::val("SELECT id FROM custom_fields WHERE entity = ? AND label = 'Ref code'", [$e]);
 check('a field was created on each of them', count(array_filter($CF)) === count($ents));
 
 echo "Suppliers and supplier items through the API\n";
 $r = $a->call('POST', '/suppliers', ['name' => 'Api Mills', 'payment_terms_days' => '15', 'contacts' => [['name' => 'Ravi', 'phone' => '555 1234', 'role' => 'Sales', 'email' => '']]]);
-$sid = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Api Mills'", [$tA]);
-check('a supplier with an extra contact person saves from JSON', $r['status'] === 200 && $sid > 0 && (int)DB::val('SELECT COUNT(*) FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ?', [$tA, $sid]) === 1);
+$sid = (int)DB::val("SELECT id FROM suppliers WHERE name = 'Api Mills'");
+check('a supplier with an extra contact person saves from JSON', $r['status'] === 200 && $sid > 0 && (int)DB::val('SELECT COUNT(*) FROM supplier_contacts WHERE supplier_id = ?', [$sid]) === 1);
 $r = $a->call('GET', "/suppliers/$sid");
 check('the supplier page data has contacts, rates and the items supplied', $r['status'] === 200 && ($r['json']['data']['contacts'][0]['name'] ?? '') === 'Ravi' && array_key_exists('rates', $r['json']['data']) && array_key_exists('products', $r['json']['data']));
-$a->call('POST', '/items', ['name' => 'Api Velvet', 'unit_id' => (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]), 'variants' => [['sku' => 'APV', 'cost_price' => 100, 'sale_price' => 200]]]);
-$vid = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'APV'", [$tA]);
+$a->call('POST', '/items', ['name' => 'Api Velvet', 'unit_id' => (int)DB::val("SELECT id FROM units WHERE name = 'Meter'"), 'variants' => [['sku' => 'APV', 'cost_price' => 100, 'sale_price' => 200]]]);
+$vid = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'APV'");
 $r = $a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Royal Maroon', 'supplier_code' => 'RM-1', 'variant_id' => $vid, 'min_order_qty' => '50', 'is_preferred' => 1]);
-$siId = (int)DB::val("SELECT id FROM supplier_items WHERE tenant_id = ? AND supplier_code = 'RM-1'", [$tA]);
+$siId = (int)DB::val("SELECT id FROM supplier_items WHERE supplier_code = 'RM-1'");
 check('a supplier item links to our variant through the API', $siId > 0 && ($r['json']['redirect'] ?? '') === "purchase/supplier-items/$siId");
 $a->call('POST', "/suppliers/$sid/rates", ['variant_id' => $vid, 'rate' => '120', 'discount_pct' => '10', 'return' => "purchase/supplier-items/$siId"]);
 $r = $a->call('GET', "/record/supplier_item/$siId");
@@ -138,18 +129,18 @@ $r = $a->call('GET', '/columns/supplier_items');
 check('column choices come for a list', $r['status'] === 200 && isset($r['json']['options']['our_item']) && is_array($r['json']['visible']));
 
 echo "Items through the API\n";
-$unit = (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
+$unit = (int)DB::val("SELECT id FROM units WHERE name = 'Meter'");
 $r = $a->call('POST', '/items', ['name' => 'Api Silk', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'reorder_level' => '20',
     'sku' => 'ASK-R', 'cost_price' => '300', 'sale_price' => '450', 'cf' => (object)[]]);
-$iid = (int)DB::val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Api Silk'", [$tA]);
+$iid = (int)DB::val("SELECT id FROM items WHERE name = 'Api Silk'");
 check('an item saves from JSON with its one SKU and price (roll tracking on)', $r['status'] === 200 && $iid > 0 && (int)DB::val('SELECT COUNT(*) FROM item_variants WHERE item_id = ?', [$iid]) === 1 && (float)DB::val('SELECT sale_price FROM item_variants WHERE item_id = ?', [$iid]) === 450.0 && (int)DB::val('SELECT track_batch FROM items WHERE id = ?', [$iid]) === 1);
 $r = $a->call('POST', '/items', ['name' => 'Api Silk 2', 'unit_id' => $unit, 'sku' => 'ASK-R']);
-check('a duplicate SKU is refused with the reason', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'ASK-R') && !DB::val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Api Silk 2'", [$tA]));
+check('a duplicate SKU is refused with the reason', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'ASK-R') && !DB::val("SELECT 1 FROM items WHERE name = 'Api Silk 2'"));
 $r = $a->call('GET', "/items/$iid");
 check('the item page data has its SKU row with stock, supplier rates and history', $r['status'] === 200 && count($r['json']['data']['variants']) === 1 && array_key_exists('rates', $r['json']['data']) && array_key_exists('history', $r['json']['data']) && isset($r['json']['data']['variants'][0]['batches']));
-$vA = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'ASK-R'", [$tA]);
+$vA = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'ASK-R'");
 $r = $a->call('POST', '/items', ['name' => 'Api Set', 'unit_id' => $unit, 'is_bundle' => 1, 'variants' => [['sku' => 'ASET', 'sale_price' => '900']], 'components' => [['variant_id' => $vA, 'qty' => '2']]]);
-$bid = (int)DB::val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Api Set'", [$tA]);
+$bid = (int)DB::val("SELECT id FROM items WHERE name = 'Api Set'");
 check('a bundle with a component saves', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM bundle_components WHERE bundle_item_id = ?', [$bid]) === 1);
 $r = $a->call('GET', "/items/$iid/edit");
 check('the edit form data carries what the form needs (item, variants, lock flag, pickable items)', ($r['json']['data']['item']['name'] ?? '') === 'Api Silk' && count($r['json']['data']['variants']) === 1 && array_key_exists('locked', $r['json']['data']) && is_array($r['json']['data']['pickable']));
@@ -163,10 +154,10 @@ $r = $a->call('POST', "/items/$iid/delete");
 check('an item without history, once out of the bundle, can be deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM items WHERE id = ?', [$iid]));
 
 echo "Purchase documents through the API\n";
-$wh = (int)DB::val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]);
-$v2 = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'APV'", [$tA]);
+$wh = (int)DB::val('SELECT id FROM warehouses LIMIT 1');
+$v2 = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'APV'");
 $r = $a->call('POST', '/purchase/orders', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $v2, 'qty' => '10', 'unit_price' => '100', 'tax_rate' => '5']]]);
-$poId = (int)DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$poId = (int)DB::val('SELECT MAX(id) FROM purchase_orders');
 check('a purchase order saves as a draft from JSON lines (totals worked out by the server)', $r['status'] === 200 && (float)DB::val('SELECT total FROM purchase_orders WHERE id = ?', [$poId]) === 1050.0 && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$poId]) === 'draft');
 $r = $a->call('POST', '/purchase/orders', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => []]);
 check('a PO with no items is refused', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'at least one item'));
@@ -178,10 +169,10 @@ $r = $a->call('GET', "/purchase/orders/$poId/receive");
 $ol = $r['json']['data']['oldLines'] ?? [];
 check('the receive form data lists the open lines with what is still due', count($ol) === 1 && (float)$ol[0]['left'] === 10.0 && isset($r['json']['data']['racks']));
 $r = $a->call('POST', '/purchase/grns', ['cf' => [$CF['grn'] => 'cf-grn'], 'po_id' => $poId, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'CH-1', 'lines' => [['po_item_id' => $ol[0]['po_item_id'], 'qty' => '10', 'location_id' => '0', 'lot_no' => '']]]);
-$grnId = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
-check('goods are received against the PO: stock goes up and the PO is received', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $v2]) === 10.0 && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$poId]) === 'received');
+$grnId = (int)DB::val('SELECT MAX(id) FROM grns');
+check('goods are received against the PO: stock goes up and the PO is received', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$v2]) === 10.0 && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$poId]) === 'received');
 $r = $a->call('POST', "/purchase/grns/$grnId/bill");
-$billId = (int)DB::val('SELECT id FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$tA, $grnId]);
+$billId = (int)DB::val('SELECT id FROM purchase_bills WHERE grn_id = ?', [$grnId]);
 check('a bill is created from the receipt', $billId > 0 && (float)DB::val('SELECT total FROM purchase_bills WHERE id = ?', [$billId]) === 1050.0);
 $r = $a->call('POST', "/purchase/bills/$billId/payments", ['amount' => '5000', 'paid_on' => date('Y-m-d'), 'method' => 'cash']);
 check('paying more than the balance is refused', $r['status'] === 422 && (float)DB::val('SELECT paid_amount FROM purchase_bills WHERE id = ?', [$billId]) === 0.0);
@@ -193,11 +184,11 @@ $r = $a->call('GET', "/purchase/returns/create?grn=$grnId");
 $gi = $r['json']['data']['items'][0] ?? null;
 check('the return form data lists what can go back and where it sits', $gi && (float)$gi['returnable'] === 10.0 && isset($gi['placements']));
 $r = $a->call('POST', '/purchase/returns', ['cf' => [$CF['purchase_return'] => 'cf-purchase_return'], 'grn_id' => $grnId, 'return_date' => date('Y-m-d'), 'reason' => 'Damaged', 'lines' => [(string)$gi['id'] => ['qty' => '4', 'location_id' => '0']]]);
-check('a return takes stock out and credits the bill', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $v2]) === 6.0 && (float)DB::val('SELECT returned_amount FROM purchase_bills WHERE id = ?', [$billId]) === 420.0);
+check('a return takes stock out and credits the bill', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$v2]) === 6.0 && (float)DB::val('SELECT returned_amount FROM purchase_bills WHERE id = ?', [$billId]) === 420.0);
 $r = $a->call('POST', '/purchase/returns', ['grn_id' => $grnId, 'return_date' => date('Y-m-d'), 'lines' => [(string)$gi['id'] => ['qty' => '99']]]);
 check('returning more than was received is refused', $r['status'] === 422);
 $r = $a->call('POST', '/purchase/requisitions', ['cf' => [$CF['requisition'] => 'cf-requisition'], 'note' => 'Need silk', 'lines' => [['variant_id' => $v2, 'qty' => '20', 'note' => 'urgent']]]);
-$reqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$reqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions');
 check('a requisition saves and turns into a draft PO', $r['status'] === 200 && $reqId > 0);
 $r = $a->call('POST', "/purchase/requisitions/$reqId/convert", ['supplier_id' => $sid, 'warehouse_id' => $wh]);
 check('converting makes a draft purchase order and closes the requisition', $r['status'] === 200 && DB::val('SELECT status FROM purchase_requisitions WHERE id = ?', [$reqId]) === 'converted');
@@ -209,12 +200,12 @@ check('the GRN and bill record pages link their supplier, order and bill', str_c
 check('lists answer with rows and paging', count($a->call('GET', '/purchase/orders')['json']['data']['rows']) >= 2 && isset($a->call('GET', '/purchase/bills?status=paid')['json']['data']['totalDue']));
 
 echo "Items and their supplier items\n";
-$itemOf = fn(string $name) => (int)DB::val('SELECT id FROM items WHERE tenant_id = ? AND name = ?', [$tA, $name]);
-$vOf = fn(string $sku) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $sku]);
+$itemOf = fn(string $name) => (int)DB::val('SELECT id FROM items WHERE name = ?', [$name]);
+$vOf = fn(string $sku) => (int)DB::val('SELECT id FROM item_variants WHERE sku = ?', [$sku]);
 $r = $a->call('POST', '/items/' . $itemOf('Api Velvet') . '/delete');
-check('an item that suppliers are linked to cannot be deleted (it would silently drop the supplier items and rates)', $r['status'] === 422 && DB::val('SELECT 1 FROM items WHERE tenant_id = ? AND name = ?', [$tA, 'Api Velvet']) && (int)DB::val('SELECT COUNT(*) FROM supplier_items WHERE variant_id = ?', [$vid]) === 1 && str_contains(json_encode($r['json']['messages']), 'supplier'));
+check('an item that suppliers are linked to cannot be deleted (it would silently drop the supplier items and rates)', $r['status'] === 422 && DB::val('SELECT 1 FROM items WHERE name = ?', ['Api Velvet']) && (int)DB::val('SELECT COUNT(*) FROM supplier_items WHERE variant_id = ?', [$vid]) === 1 && str_contains(json_encode($r['json']['messages']), 'supplier'));
 $r = $a->call('POST', '/items', ['name' => 'Two SKUs', 'unit_id' => $unit, 'variants' => [['sku' => 'TS-1'], ['sku' => 'TS-2']], 'cf' => (object)[]]);
-check('two SKUs on one item are refused: every colour, design or size is its own item', $r['status'] === 422 && !DB::val("SELECT 1 FROM items WHERE tenant_id = ? AND name = 'Two SKUs'", [$tA]) && str_contains(json_encode($r['json']['messages']), 'separate item'));
+check('two SKUs on one item are refused: every colour, design or size is its own item', $r['status'] === 422 && !DB::val("SELECT 1 FROM items WHERE name = 'Two SKUs'") && str_contains(json_encode($r['json']['messages']), 'separate item'));
 $r = $a->call('POST', '/items', ['name' => 'Api Linked', 'unit_id' => $unit, 'sku' => 'LK-A', 'sale_price' => '10', 'cf' => (object)[]]);
 $lk = $itemOf('Api Linked');
 $a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'Their A', 'supplier_code' => 'LKA', 'variant_id' => $vOf('LK-A'), 'design_no' => 'D-9', 'composition' => 'Cotton', 'width' => '48 in', 'gsm' => '120', 'pattern' => 'Check', 'finish' => 'Matt']);
@@ -229,7 +220,7 @@ check('the supplier item form offers those fields (and the item form no longer d
 // reordering uses the supplier link: preferred supplier, its rate and its minimum order quantity
 $a->call('POST', '/items', ['name' => 'Api Reorder', 'unit_id' => $unit, 'reorder_level' => '10', 'reorder_qty' => '12', 'variants' => [['sku' => 'APR', 'cost_price' => '100']], 'cf' => (object)[]]);
 $rq = $vOf('APR'); $rqItem = $itemOf('Api Reorder');
-$a->call('POST', '/suppliers', ['name' => 'Api Other Mills']); $sid2 = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Api Other Mills'", [$tA]);
+$a->call('POST', '/suppliers', ['name' => 'Api Other Mills']); $sid2 = (int)DB::val("SELECT id FROM suppliers WHERE name = 'Api Other Mills'");
 $a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid, 'supplier_name' => 'AR', 'supplier_code' => 'AR-1', 'variant_id' => $rq, 'min_order_qty' => '50', 'is_preferred' => 1]);
 $a->call('POST', '/purchase/supplier-items', ['supplier_id' => $sid2, 'supplier_code' => 'AR-2', 'variant_id' => $rq]);
 $a->call('POST', "/suppliers/$sid/rates", ['variant_id' => $rq, 'rate' => '120', 'discount_pct' => '10']);
@@ -237,30 +228,30 @@ $low = fn() => array_values(array_filter($a->call('GET', '/reports/low-stock')['
 $row = $low();
 check('low stock suggests the preferred supplier, at its current rate, and never less than its minimum order', ($row['supplier'] ?? '') === 'Api Mills' && (float)($row['cost'] ?? 0) === 108.0 && (float)($row['suggest'] ?? 0) === 50.0);
 $a->call('POST', '/reports/low-stock/create-pos', ['pick' => [$rqItem]]);
-$poL = (int)DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$poL = (int)DB::val('SELECT MAX(id) FROM purchase_orders');
 check('and the draft purchase order made from it carries that supplier, rate and quantity', (int)DB::val('SELECT supplier_id FROM purchase_orders WHERE id = ?', [$poL]) === $sid && (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [$poL]) === 108.0 && (float)DB::val('SELECT qty_ordered FROM purchase_order_items WHERE po_id = ?', [$poL]) === 50.0);
 $a->call('POST', '/purchase/requisitions', ['note' => 'Reorder', 'lines' => [['variant_id' => $rq, 'qty' => '5']]]);
-$rqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$rqId = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions');
 $a->call('POST', "/purchase/requisitions/$rqId/convert", ['supplier_id' => $sid, 'warehouse_id' => $wh]);
 $poR = (int)DB::val('SELECT po_id FROM purchase_requisitions WHERE id = ?', [$rqId]);
 check('turning a requisition into a PO prices the lines from that supplier\'s rate list, not the item\'s default cost', (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [$poR]) === 108.0);
-$rqId2 = 0; $a->call('POST', '/purchase/requisitions', ['note' => 'Other', 'lines' => [['variant_id' => $rq, 'qty' => '5']]]); $rqId2 = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions WHERE tenant_id = ?', [$tA]);
+$rqId2 = 0; $a->call('POST', '/purchase/requisitions', ['note' => 'Other', 'lines' => [['variant_id' => $rq, 'qty' => '5']]]); $rqId2 = (int)DB::val('SELECT MAX(id) FROM purchase_requisitions');
 $a->call('POST', "/purchase/requisitions/$rqId2/convert", ['supplier_id' => $sid2, 'warehouse_id' => $wh]);
 check('a supplier with no rate falls back to the item\'s default cost', (float)DB::val('SELECT unit_price FROM purchase_order_items WHERE po_id = ?', [(int)DB::val('SELECT po_id FROM purchase_requisitions WHERE id = ?', [$rqId2])]) === 100.0);
 
 echo "Warehouses, racks and stock through the API\n";
 $r = $a->call('POST', '/warehouses', ['cf' => [$CF['warehouse'] => 'cf-warehouse'], 'name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4']);
-$wh2 = (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA]);
+$wh2 = (int)DB::val("SELECT id FROM warehouses WHERE name = 'Api Godown'");
 check('a warehouse saves from JSON (code upper-cased)', $r['status'] === 200 && $wh2 > 0 && DB::val('SELECT code FROM warehouses WHERE id = ?', [$wh2]) === 'APG');
 $r = $a->call('POST', '/warehouses', ['name' => 'Api Godown', 'code' => 'X']);
 check('a duplicate warehouse name is refused', $r['status'] === 422);
 $r = $a->call('GET', '/warehouses');
 check('the warehouse list returns total stock per warehouse', $r['status'] === 200 && in_array('Api Godown', array_column($r['json']['data']['rows'], 'name'), true) && array_key_exists('total_qty', $r['json']['data']['rows'][0]));
 $r = $a->call('POST', '/locations', ['warehouse_id' => $wh, 'mode' => 'range', 'prefix' => 'ap-', 'from' => '1', 'to' => '3', 'pad' => '2']);
-check('a range of racks is created', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code LIKE 'AP-0%'", [$tA, $wh]) === 3);
+check('a range of racks is created', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM locations WHERE warehouse_id = ? AND code LIKE 'AP-0%'", [$wh]) === 3);
 $r = $a->call('POST', '/locations', ['warehouse_id' => $wh2, 'mode' => 'single', 'code' => 'b-1', 'description' => 'Back row']);
-$rack2 = (int)DB::val("SELECT id FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code = 'B-1'", [$tA, $wh2]);
-$rack1 = (int)DB::val("SELECT id FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code = 'AP-01'", [$tA, $wh]);
+$rack2 = (int)DB::val("SELECT id FROM locations WHERE warehouse_id = ? AND code = 'B-1'", [$wh2]);
+$rack1 = (int)DB::val("SELECT id FROM locations WHERE warehouse_id = ? AND code = 'AP-01'", [$wh]);
 check('a single rack is created', $r['status'] === 200 && $rack2 > 0 && $rack1 > 0);
 $r = $a->call('GET', "/locations?warehouse=$wh2");
 check('the rack list filters by warehouse', count($r['json']['data']['rows']) === 1 && isset($r['json']['data']['unassigned']));
@@ -270,18 +261,18 @@ foreach (array_merge($r['json']['record']['summary'] ?? [], ...array_column($r['
 check('the rack record page links its warehouse', str_contains(json_encode($r['json']), 'warehouses\\/' . $wh2));
 
 $r = $a->call('POST', '/items', ['name' => 'Api Roll', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'ARL-1', 'cost_price' => '200', 'sale_price' => '300']], 'cf' => (object)[]]);
-$rv = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'ARL-1'", [$tA]);
+$rv = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'ARL-1'");
 $r = $a->call('GET', '/stock/lookup?q=ARL-1');
 check('the stock item search returns roll flags and the unit', ($r['json'][0]['track_batch'] ?? null) !== null && ($r['json'][0]['unit'] ?? '') !== '' && (int)$r['json'][0]['id'] === $rv);
 $r = $a->call('GET', '/stock/adjustments/create');
 check('the adjustment form data has warehouses, reasons and racks per warehouse', count($r['json']['data']['warehouses']) >= 2 && isset($r['json']['data']['reasons']['opening']) && isset($r['json']['data']['racks'][$wh]));
 check('the reasons are also a pick list and the schema types reason as one', count($a->call('GET', '/options/stock_reasons')['json']['options']) === 7 && ($a->call('GET', '/schema/adjustment')['json']['schema']['fields']['reason']['source'] ?? '') === 'stock_reasons');
 $r = $a->call('POST', '/stock/adjustments', ['cf' => [$CF['adjustment'] => 'cf-adjustment'], 'warehouse_id' => $wh, 'reason' => 'opening', 'note' => 'API opening', 'lines' => [['variant_id' => $rv, 'batch_id' => 'new', 'lot_no' => 'L7', 'location_id' => $rack1, 'qty' => '50', 'unit_cost' => '']]]);
-$adjId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment'", [$tA]);
-$bid2 = (int)DB::val('SELECT id FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv]);
-check('an opening adjustment creates a roll on the rack', $r['status'] === 200 && $adjId > 0 && $bid2 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND location_id = ?', [$tA, $bid2, $rack1]) === 50.0);
+$adjId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'adjustment'");
+$bid2 = (int)DB::val('SELECT id FROM batches WHERE variant_id = ?', [$rv]);
+check('an opening adjustment creates a roll on the rack', $r['status'] === 200 && $adjId > 0 && $bid2 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND location_id = ?', [$bid2, $rack1]) === 50.0);
 $r = $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'damage', 'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'qty' => '-500']]]);
-check('taking out more than the roll holds is refused and nothing is posted', $r['status'] === 422 && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE tenant_id = ? AND batch_id = ?', [$tA, $bid2]) === 50.0);
+check('taking out more than the roll holds is refused and nothing is posted', $r['status'] === 422 && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE batch_id = ?', [$bid2]) === 50.0);
 $r = $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => '', 'lines' => [['variant_id' => $rv, 'qty' => '1']]]);
 check('a missing reason is refused', $r['status'] === 422);
 $r = $a->call('GET', "/stock/batch-options?variant=$rv&warehouse=$wh&in_stock=1");
@@ -293,13 +284,13 @@ check('the adjustment page data has the document and its lines', ($r['json']['da
 $rec = $a->call('GET', "/record/adjustment/$adjId");
 check('the adjustment record page shows the reason as a label and who/when as facts', str_contains(json_encode($rec['json']), 'Opening stock') && str_contains(json_encode($rec['json']), '"By"'));
 
-$bal = fn(int $w, int $loc = -1) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?' . ($loc >= 0 ? ' AND location_id = ' . $loc : ''), [$tA, $bid2, $w]);
+$bal = fn(int $w, int $loc = -1) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE batch_id = ? AND warehouse_id = ?' . ($loc >= 0 ? ' AND location_id = ' . $loc : ''), [$bid2, $w]);
 $r = $a->call('POST', '/stock/transfers', ['cf' => [$CF['transfer'] => 'cf-transfer'], 'warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'transport' => 'Shree Travels', 'vehicle_no' => 'MH12AB1234', 'lr_no' => 'LR-77', 'expected_date' => date('Y-m-d', strtotime('+2 days')),
     'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack2, 'qty' => '20']]]);
-$trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+$trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'transfer'");
 check('a transfer between warehouses is a dispatch: it leaves the sender and is NOT yet in the other warehouse', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$trfId]) === 'in_transit' && $bal($wh) === 30.0 && $bal($wh2) === 0.0);
 check('the dispatch keeps transport details and only an "out" ledger row exists', DB::val('SELECT transport FROM stock_docs WHERE id = ?', [$trfId]) === 'Shree Travels' && DB::val('SELECT lr_no FROM stock_docs WHERE id = ?', [$trfId]) === 'LR-77'
-    && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_out'", [$tA, $trfId]) === 1 && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_in'", [$trfId]) === 0);
+    && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_out'", [$trfId]) === 1 && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_in'", [$trfId]) === 0);
 $r = $a->call('GET', "/stock?q=ARL-1");
 check('stock on hand shows 30 and the 20 m on the road separately', (float)$r['json']['data']['rows'][0]['qty'] === 30.0 && (float)$r['json']['data']['rows'][0]['in_transit'] === 20.0 && (float)$r['json']['data']['transitTotal'] === 20.0);
 $r = $a->call('GET', "/stock/transfers/$trfId");
@@ -326,7 +317,7 @@ $r = $a->call('GET', "/stock/transfers/$trfId/challan");
 check('the dispatch challan (paper that travels with the goods) has its data: both warehouses, transport and the lines', $r['status'] === 200 && ($r['json']['view'] ?? '') === 'app/print/transfer_challan' && ($r['json']['data']['doc']['lr_no'] ?? '') === 'LR-77' && ($r['json']['data']['to']['name'] ?? '') === 'Api Godown' && count($r['json']['data']['lines']) === 1);
 $r = $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh, 'lines' => [['variant_id' => $rv, 'batch_id' => $bid2, 'location_id' => $rack1, 'to_location_id' => $rack1, 'qty' => '1']]]);
 check('moving to the very same place is refused', $r['status'] === 422);
-$trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+$trfId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'transfer'");
 $r = $a->call('GET', "/stock/transfers/$trfId");
 check('the transfer page data names both warehouses and racks', ($r['json']['data']['doc']['to_warehouse'] ?? '') === 'Api Godown' && ($r['json']['data']['lines'][0]['to_rack'] ?? '') === 'B-1');
 
@@ -342,20 +333,20 @@ $r = $a->call('GET', '/stock/ledger?type=transfer_out');
 check('the ledger filters by movement type', $r['status'] === 200 && count($r['json']['data']['rows']) >= 1 && isset($r['json']['data']['types']['transfer_out']));
 
 $r = $a->call('POST', '/stock/takes', ['cf' => [$CF['stocktake'] => 'cf-stocktake'], 'warehouse_id' => $wh2, 'note' => 'API count']);
-$takeId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake'", [$tA]);
+$takeId = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'stocktake'");
 $r = $a->call('GET', "/stock/takes/$takeId");
 $tl = $r['json']['data']['lines'] ?? [];
 check('a stock-take lists what the system holds in the warehouse', $takeId > 0 && count($tl) === 1 && (float)$tl[0]['expected_qty'] === 20.0);
 $r = $a->call('POST', "/stock/takes/$takeId", ['action' => 'save', 'counts' => [(string)$tl[0]['id'] => '18']]);
-check('saving counts keeps the draft and leaves stock alone', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$takeId]) === 'draft' && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE tenant_id = ? AND warehouse_id = ?', [$tA, $wh2]) === 20.0);
+check('saving counts keeps the draft and leaves stock alone', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$takeId]) === 'draft' && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE warehouse_id = ?', [$wh2]) === 20.0);
 $r = $a->call('POST', "/stock/takes/$takeId", ['action' => 'post', 'counts' => [(string)$tl[0]['id'] => '18']]);
-check('posting corrects stock to the counted quantity', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$takeId]) === 'posted' && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE tenant_id = ? AND warehouse_id = ?', [$tA, $wh2]) === 18.0);
+check('posting corrects stock to the counted quantity', $r['status'] === 200 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$takeId]) === 'posted' && (float)DB::val('SELECT SUM(qty) FROM stock_balances WHERE warehouse_id = ?', [$wh2]) === 18.0);
 $r = $a->call('POST', "/stock/takes/$takeId/delete");
 check('a posted stock-take cannot be deleted', $r['status'] === 422 && DB::val('SELECT 1 FROM stock_docs WHERE id = ?', [$takeId]));
 $rec = $a->call('GET', "/record/stocktake/$takeId");
 check('the stock-take record page has its started date and warehouse', $rec['status'] === 200 && str_contains(json_encode($rec['json']), 'Api Godown') && str_contains(json_encode($rec['json']), 'Started'));
 $r = $a->call('POST', '/stock/takes', ['warehouse_id' => $wh2]);
-$take2 = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake'", [$tA]);
+$take2 = (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'stocktake'");
 $r = $a->call('POST', "/stock/takes/$take2/delete");
 check('a draft stock-take can be deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM stock_docs WHERE id = ?', [$take2]));
 $r = $a->call('POST', "/warehouses/$wh2/delete");
@@ -385,7 +376,7 @@ $r = $a->call('GET', "/lookup/sale-items?q=ARL-1&customer=$cid&warehouse=$wh");
 check('the sale item search returns price, tax, free stock and roll flags', (int)($r['json'][0]['id'] ?? 0) === $rv && (float)$r['json'][0]['price'] === 300.0 && (float)$r['json'][0]['available'] === 30.0 && (int)$r['json'][0]['track_batch'] === 1);
 $r = $a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'delivery_charge' => '100', 'notes' => 'API order',
     'lines' => [['variant_id' => $rv, 'qty' => '10', 'unit_price' => '300', 'discount_pct' => '10', 'tax_rate' => '5'], ['variant_id' => $v2, 'qty' => '2', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0']]]);
-$soId = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$soId = (int)DB::val('SELECT MAX(id) FROM sales_orders');
 check('a sales order saves as a draft with totals worked out by the server', $r['status'] === 200 && $soId > 0 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'draft' && (float)DB::val('SELECT total FROM sales_orders WHERE id = ?', [$soId]) === 3235.0);
 $r = $a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => []]);
 check('an order with no items is refused', $r['status'] === 422);
@@ -404,9 +395,9 @@ check('the delivery form suggests the roll and rack for each line', count($dl) >
 $r = $a->call('POST', '/sales/deliveries', ['cf' => [$CF['delivery'] => 'cf-delivery'], 'order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
     ['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '4', 'batch_id' => $bid2, 'location_id' => $rack1],
     ['order_item_id' => $byV[$v2]['order_item_id'], 'variant_id' => $v2, 'qty' => '0', 'batch_id' => '0', 'location_id' => '0']]]);
-$dlv1 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
-$inv1 = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $dlv1]);
-check('a part delivery takes the roll quantity out and makes an invoice', $r['status'] === 200 && $inv1 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 26.0 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'partial');
+$dlv1 = (int)DB::val('SELECT MAX(id) FROM deliveries');
+$inv1 = (int)DB::val('SELECT id FROM sales_invoices WHERE delivery_id = ?', [$dlv1]);
+check('a part delivery takes the roll quantity out and makes an invoice', $r['status'] === 200 && $inv1 > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND warehouse_id = ? AND location_id = ?', [$bid2, $wh, $rack1]) === 26.0 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'partial');
 check('the 500 advance went onto that invoice', (float)DB::val("SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE invoice_id = ? AND method = 'advance'", [$inv1]) > 0);
 $r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '99', 'batch_id' => $bid2, 'location_id' => $rack1]]]);
 check('delivering more than is due is refused', $r['status'] === 422);
@@ -415,8 +406,8 @@ check('a roll item without a roll chosen is refused', $r['status'] === 422 && st
 $r = $a->call('POST', '/sales/deliveries', ['order_id' => $soId, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
     ['order_item_id' => $byV[$rv]['order_item_id'], 'variant_id' => $rv, 'qty' => '6', 'batch_id' => $bid2, 'location_id' => $rack1],
     ['order_item_id' => $byV[$v2]['order_item_id'], 'variant_id' => $v2, 'qty' => '2', 'batch_id' => '0', 'location_id' => '0']]]);
-$dlv2 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
-check('the rest is delivered and the order is delivered', $r['status'] === 200 && $dlv2 !== $dlv1 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'delivered' && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 20.0);
+$dlv2 = (int)DB::val('SELECT MAX(id) FROM deliveries');
+check('the rest is delivered and the order is delivered', $r['status'] === 200 && $dlv2 !== $dlv1 && DB::val('SELECT status FROM sales_orders WHERE id = ?', [$soId]) === 'delivered' && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND warehouse_id = ? AND location_id = ?', [$bid2, $wh, $rack1]) === 20.0);
 $r = $a->call('GET', "/sales/deliveries/$dlv1");
 check('the delivery page data lists the roll and rack of each line', ($r['json']['data']['items'][0]['batch_no'] ?? '') !== '' && ($r['json']['data']['items'][0]['rack'] ?? '') === 'AP-01' && ($r['json']['data']['d']['invoice_no'] ?? '') !== '');
 $rec = $a->call('GET', "/record/delivery/$dlv1");
@@ -446,8 +437,8 @@ $ri = $r['json']['data']['items'][0] ?? null;
 check('the sales return form data lists what can come back and the racks', $ri && (float)$ri['returnable'] === 4.0 && isset($r['json']['data']['racks'][$wh]));
 check('the invoice pick list answers without an invoice chosen', count($a->call('GET', '/sales/returns/create')['json']['data']['rows']) >= 2);
 $r = $a->call('POST', '/sales/returns', ['cf' => [$CF['sales_return'] => 'cf-sales_return'], 'invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'reason' => 'Wrong shade', 'lines' => [(string)$ri['id'] => ['qty' => '2', 'location_id' => $rack1, 'restock' => 1]]]);
-$srId = (int)DB::val('SELECT MAX(id) FROM sales_returns WHERE tenant_id = ?', [$tA]);
-check('a return puts the goods back on the rack and credits the invoice', $r['status'] === 200 && $srId > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $bid2, $wh, $rack1]) === 22.0 && (float)DB::val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv1]) > 0);
+$srId = (int)DB::val('SELECT MAX(id) FROM sales_returns');
+check('a return puts the goods back on the rack and credits the invoice', $r['status'] === 200 && $srId > 0 && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND warehouse_id = ? AND location_id = ?', [$bid2, $wh, $rack1]) === 22.0 && (float)DB::val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv1]) > 0);
 $r = $a->call('POST', '/sales/returns', ['invoice_id' => $inv1, 'return_date' => date('Y-m-d'), 'lines' => [(string)$ri['id'] => ['qty' => '50', 'location_id' => '0', 'restock' => 1]]]);
 check('returning more than was sold is refused', $r['status'] === 422);
 $r = $a->call('GET', "/sales/returns/$srId");
@@ -457,13 +448,13 @@ check('the return record page links its invoice and shows the credit', str_conta
 check('the sales order record page has created-by and total', str_contains(json_encode($a->call('GET', "/record/sales_order/$soId")['json']), 'Created by'));
 
 $r = $a->call('POST', '/sales/deliveries', ['customer_id' => $cid, 'warehouse_id' => $wh, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [['variant_id' => $v2, 'qty' => '1', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0', 'batch_id' => '0', 'location_id' => '0']]]);
-$dlv3 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+$dlv3 = (int)DB::val('SELECT MAX(id) FROM deliveries');
 check('goods can be delivered without an order (and invoiced)', $r['status'] === 200 && $dlv3 > $dlv2 && DB::val('SELECT order_id FROM deliveries WHERE id = ?', [$dlv3]) === null && DB::val('SELECT 1 FROM sales_invoices WHERE delivery_id = ?', [$dlv3]) !== null);
 $r = $a->call('GET', '/sales/deliveries/create');
 check('the direct delivery form data has customers and warehouses', count($r['json']['data']['customers']) >= 1 && count($r['json']['data']['warehouses']) >= 2);
 check('lists answer with rows: orders, deliveries, returns', count($a->call('GET', '/sales/orders?status=delivered')['json']['data']['rows']) >= 1 && count($a->call('GET', '/sales/deliveries')['json']['data']['rows']) >= 3 && count($a->call('GET', '/sales/returns')['json']['data']['rows']) >= 1);
 $a->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $v2, 'qty' => '1', 'unit_price' => '150']]]);
-$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders');
 $r = $a->call('POST', "/sales/orders/$so2/delete");
 check('a draft order can be deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM sales_orders WHERE id = ?', [$so2]));
 $r = $a->call('POST', "/sales/orders/$soId/delete");
@@ -488,14 +479,14 @@ check('creating orders from low stock with nothing low explains itself', $r['sta
 
 echo "Transfers between warehouses: in transit, shortage, cancel, permissions\n";
 $a->call('POST', '/items', ['name' => 'Api Roll Two', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'reorder_level' => '100', 'variants' => [['name' => '', 'sku' => 'ARL-2', 'cost_price' => '150', 'sale_price' => '250']], 'cf' => (object)[]]);
-$rv2 = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'ARL-2'", [$tA]);
+$rv2 = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'ARL-2'");
 $itm2 = (int)DB::val('SELECT item_id FROM item_variants WHERE id = ?', [$rv2]);
 $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'T2', 'location_id' => $rack1, 'qty' => '40']]]);
-$rb2 = (int)DB::val('SELECT id FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$rb2 = (int)DB::val('SELECT id FROM batches WHERE variant_id = ?', [$rv2]);
 $sendT = fn(array $extra = [], string $qty = '40', int $from = 0, int $to = 0, int $rack = 0) => $a->call('POST', '/stock/transfers', $extra + ['warehouse_id' => $from ?: $wh, 'to_warehouse_id' => $to ?: $wh2,
     'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack ?: $rack1, 'qty' => $qty]]]);
-$bw = fn(int $w) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ?', [$tA, $rb2, $w]);
-$lastT = fn() => (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tA]);
+$bw = fn(int $w) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE batch_id = ? AND warehouse_id = ?', [$rb2, $w]);
+$lastT = fn() => (int)DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'transfer'");
 
 check('a past "expected arrival" date is refused', $sendT(['expected_date' => date('Y-m-d', strtotime('-1 day'))])['status'] === 422 && $bw($wh) === 40.0);
 check('the same roll listed twice on one dispatch is refused', $a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '5'], ['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'qty' => '5']]])['status'] === 422 && $bw($wh) === 40.0);
@@ -518,7 +509,7 @@ check('the transfers report lists what is on the road with days and status', cou
 check('the dashboard counts transfers on the road', (int)$a->call('GET', '/dashboard')['json']['data']['transitOpen'] >= 1);
 check('the transfer list filters and counts by status', count($a->call('GET', '/stock/transfers?status=open')['json']['data']['rows']) >= 1 && (int)$a->call('GET', '/stock/transfers')['json']['data']['counts']['open'] >= 1);
 $a->call('POST', "/stock/transfers/$t2/cancel");
-check('cancelling a dispatch puts every roll back on the rack it left', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t2]) === 'cancelled' && $bw($wh) === 40.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND location_id = ?', [$tA, $rb2, $rack1]) === 40.0
+check('cancelling a dispatch puts every roll back on the rack it left', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t2]) === 'cancelled' && $bw($wh) === 40.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND location_id = ?', [$rb2, $rack1]) === 40.0
     && (int)DB::val("SELECT COUNT(*) FROM stock_ledger WHERE ref_type = 'stock_doc' AND ref_id = ? AND type = 'transfer_return'", [$t2]) === 1);
 check('a cancelled transfer cannot be cancelled or received again', $a->call('POST', "/stock/transfers/$t2/cancel")['status'] === 422 && $a->call('POST', "/stock/transfers/$t2/receive", ['lines' => [(string)DB::val('SELECT id FROM stock_doc_lines WHERE doc_id = ?', [$t2]) => ['qty' => '1']]])['status'] === 422);
 
@@ -531,14 +522,14 @@ check('settling without saying what happened is refused', $a->call('POST', "/sto
 $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '5', 'action' => 'lost', 'note' => 'Roll end lost at the transporter']]]);
 check('writing off 5 as lost changes no stock but is recorded; 10 are still unaccounted', $bw($wh) === 0.0 && $bw($wh2) === 25.0 && (float)DB::val('SELECT qty_lost FROM stock_doc_lines WHERE id = ?', [$l3]) === 5.0 && DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t3]) === 'partial');
 $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '3', 'action' => 'return', 'location_id' => $rack1]]]);
-check('sending 3 back adds them to the sender\'s rack again', $bw($wh) === 3.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE tenant_id = ? AND batch_id = ? AND warehouse_id = ? AND location_id = ?', [$tA, $rb2, $wh, $rack1]) === 3.0);
+check('sending 3 back adds them to the sender\'s rack again', $bw($wh) === 3.0 && (float)DB::val('SELECT qty FROM stock_balances WHERE batch_id = ? AND warehouse_id = ? AND location_id = ?', [$rb2, $wh, $rack1]) === 3.0);
 $r = $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '2', 'action' => 'return', 'location_id' => $rack2]]]);
 check('"send back" onto a rack of the OTHER warehouse is refused', $r['status'] === 422 && $bw($wh) === 3.0);
 $a->call('POST', "/stock/transfers/$t3/settle", ['lines' => [$l3 => ['qty' => '7', 'action' => 'lost']]]);
 check('once every metre is accounted for the transfer closes "received with a shortage"', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t3]) === 'received_short' && (float)DB::val('SELECT qty - qty_received - qty_lost - qty_returned FROM stock_doc_lines WHERE id = ?', [$l3]) === 0.0);
 $ev = $a->call('GET', "/stock/transfers/$t3")['json']['data']['events'];
 check('every step is in the history: dispatch, receipt, two write-offs, one send-back', array_count_values(array_column($ev, 'event')) === ['dispatch' => 1, 'receive' => 1, 'lost' => 2, 'returned' => 1]);
-$bad = DB::all('SELECT b.variant_id FROM stock_balances b LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger WHERE tenant_id = ? GROUP BY variant_id, warehouse_id, batch_id, location_id) l ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id WHERE b.tenant_id = ? AND ABS(b.qty - COALESCE(l.s,0)) > 0.0005', [$tA, $tA]);
+$bad = DB::all('SELECT b.variant_id FROM stock_balances b LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger GROUP BY variant_id, warehouse_id, batch_id, location_id) l ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id WHERE ABS(b.qty - COALESCE(l.s,0)) > 0.0005');
 check('after all of that the ledger still equals the balances everywhere', !$bad);
 $r = $a->call('GET', '/reports/transfers?status=short');
 check('the shortage report shows what was lost and sent back', ($r['json']['data']['rows'][0]['doc_no'] ?? '') !== '' && (float)$r['json']['data']['rows'][0]['lost'] === 12.0 && (float)$r['json']['data']['rows'][0]['returned'] === 3.0 && str_contains($r['json']['data']['rows'][0]['status'], 'shortage'));
@@ -546,14 +537,14 @@ $r = $a->call('GET', '/stock/ledger?type=transfer_return');
 check('"sent back" is a movement type of its own in the ledger', isset($r['json']['data']['types']['transfer_return']) && count($r['json']['data']['rows']) >= 2);
 
 // inside one warehouse a move is instant, with nothing to receive
-$a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'to_location_id' => (int)DB::val("SELECT id FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND code = 'AP-02'", [$tA, $wh]), 'qty' => '1']]]);
+$a->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rb2, 'location_id' => $rack1, 'to_location_id' => (int)DB::val("SELECT id FROM locations WHERE warehouse_id = ? AND code = 'AP-02'", [$wh]), 'qty' => '1']]]);
 $t5 = $lastT();
 check('moving between racks of one warehouse stays instant (status "moved", nothing to receive)', DB::val('SELECT status FROM stock_docs WHERE id = ?', [$t5]) === 'posted' && (float)DB::val('SELECT qty_received FROM stock_doc_lines WHERE doc_id = ?', [$t5]) === 1.0 && $a->call('POST', "/stock/transfers/$t5/receive", ['lines' => []])['status'] === 422);
 
 // who may do what
 $a->call('POST', '/roles', ['name' => 'Dispatcher ' . $sfx, 'perms' => ['stock.view', 'stock.transfer', 'items.view']]);
 $a->call('POST', '/roles', ['name' => 'Receiver ' . $sfx, 'perms' => ['stock.view', 'stock.receive', 'items.view']]);
-$rDis = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Dispatcher ' . $sfx]); $rRec = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Receiver ' . $sfx]);
+$rDis = (int)DB::val('SELECT id FROM roles WHERE name = ?', ['Dispatcher ' . $sfx]); $rRec = (int)DB::val('SELECT id FROM roles WHERE name = ?', ['Receiver ' . $sfx]);
 foreach ([['dis', $rDis], ['rec', $rRec]] as [$k, $rid]) $a->call('POST', '/users', ['name' => ucfirst($k) . ' User', 'email' => "$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rid, 'warehouse_id' => '0']);
 $dis = new J($base); $dis->session(); $dis->call('POST', '/login', ['email' => "dis-$sfx@test.local", 'password' => 'Password123']); $dis->session();
 $rec = new J($base); $rec->session(); $rec->call('POST', '/login', ['email' => "rec-$sfx@test.local", 'password' => 'Password123']); $rec->session();
@@ -570,10 +561,10 @@ check('the receiver confirms it: the transfer closes and the name of who receive
 check('the role form offers a "receive" permission on Stock', in_array('receive', $a->call('GET', '/roles/create')['json']['data']['modules']['stock']['actions'], true));
 
 echo "Warehouse-wise users: every person works at one warehouse\n";
-$rIn = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Warehouse Incharge'", [$tA]); $rOp = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Warehouse Operator'", [$tA]);
+$rIn = (int)DB::val("SELECT id FROM roles WHERE name = 'Warehouse Incharge'"); $rOp = (int)DB::val("SELECT id FROM roles WHERE name = 'Warehouse Operator'");
 check('the Warehouse Incharge and Warehouse Operator roles exist and are tied to a warehouse', $rIn > 0 && $rOp > 0 && (int)DB::val('SELECT COUNT(*) FROM roles WHERE id IN (?, ?) AND warehouse_bound = 1', [$rIn, $rOp]) === 2);
 $a->call('POST', '/warehouses', ['name' => 'Api Third', 'code' => 'AP3']);
-$wh3 = (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Third'", [$tA]);
+$wh3 = (int)DB::val("SELECT id FROM warehouses WHERE name = 'Api Third'");
 $a->call('POST', '/locations', ['warehouse_id' => $wh3, 'mode' => 'single', 'code' => 'T-1']);
 $mk = fn(string $k, int $role, string $w) => $a->call('POST', '/users', ['name' => "WH $k", 'email' => "wh$k-$sfx@test.local", 'password' => 'Password123', 'role_id' => $role, 'warehouse_id' => $w]);
 check('a user must be given a warehouse (or "all warehouses")', $a->call('POST', '/users', ['name' => 'No WH', 'email' => "nowh-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rOp])['status'] === 422 && !DB::val('SELECT 1 FROM users WHERE email = ?', ["nowh-$sfx@test.local"]));
@@ -588,12 +579,12 @@ $names = fn(array $r) => array_column($r['json']['options'] ?? [], 'name');
 check('the warehouse pick-lists show only their own warehouse; transfers can still go to any warehouse', count($wOp2->call('GET', '/options/warehouses')['json']['options']) === 1 && count($wOp2->call('GET', '/options/all_warehouses')['json']['options']) >= 3 && count($a->call('GET', '/options/warehouses')['json']['options']) >= 3);
 
 $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'WW', 'location_id' => $rack1, 'qty' => '10']]]);
-$rw = (int)DB::val('SELECT MAX(id) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$rw = (int)DB::val('SELECT MAX(id) FROM batches WHERE variant_id = ?', [$rv2]);
 $a->call('POST', '/stock/adjustments', ['warehouse_id' => $wh2, 'reason' => 'opening', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'W2', 'location_id' => $rack2, 'qty' => '7']]]);
-$rw2 = (int)DB::val('SELECT MAX(id) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rv2]);
+$rw2 = (int)DB::val('SELECT MAX(id) FROM batches WHERE variant_id = ?', [$rv2]);
 $adj = fn(J $c, int $w, int $rack) => $c->call('POST', '/stock/adjustments', ['warehouse_id' => $w, 'reason' => 'correction', 'lines' => [['variant_id' => $rv2, 'batch_id' => 'new', 'lot_no' => 'ZZ', 'location_id' => $rack, 'qty' => '1']]]);
-$before = (int)DB::val('SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ?', [$tA]);
-check('an incharge can add stock at their warehouse but not at another', $adj($wIn, $wh, $rack1)['status'] === 200 && $adj($wIn, $wh2, $rack2)['status'] === 422 && (int)DB::val('SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ?', [$tA]) === $before + 1);
+$before = (int)DB::val('SELECT COUNT(*) FROM stock_docs');
+check('an incharge can add stock at their warehouse but not at another', $adj($wIn, $wh, $rack1)['status'] === 200 && $adj($wIn, $wh2, $rack2)['status'] === 422 && (int)DB::val('SELECT COUNT(*) FROM stock_docs') === $before + 1);
 check('and cannot send out stock that sits in another warehouse', $wOp2->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rw, 'location_id' => $rack1, 'qty' => '1']]])['status'] === 422);
 
 $r = $wIn->call('POST', '/stock/transfers', ['warehouse_id' => $wh, 'to_warehouse_id' => $wh2, 'lines' => [['variant_id' => $rv2, 'batch_id' => $rw, 'location_id' => $rack1, 'qty' => '3']]]);
@@ -629,7 +620,7 @@ check('roll labels follow the same rule: a warehouse user prints only rolls that
 check('racks can be listed and shown for their warehouse only', $wOp2->call('GET', '/locations')['status'] === 200 && $whOf($wOp2->call('GET', "/locations?warehouse=$wh")['json']['data']['rows'], 'warehouse') === [$w2name] && $wOp2->call('GET', "/locations/$rack1")['status'] === 404);
 check('the warehouse list shows only theirs; head-office jobs are refused', count($wOp2->call('GET', '/warehouses')['json']['data']['rows']) === 1 && $wOp2->call('GET', "/warehouses/$wh")['status'] === 404
     && $wIn->call('POST', '/warehouses', ['name' => 'Sneaky', 'code' => 'SN'])['status'] === 422 && $wIn->call('POST', "/warehouses/$wh/default")['status'] === 422);
-check('the item page counts their warehouse only', array_sum(array_map(fn($v) => (float)$v['total'], $wOp2->call('GET', "/items/$itm2")['json']['data']['variants'])) === (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ?', [$tA, $rv2, $wh2]));
+check('the item page counts their warehouse only', array_sum(array_map(fn($v) => (float)$v['total'], $wOp2->call('GET', "/items/$itm2")['json']['data']['variants'])) === (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ? AND warehouse_id = ?', [$rv2, $wh2]));
 
 $d = $wOp2->call('GET', '/dashboard')['json']['data'];
 check('the dashboard is theirs: warehouse stock and transfers, no company money figures', $d['scoped'] === $w2name && (float)$d['salesNow'] === 0.0 && (float)$d['receivable'] === 0.0 && $d['overdue'] === []);
@@ -639,7 +630,7 @@ $rs = $wIn->call('GET', "/reports/stock-summary?warehouse=$wh2")['json']['data']
 check('and a warehouse report is held to their warehouse whatever the filter says', ($rs['f']['warehouse'] ?? 0) === $wh && count($rs['lists']['warehouse']) === 1);
 
 $a->call('POST', '/roles', ['name' => 'Site lead ' . $sfx, 'perms' => ['users.view', 'users.create', 'users.edit', 'stock.view'], 'warehouse_bound' => '1']);
-$rLead = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Site lead ' . $sfx]);
+$rLead = (int)DB::val('SELECT id FROM roles WHERE name = ?', ['Site lead ' . $sfx]);
 check('a role can be marked "warehouse staff"', (int)DB::val('SELECT warehouse_bound FROM roles WHERE id = ?', [$rLead]) === 1);
 $mk('lead', $rLead, (string)$wh3); $lead = $login('lead');
 $r = $lead->call('POST', '/users', ['name' => 'By Lead', 'email' => "bylead-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rOp, 'warehouse_id' => '0']);
@@ -669,7 +660,7 @@ $tplBody = ['name' => 'Api label', 'for' => 'items', 'w' => 60, 'h' => 30, 'page
 ]];
 $r = $a->call('POST', '/labels/templates', $tplBody);
 $tid = (int)($r['json']['id'] ?? 0);
-check('a designed template saves', $r['status'] === 200 && $tid > 0 && (int)DB::val('SELECT COUNT(*) FROM label_templates WHERE tenant_id = ?', [$tA]) === 1);
+check('a designed template saves', $r['status'] === 200 && $tid > 0 && (int)DB::val('SELECT COUNT(*) FROM label_templates') === 1);
 $t = $a->call('GET', "/labels/templates/$tid/edit")['json']['data']['template'];
 check('unknown element kinds are dropped; a bad font and a bad colour fall back; positions and sizes are kept', count($t['elements']) === 3 && $t['elements'][0]['font'] === 'Arial' && $t['elements'][0]['color'] === '#000000' && $t['elements'][0]['bold'] === true && $t['elements'][1]['sym'] === 'ean13' && (float)$t['w'] === 60.0);
 check('the same name twice is refused', $a->call('POST', '/labels/templates', $tplBody)['status'] === 422);
@@ -690,9 +681,8 @@ check('ready-made templates cannot be changed or deleted', $a->call('POST', '/la
 $h = new Client($base); $h->post('/login', ['email' => $emA, 'password' => 'Password123'], '/login');
 $pr = $h->get("/labels/print?type=items&template=$tid&n[{$vOf('APR')}]=2");
 check('the printout uses the saved template: its size, text and a barcode that is the right kind', $pr['status'] === 200 && substr_count($pr['body'], 'class="lbl') === 2 && str_contains($pr['body'], 'size: 62mm 30mm') && str_contains($pr['body'], 'Api Reorder') && str_contains($pr['body'], 'aria-label="QR code"'));
-check('a template of another company cannot be opened or printed', (function () use ($tid, $base, $emB) { $x = new J($base); $x->session(); $x->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $x->session(); return $x->call('GET', "/labels/templates/$tid/edit")['status'] === 404 && $x->call('POST', "/labels/templates/$tid", ['name' => 'x', 'w' => 50, 'h' => 25])['status'] === 404; })());
 $a->call('POST', '/roles', ['name' => 'Label viewer ' . $sfx, 'perms' => ['labels.view', 'stock.view']]);
-$rLv = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Label viewer ' . $sfx]);
+$rLv = (int)DB::val('SELECT id FROM roles WHERE name = ?', ['Label viewer ' . $sfx]);
 $a->call('POST', '/users', ['name' => 'Lv', 'email' => "lv-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rLv, 'warehouse_id' => '0']);
 $lv = new J($base); $lv->session(); $lv->call('POST', '/login', ['email' => "lv-$sfx@test.local", 'password' => 'Password123']); $lv->session();
 check('someone who may only print labels can open and print, but cannot design, edit or delete', $lv->call('GET', '/labels')['status'] === 200 && $lv->call('GET', "/labels/templates/$tid/edit")['status'] === 200
@@ -707,7 +697,7 @@ check('the company tab data carries the saved values', $r['status'] === 200 && i
 $r = $a->call('POST', '/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => 'Apia HF Pvt', 'address' => '12 Mill Road', 'phone' => '999', 'email' => 'bad-email', 'website' => '', 'tax_no' => '', 'bank' => '']);
 check('an invalid company email is refused', $r['status'] === 422);
 $r = $a->call('POST', '/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => 'Apia HF Pvt', 'address' => '12 Mill Road', 'phone' => '999', 'email' => 'hello@apia.test', 'website' => '', 'tax_no' => 'GST1', 'bank' => '']);
-check('the company profile saves', $r['status'] === 200 && (string)DB::val('SELECT name FROM tenants WHERE id = ?', [$tA]) === 'Apia Home Furnishing' && ($a->call('GET', '/settings/company')['json']['data']['values']['tax_no'] ?? '') === 'GST1');
+check('the company profile saves', $r['status'] === 200 && (string)DB::val("SELECT svalue FROM settings WHERE skey = 'company.name'") === 'Apia Home Furnishing' && ($a->call('GET', '/settings/company')['json']['data']['values']['tax_no'] ?? '') === 'GST1');
 $png = tempnam(sys_get_temp_dir(), 'lg') . '.png';
 file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
 $r = $a->form('/settings/company', ['name' => 'Apia Home Furnishing', 'legal_name' => '', 'address' => '', 'phone' => '', 'email' => '', 'website' => '', 'tax_no' => 'GST1', 'bank' => '', 'logo' => new CURLFile($png, 'image/png', 'logo.png')]);
@@ -760,13 +750,13 @@ check('an unknown settings tab is a 404 JSON', $a->call('GET', '/settings/nothin
 $r = $a->call('GET', '/masters/categories');
 check('the master list comes with its definition and the other tabs', isset($r['json']['data']['def']['fields']) && isset($r['json']['data']['tabs']['units']));
 $a->call('POST', '/masters/categories', ['name' => 'Curtains']);
-$catId = (int)DB::val("SELECT id FROM categories WHERE tenant_id = ? AND name = 'Curtains'", [$tA]);
+$catId = (int)DB::val("SELECT id FROM categories WHERE name = 'Curtains'");
 check('a category is added', $catId > 0);
 check('a duplicate name is refused', $a->call('POST', '/masters/categories', ['name' => 'Curtains'])['status'] === 422);
 $a->call('POST', '/masters/units', ['name' => 'Dozen', 'short_name' => 'doz', 'allow_decimal' => '0']);
-check('a unit saves with its decimals switch', (int)DB::val("SELECT allow_decimal FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]) === 0);
-$a->call('POST', '/masters/units/' . (int)DB::val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]), ['name' => 'Dozen', 'short_name' => 'doz', 'allow_decimal' => '1']);
-check('and it can be changed', (int)DB::val("SELECT allow_decimal FROM units WHERE tenant_id = ? AND name = 'Dozen'", [$tA]) === 1);
+check('a unit saves with its decimals switch', (int)DB::val("SELECT allow_decimal FROM units WHERE name = 'Dozen'") === 0);
+$a->call('POST', '/masters/units/' . (int)DB::val("SELECT id FROM units WHERE name = 'Dozen'"), ['name' => 'Dozen', 'short_name' => 'doz', 'allow_decimal' => '1']);
+check('and it can be changed', (int)DB::val("SELECT allow_decimal FROM units WHERE name = 'Dozen'") === 1);
 $r = $a->call('POST', "/masters/units/$unit/delete");
 check('a unit in use cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM units WHERE id = ?', [$unit]));
 $a->call('POST', "/masters/categories/$catId/delete");
@@ -776,14 +766,14 @@ check('an unknown master type is a 404 JSON', $a->call('GET', '/masters/nothing'
 $r = $a->call('GET', '/roles/create');
 check('the role form lists modules with their possible actions', isset($r['json']['data']['modules']['items']['actions']) && $r['json']['data']['granted'] === []);
 $a->call('POST', '/roles', ['name' => 'Counter staff', 'perms' => ['items.view', 'sales.view', 'sales.create']]);
-$roleId = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Counter staff'", [$tA]);
+$roleId = (int)DB::val("SELECT id FROM roles WHERE name = 'Counter staff'");
 check('a role is created with its permissions', $roleId > 0 && (int)DB::val('SELECT COUNT(*) FROM role_permissions WHERE role_id = ?', [$roleId]) === 3);
 check('its permissions come back on the edit form', count($a->call('GET', "/roles/$roleId/edit")['json']['data']['granted']) === 3);
 check('a duplicate role name is refused', $a->call('POST', '/roles', ['name' => 'Counter staff', 'perms' => []])['status'] === 422);
 $r = $a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'short', 'role_id' => $roleId, 'warehouse_id' => '0']);
 check('a short password for a new user is refused', $r['status'] === 422);
 $a->call('POST', '/users', ['name' => 'Sita', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId, 'warehouse_id' => '0']);
-$uid = (int)DB::val("SELECT id FROM users WHERE tenant_id = ? AND email = ?", [$tA, 'sita-' . $sfx . '@test.local']);
+$uid = (int)DB::val("SELECT id FROM users WHERE email = ?", ['sita-' . $sfx . '@test.local']);
 check('a user is added on that role', $uid > 0 && (int)DB::val('SELECT role_id FROM users WHERE id = ?', [$uid]) === $roleId);
 check('a duplicate email is refused', $a->call('POST', '/users', ['name' => 'Sita 2', 'email' => 'sita-' . $sfx . '@test.local', 'password' => 'Password123', 'role_id' => $roleId, 'warehouse_id' => '0'])['status'] === 422);
 $r = $a->call('GET', "/users/$uid/edit");
@@ -791,7 +781,7 @@ check('the user form data has the user and the roles they may be given', ($r['js
 check('the user list shows role names', in_array('Counter staff', array_column($a->call('GET', '/users')['json']['data']['users'], 'role_name'), true));
 $a->call('POST', "/users/$uid/toggle");
 check('a user can be disabled', (int)DB::val('SELECT is_active FROM users WHERE id = ?', [$uid]) === 0);
-$myId = (int)DB::val('SELECT id FROM users WHERE tenant_id = ? ORDER BY id LIMIT 1', [$tA]);
+$myId = (int)DB::val('SELECT id FROM users ORDER BY id LIMIT 1');
 check('you cannot disable or delete yourself', $a->call('POST', "/users/$myId/toggle")['status'] === 422 && $a->call('POST', "/users/$myId/delete")['status'] === 422);
 $r = $a->call('POST', "/roles/$roleId/delete");
 check('a role with users cannot be deleted (reason comes back)', $r['status'] === 422 && DB::val('SELECT 1 FROM roles WHERE id = ?', [$roleId]));
@@ -806,93 +796,16 @@ check('a mismatched confirmation is refused', $a->call('POST', '/profile/passwor
 $a->call('POST', '/profile', ['name' => 'Apia Owner', 'email' => (string)DB::val('SELECT email FROM users WHERE id = ?', [$myId])]);
 check('the profile name saves', (string)DB::val('SELECT name FROM users WHERE id = ?', [$myId]) === 'Apia Owner');
 
-echo "Super admin through the API\n";
-$sx = new J($base); $r = $sx->call('GET', '/admin/session'); $sx->csrf = (string)$r['json']['csrf'];
-check('signed out, the admin session says so (and hands out a CSRF token)', $r['status'] === 200 && $r['json']['authenticated'] === false && $sx->csrf !== '');
-check('admin pages answer 401 JSON to someone not signed in as admin', $sx->call('GET', '/admin/tenants')['status'] === 401 && $a->call('GET', '/admin/tenants')['status'] === 401);
-$r = $sx->call('POST', '/admin/login', ['email' => $sa['email'], 'password' => 'wrong-password']);
-check('a wrong admin password is refused', $r['status'] === 422 && ($r['json']['ok'] ?? true) === false);
-$r = $sx->call('POST', '/admin/login', ['email' => $sa['email'], 'password' => $sa['password']]);
-$r2 = $sx->call('GET', '/admin/session');
-check('the Super Admin signs in and the session shows who and how many updates wait', $r['status'] === 200 && $r2['json']['authenticated'] === true && ($r2['json']['admin']['name'] ?? '') !== '' && isset($r2['json']['pending']));
-$r = $sx->call('GET', '/admin');
-check('the dashboard has company counts, users and the newest companies', isset($r['json']['data']['counts']['total']) && isset($r['json']['data']['users']) && is_array($r['json']['data']['recent']));
-$r = $sx->call('GET', '/admin/plans');
-$planRows = $r['json']['data']['plans'] ?? [];
-check('the plan list has limits and how many companies use each', count($planRows) >= 1 && isset($planRows[0]['tenant_count']) && isset($planRows[0]['max_users']));
-$r = $sx->call('POST', '/admin/plans', ['name' => 'API Plan ' . $sfx, 'max_users' => '3', 'max_items' => '100', 'max_warehouses' => '2', 'price' => '499', 'trial_days' => '14', 'is_active' => 1]);
-$planId = (int)DB::val("SELECT id FROM plans WHERE name = ?", ['API Plan ' . $sfx]);
-check('a plan is created', $r['status'] === 200 && $planId > 0 && (int)DB::val('SELECT max_users FROM plans WHERE id = ?', [$planId]) === 3);
-check('a plan without a name is refused', $sx->call('POST', '/admin/plans', ['name' => '', 'max_users' => '1', 'max_items' => '1', 'max_warehouses' => '1', 'price' => '1', 'trial_days' => '1'])['status'] === 422);
-$sx->call('POST', "/admin/plans/$planId", ['name' => 'API Plan ' . $sfx, 'max_users' => '5', 'max_items' => '100', 'max_warehouses' => '2', 'price' => '599', 'trial_days' => '14', 'is_active' => '']);
-check('a plan can be changed and switched off', (int)DB::val('SELECT max_users FROM plans WHERE id = ?', [$planId]) === 5 && (int)DB::val('SELECT is_active FROM plans WHERE id = ?', [$planId]) === 0);
-check('the plan edit form data comes back', ($sx->call('GET', "/admin/plans/$planId/edit")['json']['data']['plan']['name'] ?? '') === 'API Plan ' . $sfx);
-$sx->call('POST', "/admin/plans/$planId", ['name' => 'API Plan ' . $sfx, 'max_users' => '5', 'max_items' => '100', 'max_warehouses' => '2', 'price' => '599', 'trial_days' => '14', 'is_active' => 1]);
-$ownerEmail = 'adm-' . $sfx . '@test.local';
-$r = $sx->call('POST', '/admin/tenants', ['name' => 'Admin Made Co ' . $sfx, 'plan_id' => $planId, 'status' => 'trial', 'owner_name' => 'Gita', 'owner_email' => $ownerEmail, 'owner_password' => 'short']);
-check('a company with a short owner password is refused', $r['status'] === 422);
-$r = $sx->call('POST', '/admin/tenants', ['name' => 'Admin Made Co ' . $sfx, 'plan_id' => $planId, 'status' => 'active', 'subscription_ends_at' => date('Y-m-d', strtotime('+30 days')), 'owner_name' => 'Gita', 'owner_email' => $ownerEmail, 'owner_password' => 'Password123']);
-$tNew = (int)DB::val('SELECT id FROM tenants WHERE name = ?', ['Admin Made Co ' . $sfx]);
-check('a company is created with its owner, roles and a walk-in customer', $r['status'] === 200 && $tNew > 0 && (int)DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ? AND email = ?', [$tNew, $ownerEmail]) === 1 && (int)DB::val('SELECT COUNT(*) FROM roles WHERE tenant_id = ?', [$tNew]) >= 3);
-check('the same owner email cannot be used twice', $sx->call('POST', '/admin/tenants', ['name' => 'Another ' . $sfx, 'plan_id' => $planId, 'owner_name' => 'X', 'owner_email' => $ownerEmail, 'owner_password' => 'Password123'])['status'] === 422);
-$r = $sx->call('GET', '/admin/tenants');
-$mine = array_values(array_filter($r['json']['data']['tenants'], fn($t) => (int)$t['id'] === $tNew))[0] ?? null;
-check('the company list shows plan, status and user count', $mine && $mine['plan_name'] === 'API Plan ' . $sfx && (int)$mine['user_count'] === 1 && $mine['status'] === 'active' && !str_contains($r['raw'], 'password_hash'));
-$r = $sx->call('GET', "/admin/tenants/$tNew/edit");
-check('the company form data has its users and the plans', ($r['json']['data']['users'][0]['email'] ?? '') === $ownerEmail && count($r['json']['data']['plans']) >= 1);
-$sx->call('POST', "/admin/tenants/$tNew", ['name' => 'Admin Made Co ' . $sfx . ' Ltd', 'plan_id' => $planId, 'status' => 'trial', 'trial_ends_at' => date('Y-m-d', strtotime('+10 days')), 'subscription_ends_at' => '']);
-check('a company can be edited (name, status, dates)', DB::val('SELECT name FROM tenants WHERE id = ?', [$tNew]) === 'Admin Made Co ' . $sfx . ' Ltd' && DB::val('SELECT status FROM tenants WHERE id = ?', [$tNew]) === 'trial');
-$sx->call('POST', "/admin/tenants/$tNew/status");
-check('suspend switches a company off', DB::val('SELECT status FROM tenants WHERE id = ?', [$tNew]) === 'suspended');
-$r = $sx->call('POST', "/admin/tenants/$tNew/impersonate");
-check('a suspended company cannot be opened as its owner', $r['status'] === 422 && !($sx->call('GET', '/session')['json']['authenticated'] ?? false));
-$sx->call('POST', "/admin/tenants/$tNew/status");
-check('activate switches it back on', DB::val('SELECT status FROM tenants WHERE id = ?', [$tNew]) === 'active');
-$r = $sx->call('POST', "/admin/tenants/$tNew/impersonate");
-$ses = $sx->call('GET', '/session');
-check('"Open as owner" signs the admin into that company in support mode', $r['status'] === 200 && ($ses['json']['authenticated'] ?? false) === true && ($ses['json']['supportMode'] ?? false) === true && ($ses['json']['tenant']['name'] ?? '') === 'Admin Made Co ' . $sfx . ' Ltd');
-check('and the support session can use the company app', $sx->call('GET', '/customers')['status'] === 200);
-$sx->call('POST', '/impersonate/stop');
-check('stopping support mode returns to the admin area', !($sx->call('GET', '/session')['json']['authenticated'] ?? false) && ($sx->call('GET', '/admin/session')['json']['authenticated'] ?? false) === true);
-$r = $sx->call('GET', '/admin/system');
-check('the system page lists pending and applied updates and the environment', is_array($r['json']['data']['pending']) && count($r['json']['data']['applied']) >= 10 && isset($r['json']['data']['info']['PHP']));
-$r = $sx->call('POST', '/admin/system/migrate');
-check('running updates when none are waiting says so', $r['status'] === 200 && str_contains(json_encode($r['json']['messages']), 'up to date'));
-$bk = $sx->call('POST', '/admin/system/backup', []);
-check('the backup is a plain .sql download with every table', $bk['status'] === 200 && str_contains($bk['raw'], 'CREATE TABLE') && $bk['json'] === null);
-$r = $sx->call('GET', '/admin/audit');
-$acts = array_column($r['json']['data']['logs'], 'action');
-check('the audit log shows what happened (company created, support mode)', in_array('tenant_create', $acts, true) && in_array('impersonate_start', $acts, true) && in_array('db_backup', $acts, true));
-$sx->call('POST', '/admin/logout');
-check('admin sign-out ends the admin session', ($sx->call('GET', '/admin/session')['json']['authenticated'] ?? true) === false && $sx->call('GET', '/admin/plans')['status'] === 401);
-// forgotten Super Admin password (a throw-away admin, so the real one is untouched)
-$fe = "fa-$sfx@test.local";
-DB::insert('super_admins', ['name' => 'Forgetful', 'email' => $fe, 'password_hash' => password_hash('OldPassword1', PASSWORD_DEFAULT)]);
-$fx = new J($base); $r = $fx->call('GET', '/admin/session'); $fx->csrf = (string)$r['json']['csrf'];
-@unlink(ROOT . '/storage/logs/mail.log');
-$unknown = $fx->call('POST', '/admin/forgot-password', ['email' => "nobody-$sfx@test.local"]);
-$known = $fx->call('POST', '/admin/forgot-password', ['email' => $fe]);
-$mailLog = (string)@file_get_contents(ROOT . '/storage/logs/mail.log');
-check('"Forgot password" gives the same answer for any address, and mails a link only to a real Super Admin', $unknown['status'] === 200 && $known['status'] === 200 && ($unknown['json']['messages'] ?? null) === ($known['json']['messages'] ?? 0)
-    && !str_contains($mailLog, "nobody-$sfx") && preg_match('~admin/reset-password/([a-f0-9]{64})~', $mailLog, $mt) === 1);
-$tok = $mt[1] ?? 'x';
-check('a company-user reset page does not accept an admin token (and the reverse)', (new Client($base))->get("/reset-password/$tok")['status'] !== 200 || str_contains((new Client($base))->get("/reset-password/$tok")['body'], 'invalid'));
-check('a wrong confirmation or a short password is refused and changes nothing', $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'NewPassword1', 'password_confirm' => 'Different1'])['status'] === 422
-    && $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'short', 'password_confirm' => 'short'])['status'] === 422 && password_verify('OldPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
-$r = $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'NewPassword1', 'password_confirm' => 'NewPassword1']);
-check('the link sets the new password', $r['status'] === 200 && password_verify('NewPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
-check('the link works once only', $fx->call('POST', "/admin/reset-password/$tok", ['password' => 'Another123', 'password_confirm' => 'Another123'])['status'] === 422 && password_verify('NewPassword1', (string)DB::val('SELECT password_hash FROM super_admins WHERE email = ?', [$fe])));
-check('and the new password signs in (the old one does not)', $fx->call('POST', '/admin/login', ['email' => $fe, 'password' => 'OldPassword1'])['status'] === 422 && $fx->call('POST', '/admin/login', ['email' => $fe, 'password' => 'NewPassword1'])['status'] === 200);
-DB::run('DELETE FROM super_admins WHERE email = ?', [$fe]); DB::run('DELETE FROM password_resets WHERE email = ?', ['admin:' . $fe]);
-
-$ownerClient = new J($base); $ownerClient->session();
-$r = $ownerClient->call('POST', '/login', ['email' => $ownerEmail, 'password' => 'Password123']);
-check('the new company\'s owner can sign in', $r['status'] === 200 && ($ownerClient->session()['json']['authenticated'] ?? false) === true);
+echo "Updates & backup through the API (owner only)\n";
+$r = $a->call('GET', '/settings/system');
+check('the owner gets the update page as data: nothing waiting, the applied updates listed', $r['status'] === 200 && ($r['json']['data']['pending'] ?? null) === [] && in_array('030_single_company.php', array_column($r['json']['data']['applied'] ?? [], 'name'), true));
+$r = $a->call('POST', '/settings/system/migrate');
+check('running updates when nothing waits says so', $r['status'] === 200 && str_contains(json_encode($r['json']['messages'] ?? []), 'up to date'));
+check('the session tells the owner how many updates wait (none)', ($a->session()['json']['updates'] ?? null) === 0);
+$bk = $a->call('POST', '/settings/system/backup', []);
+check('the backup downloads for the owner', str_contains($bk['raw'] ?? '', 'CREATE TABLE'));
 
 echo "Isolation and secrets\n";
-$b = new J($base); $b->session(); $b->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b->session();
-check('another company gets a 404 for it, on the page data and the record data', $b->call('GET', "/customers/$cid")['status'] === 404 && $b->call('GET', "/record/customer/$cid")['status'] === 404);
-check('and cannot change it', $b->call('POST', "/customers/$cid", ['name' => 'Hacked'])['status'] === 404 && (string)DB::val('SELECT name FROM customers WHERE id = ?', [$cid]) === 'Rani Textiles');
 $r = $a->call('GET', '/users');
 check('user lists never include password hashes', $r['status'] === 200 && !str_contains($r['raw'], 'password_hash') && !str_contains($r['raw'], '$2y$'));
 $a->call('POST', '/logout', []);
@@ -915,12 +828,12 @@ check('the reset goes through and the link then stops working', $r['status'] ===
 
 // customer groups
 $r = $c->call('POST', '/customers/groups', ['name' => 'Dealer', 'discount_pct' => '7.5']);
-$gid = (int)DB::val('SELECT id FROM customer_groups WHERE tenant_id = ? AND name = ?', [$tA, 'Dealer']);
+$gid = (int)DB::val('SELECT id FROM customer_groups WHERE name = ?', ['Dealer']);
 check('a customer group is created (and a duplicate name refused)', $r['status'] === 200 && $gid > 0 && $c->call('POST', '/customers/groups', ['name' => 'Dealer', 'discount_pct' => '1'])['status'] === 422);
 $g = $c->call('GET', "/customers/groups/$gid/edit");
 check('the group page gives the row and its prices; the list counts it', ($g['json']['data']['row']['name'] ?? '') === 'Dealer' && is_array($g['json']['data']['prices'] ?? null)
     && in_array('Dealer', array_column($c->call('GET', '/customers/groups')['json']['data']['rows'] ?? [], 'name'), true));
-$vid = (int)DB::val('SELECT v.id FROM item_variants v WHERE v.tenant_id = ? LIMIT 1', [$tA]);
+$vid = (int)DB::val('SELECT v.id FROM item_variants v LIMIT 1');
 if ($vid) {
     $c->call('POST', "/customers/groups/$gid/prices", ['variant_id' => $vid, 'price' => '99']);
     check('a special price is saved and removable', (float)DB::val('SELECT price FROM group_prices WHERE group_id = ? AND variant_id = ?', [$gid, $vid]) === 99.0);
@@ -928,8 +841,6 @@ if ($vid) {
     $c->call('POST', "/customers/groups/$gid/prices/$pid/delete", []);
     check('...removed', (int)DB::val('SELECT COUNT(*) FROM group_prices WHERE group_id = ?', [$gid]) === 0);
 }
-check('another company cannot open or delete the group', ($b2 = new J($base)) && $b2->session() !== null && $b2->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']) !== null && $b2->session() !== null
-    && $b2->call('GET', "/customers/groups/$gid/edit")['status'] === 404 && $b2->call('POST', "/customers/groups/$gid/delete", [])['status'] === 404);
 $c->call('POST', "/customers/groups/$gid/delete", []);
 check('the group is deleted', !DB::val('SELECT 1 FROM customer_groups WHERE id = ?', [$gid]));
 
@@ -952,21 +863,21 @@ $payload = [$cust['key'] => ['style' => $cust['style'], 'lines' => $cust['lines'
     'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => array_merge($sec['fields'], ['cf:new1'])], array_slice($cust['sections'], 0, 1)),
     'fields' => ['cf:new1' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Colour code', 'type' => 'text', 'options' => '', 'inList' => false, 'unique' => false, 'isNew' => true]]]];
 $r = $c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'customer', 'close' => '', 'return' => '']);
-check('a new field added in the designer is saved (JSON answer, no redirect crash)', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]) === 1);
+check('a new field added in the designer is saved (JSON answer, no redirect crash)', $r['status'] === 200 && (int)DB::val("SELECT COUNT(*) FROM custom_fields WHERE label = 'Colour code'") === 1);
 check('the custom-fields screens now lead to the designer', (string)(new Client($base))->get('/settings/custom-fields')['status'] !== '500');
-DB::run("DELETE FROM custom_fields WHERE tenant_id = ? AND label = 'Colour code'", [$tA]);
+DB::run("DELETE FROM custom_fields WHERE label = 'Colour code'");
 
 echo "Custom fields: saved on each form\n";
-$cfv = fn(string $e, int $id) => (string)DB::val('SELECT value FROM custom_field_values WHERE tenant_id = ? AND field_id = ? AND entity_id = ?', [$tA, $CF[$e], $id]);
-$maxId = fn(string $table, string $extra = '') => (int)DB::val("SELECT MAX(id) FROM $table WHERE tenant_id = ? $extra", [$tA]);
+$cfv = fn(string $e, int $id) => (string)DB::val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$CF[$e], $id]);
+$maxId = fn(string $table, string $extra = '') => (int)DB::val("SELECT MAX(id) FROM $table WHERE 1=1 $extra");
 check('a goods receipt keeps its field', $cfv('grn', $grnId) === 'cf-grn');
 check('a purchase return keeps its field', $cfv('purchase_return', $maxId('purchase_returns')) === 'cf-purchase_return');
-check('a requisition keeps its field', $cfv('requisition', (int)DB::val('SELECT id FROM purchase_requisitions WHERE tenant_id = ? AND note = ?', [$tA, 'Need silk'])) === 'cf-requisition');
-check('a warehouse keeps its field', $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA])) === 'cf-warehouse');
-check('an adjustment keeps its field', $cfv('adjustment', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment' AND note = 'API opening'", [$tA])) === 'cf-adjustment');
-check('a transfer keeps its field', $cfv('transfer', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND lr_no = 'LR-77'", [$tA])) === 'cf-transfer');
-check('a stock-take keeps its field', $cfv('stocktake', (int)DB::val("SELECT id FROM stock_docs WHERE tenant_id = ? AND type = 'stocktake' AND note = 'API count'", [$tA])) === 'cf-stocktake');
-check('a delivery keeps its field', $cfv('delivery', (int)DB::val('SELECT MIN(id) FROM deliveries WHERE tenant_id = ? AND order_id = ?', [$tA, $soId])) === 'cf-delivery');
+check('a requisition keeps its field', $cfv('requisition', (int)DB::val('SELECT id FROM purchase_requisitions WHERE note = ?', ['Need silk'])) === 'cf-requisition');
+check('a warehouse keeps its field', $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE name = 'Api Godown'")) === 'cf-warehouse');
+check('an adjustment keeps its field', $cfv('adjustment', (int)DB::val("SELECT id FROM stock_docs WHERE type = 'adjustment' AND note = 'API opening'")) === 'cf-adjustment');
+check('a transfer keeps its field', $cfv('transfer', (int)DB::val("SELECT id FROM stock_docs WHERE type = 'transfer' AND lr_no = 'LR-77'")) === 'cf-transfer');
+check('a stock-take keeps its field', $cfv('stocktake', (int)DB::val("SELECT id FROM stock_docs WHERE type = 'stocktake' AND note = 'API count'")) === 'cf-stocktake');
+check('a delivery keeps its field', $cfv('delivery', (int)DB::val('SELECT MIN(id) FROM deliveries WHERE order_id = ?', [$soId])) === 'cf-delivery');
 check('a sales return keeps its field', $cfv('sales_return', $maxId('sales_returns')) === 'cf-sales_return');
 $r = $c->call('GET', "/purchase/bills/$billId/edit");
 check('the bill edit form carries the saved values of the company\'s fields (empty so far)', $r['status'] === 200 && array_key_exists('cfValues', $r['json']['data'] ?? []));
@@ -974,18 +885,16 @@ $r = $c->call('POST', "/purchase/bills/$billId", ['supplier_bill_no' => 'SB-1', 
 check('a bill takes its field when it is edited', $r['status'] === 200 && $cfv('bill', $billId) === 'cf-bill' && ($c->call('GET', "/purchase/bills/$billId/edit")['json']['data']['cfValues'][$CF['bill']] ?? '') === 'cf-bill');
 $r = $c->call('POST', "/sales/invoices/$inv1", ['invoice_date' => date('Y-m-d'), 'due_date' => '', 'delivery_charge' => '', 'installation_charge' => '', 'notes' => '', 'cf' => [$CF['invoice'] => 'cf-invoice']]);
 check('an invoice takes its field when it is edited', $r['status'] === 200 && $cfv('invoice', $inv1) === 'cf-invoice');
-$r = $c->call('POST', '/warehouses/' . (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA]), ['name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4', 'is_active' => 1, 'cf' => [$CF['warehouse'] => 'cf-wh-2']]);
-check('a warehouse takes a changed value', $r['status'] === 200 && $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Api Godown'", [$tA])) === 'cf-wh-2');
+$r = $c->call('POST', '/warehouses/' . (int)DB::val("SELECT id FROM warehouses WHERE name = 'Api Godown'"), ['name' => 'Api Godown', 'code' => 'apg', 'address' => 'Plot 4', 'is_active' => 1, 'cf' => [$CF['warehouse'] => 'cf-wh-2']]);
+check('a warehouse takes a changed value', $r['status'] === 200 && $cfv('warehouse', (int)DB::val("SELECT id FROM warehouses WHERE name = 'Api Godown'")) === 'cf-wh-2');
 $rec = json_encode($c->call('GET', "/record/grn/$grnId")['json']);
 check('the receipt\'s record page shows the field and its value', str_contains($rec, 'Ref code') && str_contains($rec, 'cf-grn'));
 
 echo "Lookup fields\n";
-$bl = new J($base); $bl->session(); $bl->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bl->session();
 $r = $c->call('GET', '/lookup/find/supplier?q=Api');
 check('a lookup searches records by what is typed', $r['status'] === 200 && in_array('Api Mills', array_column($r['json']['rows'] ?? [], 'label'), true));
 $r = $c->call('GET', "/lookup/find/supplier?id=$sid");
 check('a saved value is resolved to its name by id', ($r['json']['rows'][0]['label'] ?? '') === 'Api Mills');
-check('an unknown kind of record is a 404 and another company\'s record is never found', $c->call('GET', '/lookup/find/passwords')['status'] === 404 && ($bl->call('GET', "/lookup/find/supplier?id=$sid")['json']['rows'] ?? []) === []);
 $m2 = $c->call('GET', '/settings/formdesign')['json']['data'] ?? [];
 check('the designer offers the Lookup type and the kinds of record it can point to', isset($m2['types']['lookup']) && isset($m2['lookups']['item'], $m2['lookups']['supplier'], $m2['lookups']['rack']));
 $cust2 = null; foreach ($m2['model'] ?? [] as $f) if ($f['key'] === 'customer') $cust2 = $f;
@@ -993,17 +902,15 @@ $payload = [$cust2['key'] => ['style' => $cust2['style'], 'lines' => $cust2['lin
     'sections' => array_map(fn($sec) => ['title' => $sec['title'], 'cols' => $sec['cols'], 'fields' => array_merge($sec['fields'], ['cf:newL'])], array_slice($cust2['sections'], 0, 1)),
     'fields' => ['cf:newL' => ['w' => '', 'help' => '', 'show' => true, 'req' => false, 'name' => 'Reference supplier', 'type' => 'lookup', 'options' => 'supplier', 'inList' => true, 'unique' => false, 'isNew' => true]]]];
 $c->call('POST', '/settings/formdesign', ['payload' => json_encode($payload), 'current' => 'customer', 'close' => '', 'return' => '']);
-$lf = DB::one("SELECT id, type, options FROM custom_fields WHERE tenant_id = ? AND label = 'Reference supplier'", [$tA]);
+$lf = DB::one("SELECT id, type, options FROM custom_fields WHERE label = 'Reference supplier'");
 check('a Lookup field is created with its kind of record', $lf && $lf['type'] === 'lookup' && $lf['options'] === 'supplier');
 $sch = $c->call('GET', '/schema/customer')['json']['schema']['fields'] ?? [];
 check('the customer form carries it as a lookup with its source', ($sch['cf:' . $lf['id']]['type'] ?? '') === 'lookup' && ($sch['cf:' . $lf['id']]['source'] ?? '') === 'supplier');
 $r = $c->call('POST', '/customers', ['name' => 'Lookup Buyer', 'cf' => [$lf['id'] => (string)$sid]]);
-$cL = (int)DB::val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [$tA]);
+$cL = (int)DB::val("SELECT id FROM customers WHERE name = 'Lookup Buyer'");
 check('a customer saves with the record it points to', $r['status'] === 200 && $cL > 0 && DB::val('SELECT value FROM custom_field_values WHERE entity_id = ? AND field_id = ?', [$cL, $lf['id']]) === (string)$sid);
 $r = $c->call('POST', '/customers', ['name' => 'Lookup Bad', 'cf' => [$lf['id'] => '99999999']]);
-check('a record that does not exist is refused', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND name = 'Lookup Bad'", [$tA]) === 0);
-$sidB = (int)DB::val('SELECT id FROM suppliers WHERE tenant_id <> ? LIMIT 1', [$tA]);
-if ($sidB) { $r = $c->call('POST', '/customers', ['name' => 'Lookup Bad', 'cf' => [$lf['id'] => (string)$sidB]]); check('another company\'s record cannot be chosen', $r['status'] === 422); }
+check('a record that does not exist is refused', $r['status'] === 422 && (int)DB::val("SELECT COUNT(*) FROM customers WHERE name = 'Lookup Bad'") === 0);
 $rec = json_encode($c->call('GET', "/record/customer/$cL")['json']);
 check('the record page shows the name and links to it', str_contains($rec, 'Api Mills') && str_contains($rec, 'suppliers\\/' . $sid));
 $lst = $c->call('GET', '/customers?q=Lookup')['json']['data'] ?? [];
@@ -1012,7 +919,7 @@ $sch2 = $c->call('GET', '/schema/sales_order')['json']['schema']['fields'] ?? []
 $sch3 = $c->call('GET', '/schema/supplier_item')['json']['schema']['fields'] ?? [];
 check('the supplier / customer pickers on the standard forms are searchable lookups from the same registry', ($sch2['customer_id']['type'] ?? '') === 'lookup' && ($sch2['customer_id']['source'] ?? '') === 'customer' && ($sch3['supplier_id']['source'] ?? '') === 'supplier' && ($sch3['variant_id']['source'] ?? '') === 'item' && ($sch2['warehouse_id']['type'] ?? '') === 'select');
 DB::run('DELETE FROM custom_field_values WHERE field_id = ?', [$lf['id']]); DB::run('DELETE FROM custom_fields WHERE id = ?', [$lf['id']]);
-DB::run("DELETE FROM customers WHERE tenant_id = ? AND name = 'Lookup Buyer'", [$tA]);
+DB::run("DELETE FROM customers WHERE name = 'Lookup Buyer'");
 
 echo "Items-table columns (line grids)\n";
 $g = $c->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
@@ -1037,8 +944,6 @@ check('a column name is cut to 40 characters', mb_strlen($byK['item']['label']) 
 $design(array_map(fn($x) => ['key' => $x['key'], 'show' => true, 'label' => $x['def']], $po['grid']));
 $g = $c->call('GET', '/schema/purchase_order')['json']['schema'];
 check('naming a column back to its standard name stores no own name, and the tax switch is on again', $g['lines']['tax'] === true && array_column($g['grid'], 'label') === array_column($po['grid'], 'def'));
-$bl2 = $bl->call('GET', '/schema/purchase_order')['json']['schema']['grid'] ?? [];
-check('another company is not affected by these choices', array_column($bl2, 'key') === ['item', 'qty', 'price', 'tax', 'total'] && array_column($bl2, 'label') !== ['Material', 'Rate']);
 foreach (['purchase_order' => ['item', 'their', 'ordered', 'received', 'due', 'price', 'tax', 'total'], 'grn' => ['item', 'their', 'po', 'batch', 'rack', 'qty', 'returned', 'price', 'cost'], 'bill' => ['item', 'their', 'qty', 'price', 'tax', 'amount'],
     'purchase_return' => ['item', 'batch', 'rack', 'qty', 'price', 'value'], 'requisition' => ['item', 'qty', 'note'], 'sales_order' => ['item', 'ordered', 'delivered', 'price', 'disc', 'tax', 'total'],
     'delivery' => ['item', 'batch', 'rack', 'qty', 'price', 'total'], 'invoice' => ['item', 'batch', 'rack', 'qty', 'price', 'total'], 'sales_return' => ['item', 'batch', 'back', 'qty', 'credit']] as $ent => $keys) {
@@ -1060,17 +965,17 @@ $c->call('POST', '/settings/formdesign', ['payload' => json_encode(['purchase_or
 
 echo "Goods receipt: rolls against a bill\n";
 $r = $c->call('POST', '/items', ['name' => 'Roll Test Fabric', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'RTF-1', 'cost_price' => '100', 'sale_price' => '150']], 'cf' => (object)[]]);
-$rtf = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RTF-1'", [$tA]);
+$rtf = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'RTF-1'");
 $r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'BILL-77', 'lines' => [
     ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-1', 'billed_qty' => '200'],
     ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-2', 'billed_qty' => ''],
     ['variant_id' => $rtf, 'qty' => '50', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-3', 'billed_qty' => ''],
     ['variant_id' => $rtf, 'qty' => '48.5', 'unit_price' => '100', 'tax_rate' => '5', 'location_id' => '0', 'lot_no' => 'R-4', 'billed_qty' => '']]]);
-$gR = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
+$gR = (int)DB::val('SELECT MAX(id) FROM grns');
 check('a bill of 200 m arrives as four rolls: one batch is created for each roll and the stock is what really arrived', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM grn_items WHERE grn_id = ? AND batch_id > 0', [$gR]) === 4
-    && (int)DB::val('SELECT COUNT(DISTINCT batch_id) FROM grn_items WHERE grn_id = ?', [$gR]) === 4 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 198.5
-    && (int)DB::val('SELECT COUNT(*) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 4);
-check('each roll keeps its own length and the supplier\'s roll no.; the batches are numbered one after another', DB::all('SELECT b.batch_no, b.received_qty, b.supplier_lot FROM batches b WHERE b.tenant_id = ? AND b.variant_id = ? ORDER BY b.id', [$tA, $rtf])
+    && (int)DB::val('SELECT COUNT(DISTINCT batch_id) FROM grn_items WHERE grn_id = ?', [$gR]) === 4 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$rtf]) === 198.5
+    && (int)DB::val('SELECT COUNT(*) FROM batches WHERE variant_id = ?', [$rtf]) === 4);
+check('each roll keeps its own length and the supplier\'s roll no.; the batches are numbered one after another', DB::all('SELECT b.batch_no, b.received_qty, b.supplier_lot FROM batches b WHERE b.variant_id = ? ORDER BY b.id', [$rtf])
     === [['batch_no' => 'RTF-1-B0001', 'received_qty' => '50.000', 'supplier_lot' => 'R-1'], ['batch_no' => 'RTF-1-B0002', 'received_qty' => '50.000', 'supplier_lot' => 'R-2'], ['batch_no' => 'RTF-1-B0003', 'received_qty' => '50.000', 'supplier_lot' => 'R-3'], ['batch_no' => 'RTF-1-B0004', 'received_qty' => '48.500', 'supplier_lot' => 'R-4']]);
 $r = $c->call('GET', "/purchase/grns/$gR");
 $rows = $r['json']['data']['items'] ?? [];
@@ -1079,23 +984,23 @@ $r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' =
 check('a billed quantity that is not a number is refused', $r['status'] === 422);
 $big = []; for ($i = 0; $i < 120; $i++) $big[] = ['variant_id' => $rtf, 'qty' => '1', 'unit_price' => '100', 'location_id' => '0', 'billed_qty' => $i === 0 ? '120' : ''];
 $r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'lines' => $big]);
-check('a truck with more than 100 rolls is received in one go (up to 500 lines)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM batches WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === 124);
+check('a truck with more than 100 rolls is received in one go (up to 500 lines)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM batches WHERE variant_id = ?', [$rtf]) === 124);
 $lab = $c->call('GET', "/labels?type=rolls&grn=$gR");
 check('the roll labels of that receipt are ready to print, one per roll', count($lab['json']['data']['rows'] ?? []) === 4);
 // leave no trace for the sections that follow
-DB::run('DELETE FROM grn_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+DB::run('DELETE FROM grn_items WHERE variant_id = ?', [$rtf]);
 
 echo "Goods receipt: several purchase orders on one supplier invoice\n";
-$mkPo = function (int $supplier, array $lines) use ($c, $wh, $tA): int {
+$mkPo = function (int $supplier, array $lines) use ($c, $wh): int {
     $c->call('POST', '/purchase/orders', ['supplier_id' => $supplier, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => $lines]);
-    $id = (int)DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+    $id = (int)DB::val('SELECT MAX(id) FROM purchase_orders');
     $c->call('POST', "/purchase/orders/$id/submit");
     return $id;
 };
 $po1 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '100', 'unit_price' => '100', 'tax_rate' => '5']]);
 $po2 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '60', 'unit_price' => '110', 'tax_rate' => '5'], ['variant_id' => $v2, 'qty' => '20', 'unit_price' => '50', 'tax_rate' => '5']]);
 $c->call('POST', '/suppliers', ['name' => 'Other Mills']);
-$sid2 = (int)DB::val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Other Mills'", [$tA]);
+$sid2 = (int)DB::val("SELECT id FROM suppliers WHERE name = 'Other Mills'");
 $po3 = $mkPo($sid2, [['variant_id' => $rtf, 'qty' => '10', 'unit_price' => '100', 'tax_rate' => '5']]);
 $r = $c->call('GET', "/purchase/grns/open-pos?supplier=$sid");
 $open = $r['json']['pos'] ?? [];
@@ -1103,7 +1008,7 @@ check('the receiving screen lists the supplier\'s open orders with what is due (
 $ol1 = []; $ol2 = [];
 foreach ($open as $o) { if ((int)$o['id'] === $po1) $ol1 = $o['lines']; if ((int)$o['id'] === $po2) $ol2 = $o['lines']; }
 check('each open order comes with its due lines and its number', count($ol1) === 1 && count($ol2) === 2 && $ol1[0]['po_no'] !== '' && (float)$ol2[0]['left'] === 60.0);
-$before = (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+$before = (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$rtf]);
 // the supplier's one invoice: 160 m (100 + 60) as 3 rolls of 50 + one of 10 ... and 20 of the other item
 $r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'po_ids' => [$po1, $po2, $po3], 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'supplier_ref' => 'INV-ALL', 'lines' => [['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '10']]]);
 check('orders of different suppliers cannot share one receipt', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'same'));
@@ -1113,8 +1018,8 @@ $r = $c->call('POST', '/purchase/grns', ['supplier_id' => $sid, 'po_ids' => [$po
     ['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '50', 'lot_no' => 'M-1', 'billed_qty' => '100'], ['po_item_id' => $ol1[0]['po_item_id'], 'qty' => '50', 'lot_no' => 'M-2'],
     ['po_item_id' => $ol2[0]['po_item_id'], 'qty' => '30', 'lot_no' => 'M-3', 'billed_qty' => '60'], ['po_item_id' => $ol2[0]['po_item_id'], 'qty' => '30', 'lot_no' => 'M-4'],
     ['po_item_id' => $ol2[1]['po_item_id'], 'qty' => '20']]]);
-$gM = (int)DB::val('SELECT MAX(id) FROM grns WHERE tenant_id = ?', [$tA]);
-check('one invoice for two orders is received in one receipt: all rolls are in stock', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]) === $before + 160.0
+$gM = (int)DB::val('SELECT MAX(id) FROM grns');
+check('one invoice for two orders is received in one receipt: all rolls are in stock', $r['status'] === 200 && (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$rtf]) === $before + 160.0
     && (int)DB::val('SELECT COUNT(*) FROM grn_items WHERE grn_id = ?', [$gM]) === 5 && DB::val('SELECT supplier_ref FROM grns WHERE id = ?', [$gM]) === 'INV-ALL');
 check('both orders are marked received and each order\'s received quantity went up by its own lines', DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$po1]) === 'received' && DB::val('SELECT status FROM purchase_orders WHERE id = ?', [$po2]) === 'received'
     && (float)DB::val('SELECT qty_received FROM purchase_order_items WHERE id = ?', [$ol1[0]['po_item_id']]) === 100.0 && (float)DB::val('SELECT qty_received FROM purchase_order_items WHERE id = ?', [$ol2[1]['po_item_id']]) === 20.0);
@@ -1129,35 +1034,34 @@ check('each order lists the shared receipt, and an order with goods received can
 $r = $c->call('GET', "/record/grn/$gM");
 check('the receipt\'s record page links both orders', substr_count(json_encode($r['json']), '"links"') >= 1 && substr_count(json_encode($r['json']), 'purchase\\/orders\\/') >= 3);
 $r = $c->call('POST', "/purchase/grns/$gM/bill");
-check('one bill is made for the whole invoice', (int)DB::val('SELECT COUNT(*) FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$tA, $gM]) === 1);
+check('one bill is made for the whole invoice', (int)DB::val('SELECT COUNT(*) FROM purchase_bills WHERE grn_id = ?', [$gM]) === 1);
 // a receipt for one order still works as before (po_id from the order page)
 $po4 = $mkPo($sid, [['variant_id' => $rtf, 'qty' => '10', 'unit_price' => '100', 'tax_rate' => '5']]);
 $ol4 = $c->call('GET', "/purchase/orders/$po4/receive")['json']['data']['oldLines'] ?? [];
 $r = $c->call('POST', '/purchase/grns', ['po_id' => $po4, 'warehouse_id' => $wh, 'received_date' => date('Y-m-d'), 'lines' => [['po_item_id' => $ol4[0]['po_item_id'], 'qty' => '10']]]);
 check('receiving a single order from its own page still works and is recorded once', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM grn_pos WHERE po_id = ?', [$po4]) === 1);
-DB::run('DELETE FROM grn_items WHERE tenant_id = ? AND variant_id = ?', [$tA, $rtf]);
+DB::run('DELETE FROM grn_items WHERE variant_id = ?', [$rtf]);
 
 echo "Catalogues and products\n";
-$bq = new J($base); $bq->session(); $bq->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $bq->session();
 $itemRv = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$rv]);
 $itemV2 = (string)DB::val('SELECT i.name FROM items i JOIN item_variants v ON v.item_id = i.id WHERE v.id = ?', [$v2]);
 $r = $c->call('POST', '/catalogues', ['name' => 'CARAVAN', 'notes' => 'Showroom book']);
-$catA = (int)DB::val('SELECT id FROM catalogues WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN']);
+$catA = (int)DB::val('SELECT id FROM catalogues WHERE name = ?', ['CARAVAN']);
 check('a catalogue is created; the same name twice is refused', $r['status'] === 200 && $catA > 0 && $c->call('POST', '/catalogues', ['name' => 'CARAVAN'])['status'] === 422 && $c->call('POST', '/catalogues', ['name' => ''])['status'] === 422);
 $csv = function (string $text) { $f = tempnam(sys_get_temp_dir(), 'pc'); file_put_contents($f, $text); return new CURLFile($f, 'text/csv', 'p.csv'); };
-$before = (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]);
+$before = (int)DB::val('SELECT COUNT(*) FROM products');
 $r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\nCARAVAN,CARAVAN-3,No Such Item,100\n")]);
-check('an import with an unknown item is refused as a whole: nothing is added and the row is named', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'Row 6') && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]) === $before);
+check('an import with an unknown item is refused as a whole: nothing is added and the row is named', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'Row 6') && (int)DB::val('SELECT COUNT(*) FROM products') === $before);
 $r = $c->form('/products/import', ['file' => $csv("catalogue name,product name,item name,price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\nCARAVAN,CARAVAN-2,\"$itemV2\",500\n")]);
 check('a file that lists a product twice is refused', $r['status'] === 422 && str_contains(json_encode($r['json']['messages']), 'twice'));
 $r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",\nCARAVAN,CARAVAN-2,\"$itemV2\",500\nSECOND,SECOND-9,\"$itemRv\",450\n,Plain Product,\"$itemRv\",300\n")]);
-$p1 = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN-1']); $p9 = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'SECOND-9']);
+$p1 = (int)DB::val('SELECT id FROM products WHERE name = ?', ['CARAVAN-1']); $p9 = (int)DB::val('SELECT id FROM products WHERE name = ?', ['SECOND-9']);
 check('the sheet imports: catalogues are created, products land in them, the same item sits in two catalogues, one product has no catalogue',
-    $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ?', [$tA]) === $before + 4 && (int)DB::val('SELECT COUNT(*) FROM catalogues WHERE tenant_id = ?', [$tA]) === 2
-    && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p1]) === $rv && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p9]) === $rv && DB::val('SELECT catalogue_id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'Plain Product']) === null);
+    $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM products') === $before + 4 && (int)DB::val('SELECT COUNT(*) FROM catalogues') === 2
+    && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p1]) === $rv && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$p9]) === $rv && DB::val('SELECT catalogue_id FROM products WHERE name = ?', ['Plain Product']) === null);
 check('a product without a price takes the item\'s sale price', (float)DB::val('SELECT price FROM products WHERE id = ?', [$p1]) === (float)DB::val('SELECT sale_price FROM item_variants WHERE id = ?', [$rv]));
 $r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Product Name,Item Name,Price\nCARAVAN,CARAVAN-1,\"$itemRv\",450\n")]);
-check('importing a name again updates that product instead of adding another', $r['status'] === 200 && (float)DB::val('SELECT price FROM products WHERE id = ?', [$p1]) === 450.0 && (int)DB::val('SELECT COUNT(*) FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'CARAVAN-1']) === 1);
+check('importing a name again updates that product instead of adding another', $r['status'] === 200 && (float)DB::val('SELECT price FROM products WHERE id = ?', [$p1]) === 450.0 && (int)DB::val('SELECT COUNT(*) FROM products WHERE name = ?', ['CARAVAN-1']) === 1);
 $r = $c->call('GET', '/products?catalogue=none');
 check('the product list filters by "no catalogue"', count($r['json']['data']['rows'] ?? []) === 1 && ($r['json']['data']['rows'][0]['name'] ?? '') === 'Plain Product');
 $r = $c->call('GET', "/products?catalogue=$catA");
@@ -1179,7 +1083,7 @@ $c->call('POST', "/catalogues/$catA", ['name' => 'CARAVAN', 'is_active' => 1]);
 
 $r = $c->call('POST', '/sales/orders', ['customer_id' => $cid, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'lines' => [
     ['variant_id' => $rv, 'product_id' => $p1, 'qty' => '2', 'unit_price' => '450', 'discount_pct' => '', 'tax_rate' => '0'], ['variant_id' => $v2, 'product_id' => $p1, 'qty' => '1', 'unit_price' => '150', 'discount_pct' => '', 'tax_rate' => '0']]]);
-$soP = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$soP = (int)DB::val('SELECT MAX(id) FROM sales_orders');
 check('an order line remembers its product; a product that does not belong to that item is ignored', $r['status'] === 200 && (int)DB::val('SELECT product_id FROM sales_order_items WHERE order_id = ? AND variant_id = ?', [$soP, $rv]) === $p1
     && DB::val('SELECT product_id FROM sales_order_items WHERE order_id = ? AND variant_id = ?', [$soP, $v2]) === null);
 $r = $c->call('GET', "/sales/orders/$soP");
@@ -1188,7 +1092,7 @@ $r = $c->call('GET', "/sales/orders/$soP/edit");
 check('editing the order brings the product back', (int)($r['json']['data']['oldLines'][0]['product_id'] ?? 0) === $p1 && str_contains((string)$r['json']['data']['oldLines'][0]['label'], 'CARAVAN-1'));
 $r = $c->call('POST', '/sales/deliveries', ['customer_id' => $cid, 'warehouse_id' => $wh, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [
     ['variant_id' => $rv, 'product_id' => $p9, 'qty' => '1', 'batch_id' => $bid2, 'location_id' => $rack1, 'unit_price' => '450', 'discount_pct' => '', 'tax_rate' => '0']]]);
-$dlvP = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]); $invP = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $dlvP]);
+$dlvP = (int)DB::val('SELECT MAX(id) FROM deliveries'); $invP = (int)DB::val('SELECT id FROM sales_invoices WHERE delivery_id = ?', [$dlvP]);
 check('a direct sale by product: stock leaves the item, the delivery line keeps the product', $r['status'] === 200 && $invP > 0 && (int)DB::val('SELECT product_id FROM delivery_items WHERE delivery_id = ? AND parent_id IS NULL', [$dlvP]) === $p9);
 $r = $c->call('GET', "/sales/invoices/$invP/print");
 check('the invoice and its printout name the line by product', ($r['json']['data']['items'][0]['product_name'] ?? '') === 'SECOND-9' && ($c->call('GET', "/sales/invoices/$invP")['json']['data']['items'][0]['product_name'] ?? '') === 'SECOND-9');
@@ -1201,34 +1105,31 @@ check('a product on a sales document cannot be deleted (it can be made inactive)
 $r = $c->call('GET', "/items/" . (int)DB::val('SELECT item_id FROM item_variants WHERE id = ?', [$rv]));
 check('the item page lists the products it is sold as', count($r['json']['data']['products'] ?? []) === 3);
 check('a catalogue that still has products cannot be deleted', $c->call('POST', "/catalogues/$catA/delete")['status'] === 422);
-$pPlain = (int)DB::val('SELECT id FROM products WHERE tenant_id = ? AND name = ?', [$tA, 'Plain Product']);
+$pPlain = (int)DB::val('SELECT id FROM products WHERE name = ?', ['Plain Product']);
 $r = $c->call('POST', "/products/$pPlain", ['name' => 'Plain Product', 'catalogue_id' => '', 'variant_id' => $v2, 'price' => '320', 'is_active' => 1]);
 check('a product can be moved to another item and repriced', $r['status'] === 200 && (int)DB::val('SELECT variant_id FROM products WHERE id = ?', [$pPlain]) === $v2 && (float)DB::val('SELECT price FROM products WHERE id = ?', [$pPlain]) === 320.0);
 $r = $c->call('POST', '/products', ['name' => 'CARAVAN-1', 'variant_id' => $rv, 'price' => '1']);
 check('a duplicate product name, a missing item and a bad price are refused', $r['status'] === 422 && $c->call('POST', '/products', ['name' => 'X1', 'price' => '1'])['status'] === 422 && $c->call('POST', '/products', ['name' => 'X1', 'variant_id' => $rv, 'price' => '-5'])['status'] === 422);
 $r = $c->call('POST', "/products/$pPlain/delete");
 check('an unused product is deleted', $r['status'] === 200 && !DB::val('SELECT 1 FROM products WHERE id = ?', [$pPlain]));
-check('another company cannot see, change or delete them', $bq->call('GET', "/products/$p1/edit")['status'] === 404 && $bq->call('POST', "/products/$p1", ['name' => 'Hack', 'variant_id' => $rv, 'price' => '1'])['status'] === 404
-    && $bq->call('POST', "/products/$p1/delete")['status'] === 404 && $bq->call('GET', "/catalogues/$catA")['status'] === 404 && $bq->call('POST', "/catalogues/$catA/delete")['status'] === 404
-    && !array_filter($bq->call('GET', '/products')['json']['data']['rows'] ?? [], fn($x) => str_starts_with((string)$x['name'], 'CARAVAN')));
 $r = $c->call('GET', '/search?q=CARAVAN');
 check('search finds products', in_array('Products', array_column($r['json']['groups'] ?? [], 'title'), true));
 // no one is left with the test data
-DB::run('UPDATE delivery_items SET product_id = NULL WHERE tenant_id = ?', [$tA]); DB::run('UPDATE sales_order_items SET product_id = NULL WHERE tenant_id = ?', [$tA]);
-DB::run('DELETE FROM products WHERE tenant_id = ?', [$tA]); DB::run('DELETE FROM catalogues WHERE tenant_id = ?', [$tA]);
+DB::run('UPDATE delivery_items SET product_id = NULL'); DB::run('UPDATE sales_order_items SET product_id = NULL');
+DB::run('DELETE FROM products'); DB::run('DELETE FROM catalogues');
 
 echo "Gutt numbers: known by a number first, named later\n";
 $r = $c->call('POST', '/catalogues', ['code' => 'G-245']);
-$cg = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-245'", [$tA]);
+$cg = (int)DB::val("SELECT id FROM catalogues WHERE code = 'G-245'");
 $row = DB::one('SELECT name, code, named FROM catalogues WHERE id = ?', [$cg]);
 check('a catalogue can start as just a gutt number: it is called by the number and marked "name pending"', $r['status'] === 200 && $row['name'] === 'G-245' && (int)$row['named'] === 0);
 check('the same gutt number twice, or neither number nor name, is refused', $c->call('POST', '/catalogues', ['code' => 'G-245'])['status'] === 422 && $c->call('POST', '/catalogues', ['notes' => 'x'])['status'] === 422);
 $r = $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '450']);
-$pg1 = (int)DB::val("SELECT id FROM products WHERE tenant_id = ? AND catalogue_id = ? AND code = '1'", [$tA, $cg]);
+$pg1 = (int)DB::val("SELECT id FROM products WHERE catalogue_id = ? AND code = '1'", [$cg]);
 $prow = DB::one('SELECT name, named FROM products WHERE id = ?', [$pg1]);
 check('a design can start as just a gutt number: it is called "catalogue-number" until named', $r['status'] === 200 && $prow['name'] === 'G-245-1' && (int)$prow['named'] === 0);
 check('the same gutt number twice in one catalogue is refused, in another catalogue it is fine', $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => $cg, 'variant_id' => $rv, 'price' => '1'])['status'] === 422
-    && $c->call('POST', '/catalogues', ['code' => 'G-246'])['status'] === 200 && $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-246'", [$tA]), 'variant_id' => $rv, 'price' => '1'])['status'] === 200);
+    && $c->call('POST', '/catalogues', ['code' => 'G-246'])['status'] === 200 && $c->call('POST', '/products', ['code' => '1', 'catalogue_id' => (int)DB::val("SELECT id FROM catalogues WHERE code = 'G-246'"), 'variant_id' => $rv, 'price' => '1'])['status'] === 200);
 $r = $c->call('POST', "/catalogues/$cg", ['code' => 'G-245', 'name' => 'MAHARANI', 'is_active' => 1]);
 $row = DB::one('SELECT name, code, named FROM catalogues WHERE id = ?', [$cg]);
 check('naming it later keeps the gutt number and clears "name pending"', $r['status'] === 200 && $row['name'] === 'MAHARANI' && $row['code'] === 'G-245' && (int)$row['named'] === 1);
@@ -1242,49 +1143,47 @@ $r = $c->call('GET', '/products?q=MAHARANI');
 check('products are found by name, and by gutt number inside the catalogue', ($r['json']['data']['total'] ?? 0) >= 1 && ($c->call('GET', '/lookup/find/product?q=1')['json']['rows'][0]['sub'] ?? '') !== '');
 $csv = function (string $text) { $f = tempnam(sys_get_temp_dir(), 'pg'); file_put_contents($f, $text); return new CURLFile($f, 'text/csv', 'p.csv'); };
 $r = $c->form('/products/import', ['file' => $csv("Catalogue Name,Item Name,Gutt No,Price\nG-300,$itemRv,5,200\nG-300,$itemRv,6,\n")]);
-$cn = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND name = 'G-300'", [$tA]);
+$cn = (int)DB::val("SELECT id FROM catalogues WHERE name = 'G-300'");
 check('a sheet with only gutt numbers imports: the designs are called catalogue-number and are marked "name pending"', $cn > 0 && (int)DB::val('SELECT COUNT(*) FROM products WHERE catalogue_id = ? AND named = 0', [$cn]) === 2 && DB::val('SELECT name FROM products WHERE catalogue_id = ? AND code = ?', [$cn, '5']) === 'G-300-5');
-DB::run('DELETE FROM products WHERE tenant_id = ? AND (catalogue_id = ? OR catalogue_id = ?)', [$tA, $cg, $cn]);
-DB::run("DELETE FROM products WHERE tenant_id = ? AND catalogue_id IN (SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-246')", [$tA, $tA]); DB::run("DELETE FROM catalogues WHERE tenant_id = ? AND code = 'G-246'", [$tA]);
+DB::run('DELETE FROM products WHERE (catalogue_id = ? OR catalogue_id = ?)', [$cg, $cn]);
+DB::run("DELETE FROM products WHERE catalogue_id IN (SELECT id FROM catalogues WHERE code = 'G-246')"); DB::run("DELETE FROM catalogues WHERE code = 'G-246'");
 
 echo "Catalogue launches\n";
 $c->call('POST', '/items', ['name' => 'Launch Fabric', 'item_type' => 'fabric', 'unit_id' => $unit, 'track_batch' => 1, 'variants' => [['name' => '', 'sku' => 'LF-1', 'cost_price' => '80', 'sale_price' => '100']], 'cf' => (object)[]]);
-$lf = (int)DB::val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'LF-1'", [$tA]);
+$lf = (int)DB::val("SELECT id FROM item_variants WHERE sku = 'LF-1'");
 $c->call('POST', '/stock/adjustments', ['warehouse_id' => $wh, 'reason' => 'opening', 'lines' => [['variant_id' => $lf, 'batch_id' => 'new', 'lot_no' => 'LR-1', 'location_id' => '0', 'qty' => '50', 'unit_cost' => '80'], ['variant_id' => $lf, 'batch_id' => 'new', 'lot_no' => 'LR-2', 'location_id' => '0', 'qty' => '50', 'unit_cost' => '80']]]);
-$lb = array_column(DB::all('SELECT id FROM batches WHERE tenant_id = ? AND variant_id = ? ORDER BY id', [$tA, $lf]), 'id');
-$lstock = fn() => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$tA, $lf]);
+$lb = array_column(DB::all('SELECT id FROM batches WHERE variant_id = ? ORDER BY id', [$lf]), 'id');
+$lstock = fn() => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$lf]);
 $c->call('POST', '/catalogues', ['code' => 'G-LAUNCH']);
-$cl = (int)DB::val("SELECT id FROM catalogues WHERE tenant_id = ? AND code = 'G-LAUNCH'", [$tA]);
+$cl = (int)DB::val("SELECT id FROM catalogues WHERE code = 'G-LAUNCH'");
 check('there are two rolls of 50 m to launch with', count($lb) === 2 && $lstock() === 100.0);
 $r = $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'ship_to' => 'Print House, Surat', 'note' => 'Diwali book', 'sizes' => [['size_name' => 'Large', 'qty' => '100'], ['size_name' => 'Small', 'qty' => '200']]]);
-$L = (int)DB::val('SELECT MAX(id) FROM catalogue_launches WHERE tenant_id = ?', [$tA]);
+$L = (int)DB::val('SELECT MAX(id) FROM catalogue_launches');
 $lrow = DB::one('SELECT * FROM catalogue_launches WHERE id = ?', [$L]);
 check('a launch is saved as a draft with its sizes (the fabric is asked for with a sales order)', $r['status'] === 200 && $lrow['status'] === 'draft' && str_starts_with($lrow['launch_no'], 'CL-') && (int)DB::val('SELECT COUNT(*) FROM launch_sizes WHERE launch_id = ?', [$L]) === 2);
 check('a launch needs a catalogue and a warehouse; a size needs a name; the same size twice is refused', $c->call('POST', '/launches', ['warehouse_id' => $wh])['status'] === 422
     && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => '', 'qty' => '5']]])['status'] === 422
     && $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh, 'sizes' => [['size_name' => 'Large', 'qty' => '5'], ['size_name' => 'large', 'qty' => '5']]])['status'] === 422);
 $c->call('POST', '/launches', ['catalogue_id' => $cl, 'warehouse_id' => $wh]);
-$Lempty = (int)DB::val('SELECT MAX(id) FROM catalogue_launches WHERE tenant_id = ?', [$tA]);
+$Lempty = (int)DB::val('SELECT MAX(id) FROM catalogue_launches');
 check('a launch with no fabric order yet can be cancelled', $c->call('POST', "/launches/$Lempty/cancel")['status'] === 200 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$Lempty]) === 'cancelled');
 // the fabric request is a sales order, like any order a warehouse receives
 $r = $c->call('GET', "/sales/orders/create?launch=$L");
 $ln = $r['json']['data']['launch'] ?? null;
 check('the sales order form for a launch comes addressed to the catalogue department with the place the fabric must go to', $ln && (int)$ln['id'] === $L && $ln['ship_to'] === 'Print House, Surat' && (int)$ln['customer_id'] > 0 && DB::val('SELECT name FROM customers WHERE id = ?', [$ln['customer_id']]) === 'Catalogue Department');
 $r = $c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'ship_to' => 'Print House, Surat', 'launch_id' => $L, 'lines' => [['variant_id' => $lf, 'qty' => '60', 'unit_price' => '0', 'discount_pct' => '', 'tax_rate' => '']]]);
-$so = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$so = (int)DB::val('SELECT MAX(id) FROM sales_orders');
 check('the fabric order is saved as a sales order tied to the launch; while it is a draft the launch is still a draft', $r['status'] === 200 && (int)DB::val('SELECT launch_id FROM sales_orders WHERE id = ?', [$so]) === $L && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'draft');
-check('an order cannot be tied to a launch that does not exist, or to another company\'s', $c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'launch_id' => 99999999, 'lines' => [['variant_id' => $lf, 'qty' => '1', 'unit_price' => '0']]])['status'] === 422);
 $c->call('POST', "/sales/orders/$so/confirm");
 check('confirming the order sends it to the warehouse: the launch is "ordered"', DB::val('SELECT status FROM sales_orders WHERE id = ?', [$so]) === 'confirmed' && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered');
 $lst = $c->call('GET', '/sales/orders')['json']['data']['rows'] ?? [];
 $mine = array_values(array_filter($lst, fn($x) => (int)$x['id'] === $so))[0] ?? [];
 check('the warehouse finds it among its sales orders, marked as fabric for the launch', ($mine['launch_no'] ?? '') === $lrow['launch_no'] && $c->call('GET', "/sales/orders/$so")['json']['data']['launch']['launch_no'] === $lrow['launch_no']);
-check('another company cannot see the launch', $bl->call('GET', "/launches/$L")['status'] === 404);
 // the warehouse delivers it, roll by roll
 $items = $c->call('GET', "/sales/orders/$so")['json']['data']['items'];
 $oi = $items[0]['id'];
 $c->call('POST', '/sales/deliveries', ['order_id' => $so, 'delivery_date' => date('Y-m-d'), 'lines' => [['order_item_id' => $oi, 'variant_id' => $lf, 'qty' => '40', 'batch_id' => $lb[0], 'location_id' => '0']]]);
-$d1 = (int)DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+$d1 = (int)DB::val('SELECT MAX(id) FROM deliveries');
 $r = $c->call('GET', "/launches/$L");
 $fab = $r['json']['data']['fabric'][0] ?? [];
 check('delivering 40 m from the sales order takes it out of stock, makes the launch "partly delivered" and counts the cost into the launch', $lstock() === 60.0 && DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial'
@@ -1293,7 +1192,7 @@ $c->call('POST', '/sales/deliveries', ['order_id' => $so, 'delivery_date' => dat
 check('when everything asked for has been delivered the launch is "fabric delivered"', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'dispatched' && $lstock() === 40.0);
 // wrong fabric: it comes back as an ordinary sales return of that delivery
 $c->call('POST', "/sales/deliveries/$d1/invoice");
-$inv = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? AND delivery_id = ?', [$tA, $d1]);
+$inv = (int)DB::val('SELECT id FROM sales_invoices WHERE delivery_id = ?', [$d1]);
 $ri2 = DB::one('SELECT id FROM delivery_items WHERE delivery_id = ?', [$d1]);
 $c->call('POST', '/sales/returns', ['invoice_id' => $inv, 'return_date' => date('Y-m-d'), 'reason' => 'wrong shade', 'lines' => [(string)$ri2['id'] => ['qty' => '10', 'location_id' => '0', 'restock' => 1]]]);
 $r = $c->call('GET', "/launches/$L");
@@ -1301,7 +1200,7 @@ $fab = $r['json']['data']['fabric'][0] ?? [];
 check('wrong fabric sent back with a sales return goes into stock and is taken off the launch\'s cost (and still shows on it as "came back")', $lstock() === 50.0 && (float)$fab['qty_returned'] === 10.0 && abs((float)$fab['value_issued'] - 4000.0) < 0.005);
 // the right fabric is asked for with another sales order for the same launch
 $c->call('POST', '/sales/orders', ['customer_id' => $ln['customer_id'], 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'ship_to' => 'Print House, Surat', 'launch_id' => $L, 'lines' => [['variant_id' => $lf, 'qty' => '10', 'unit_price' => '0']]]);
-$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$so2 = (int)DB::val('SELECT MAX(id) FROM sales_orders');
 $c->call('POST', "/sales/orders/$so2/confirm");
 check('a second fabric order for the same launch makes it "partly delivered" again', DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'ordered' || DB::val('SELECT status FROM catalogue_launches WHERE id = ?', [$L]) === 'partial');
 $oi2 = $c->call('GET', "/sales/orders/$so2")['json']['data']['items'][0]['id'];
@@ -1334,11 +1233,11 @@ $rp = $c->call('GET', '/reports/catalogue-launches?from=' . date('Y-m-d', strtot
 $rpr = array_values(array_filter($rp, fn($x) => $x['no'] === $lrow['launch_no']))[0] ?? [];
 check('the report of launch costs shows fabric, extra cost, books received and the cost of one book', $rpr && abs((float)$rpr['fabric_cost'] - 4800.0) < 0.005 && (int)$rpr['books'] === 280 && abs((float)$rpr['total'] - 6030.0) < 0.005 && abs((float)$rpr['per_book'] - 21.54) < 0.01 && $rpr['gutt'] === 'G-LAUNCH');
 $c->call('POST', '/roles', ['name' => 'Viewer Only ' . $sfx, 'perms' => ['items.view']]);
-$rVo = (int)DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = ?', [$tA, 'Viewer Only ' . $sfx]);
+$rVo = (int)DB::val('SELECT id FROM roles WHERE name = ?', ['Viewer Only ' . $sfx]);
 $c->call('POST', '/users', ['name' => 'Viewer Only', 'email' => "vo-$sfx@test.local", 'password' => 'Password123', 'role_id' => $rVo, 'warehouse_id' => '0']);
 $vj = new J($base); $vj->session(); $vj->call('POST', '/login', ['email' => "vo-$sfx@test.local", 'password' => 'Password123']); $vj->session();
 check('someone with no catalogue, sales or stock-receiving permission cannot open launches', $vj->call('GET', '/launches')['status'] === 403 && $vj->call('GET', "/launches/$L")['status'] === 403);
-DB::run('DELETE FROM stock_balances WHERE tenant_id = ? AND variant_id IN (?, ?, ?)', [$tA, $lf, $vL, $vS]);
+DB::run('DELETE FROM stock_balances WHERE variant_id IN (?, ?, ?)', [$lf, $vL, $vS]);
 
 echo "Print templates\n";
 $r = $c->call('GET', '/settings/templates/design?doc=invoice');
@@ -1350,7 +1249,7 @@ unset($bk);
 $mine['blocks'][] = ['id' => 'text:abc123', 'type' => 'text', 'show' => 1, 'title' => 'Jurisdiction', 'text' => 'Surat only', 'align' => 'center', 'boxed' => 1, 'size' => 9];
 $mine['blocks'][] = ['id' => 'evil', 'type' => 'items', 'show' => 1];
 $r = $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'id' => '', 'name' => 'Premium', 'cfg' => $mine, 'make_default' => '']);
-$ptid = (int)DB::val('SELECT id FROM print_templates WHERE tenant_id = ? AND name = ?', [$tA, 'Premium']);
+$ptid = (int)DB::val('SELECT id FROM print_templates WHERE name = ?', ['Premium']);
 check('a template is saved', $r['status'] === 200 && $ptid > 0);
 $saved = json_decode((string)DB::val('SELECT config FROM print_templates WHERE id = ?', [$ptid]), true);
 $itemsBlock = null; foreach ($saved['blocks'] as $bk) if ($bk['type'] === 'items') $itemsBlock = $bk;
@@ -1360,7 +1259,7 @@ check('what is saved is checked: bad paper, margin and colour fall back, unknown
     && (bool)array_filter($itemsBlock['columns'], fn($x) => $x['k'] === 'hsn' && $x['show'] === 1));
 check('the same name twice, an empty name and the name "Standard" are refused', $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => 'Premium', 'cfg' => $mine])['status'] === 422
     && $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => '', 'cfg' => $mine])['status'] === 422 && $c->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'name' => 'standard', 'cfg' => $mine])['status'] === 422);
-$invId = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? LIMIT 1', [$tA]);
+$invId = (int)DB::val('SELECT id FROM sales_invoices LIMIT 1');
 $pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
 check('until one is chosen, printing uses Standard (which follows the older simple options)', !$pr || (($pr['json']['data']['design']['id'] ?? '') === 'std' && count($pr['json']['data']['design']['list'] ?? []) === 2));
 $c->call('POST', "/settings/templates/$ptid/default", ['doc' => 'invoice']);
@@ -1368,25 +1267,20 @@ $pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
 check('the default template is the one printing uses; ?tpl= picks another', !$pr || (($pr['json']['data']['design']['id'] ?? '') === (string)$ptid && ($pr['json']['data']['design']['cfg']['header']['title'] ?? '') === 'GST INVOICE'
     && ($c->call('GET', "/sales/invoices/$invId/print?tpl=std")['json']['data']['design']['id'] ?? '') === 'std'));
 $r = $c->call('POST', "/settings/templates/$ptid/duplicate", ['doc' => 'invoice']);
-check('a template can be copied (and Standard too)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM print_templates WHERE tenant_id = ?', [$tA]) === 2
+check('a template can be copied (and Standard too)', $r['status'] === 200 && (int)DB::val('SELECT COUNT(*) FROM print_templates') === 2
     && $c->call('POST', '/settings/templates/std/duplicate', ['doc' => 'invoice'])['status'] === 200);
-$b3 = new J($base); $b3->session(); $b3->call('POST', '/login', ['email' => $emB, 'password' => 'Password123']); $b3->session();
-check('another company cannot see, edit, default or delete it', $b3->call('GET', "/settings/templates/design?doc=invoice&id=$ptid")['status'] === 404
-    && $b3->call('POST', '/settings/templates/save', ['doc' => 'invoice', 'id' => $ptid, 'name' => 'Hack', 'cfg' => $mine])['status'] === 404
-    && $b3->call('POST', "/settings/templates/$ptid/default", ['doc' => 'invoice'])['status'] === 404 && $b3->call('POST', "/settings/templates/$ptid/delete", ['doc' => 'invoice'])['status'] === 404
-    && (string)DB::val('SELECT name FROM print_templates WHERE id = ?', [$ptid]) === 'Premium');
 $c->call('POST', "/settings/templates/$ptid/delete", ['doc' => 'invoice']);
 $pr = $invId ? $c->call('GET', "/sales/invoices/$invId/print") : null;
 check('deleting the default hands printing back to Standard', !$pr || ($pr['json']['data']['design']['id'] ?? '') === 'std');
 check('a document with no total row (delivery note) has no totals section to design', !array_filter($c->call('GET', '/settings/templates/design?doc=delivery_note')['json']['data']['cfg']['blocks'] ?? [], fn($x) => $x['type'] === 'totals'));
-DB::run('DELETE FROM print_templates WHERE tenant_id = ?', [$tA]);
+DB::run('DELETE FROM print_templates');
 
 echo "The app is the front door\n";
 $sp = ['/' => '/app/', '/dashboard' => '/app/dashboard', '/customers/12/edit' => '/app/customers/12/edit', '/settings/formdesign' => '/app/settings/formdesign', '/forgot-password' => '/app/forgot-password',
-    '/admin' => '/app/admin', '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];
+    '/purchase/rates' => '/app/purchase/rates', '/items/import' => '/app/items/import'];
 $bad = []; foreach ($sp as $from => $to) if (Core\Spa::redirectFor($from) !== $to) $bad[] = $from;
 check('classic screen addresses map to their twin in the app', !$bad);
-$keep = ['/items/export', '/items/import/template', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/admin/system/backup', '/labels/barcode', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
+$keep = ['/items/export', '/items/import/template', '/reports/stock/export/csv', '/lookup/items', '/company/logo', '/settings/system/backup', '/labels/barcode', '/stock/batches/4/barcode', '/search', '/logout', '/api/v1/session'];
 $bad = []; foreach ($keep as $path) if (Core\Spa::redirectFor($path) !== null) $bad[] = $path;
 check('files and lookups are never sent to the app', !$bad);
 $pr = ['/purchase/orders/5/print' => '/app/purchase/orders/5/print', '/sales/invoices/5/print' => '/app/sales/invoices/5/print', '/sales/deliveries/3/print' => '/app/sales/deliveries/3/print', '/sales/deliveries/3/voucher' => '/app/sales/deliveries/3/voucher',
@@ -1395,19 +1289,19 @@ $bad = []; foreach ($pr as $from => $to) if (Core\Spa::redirectFor($from) !== $t
 check('printouts are pages of the app too', !$bad && Core\Spa::redirectFor('/reports/stock-summary', ['print' => '1']) === '/app/reports/stock-summary');
 
 // print data over JSON: letterhead and ready-made line amounts
-$po = (int)DB::val('SELECT id FROM purchase_orders WHERE tenant_id = ? LIMIT 1', [$tA]);
+$po = (int)DB::val('SELECT id FROM purchase_orders LIMIT 1');
 if ($po) {
     $r = $c->call('GET', "/purchase/orders/$po/print");
     check('the purchase-order printout data has the letterhead, the layout and amounts per line', ($r['json']['data']['head']['name'] ?? '') !== '' && isset($r['json']['data']['tpl']['accent']) && (!$r['json']['data']['items'] || isset($r['json']['data']['items'][0]['tot'], $r['json']['data']['items'][0]['net'])));
 }
-$inv = (int)DB::val('SELECT id FROM sales_invoices WHERE tenant_id = ? LIMIT 1', [$tA]);
+$inv = (int)DB::val('SELECT id FROM sales_invoices LIMIT 1');
 if ($inv) {
     $r = $c->call('GET', "/sales/invoices/$inv/print");
     check('the invoice printout data has the letterhead and discount / tax / total per line', isset($r['json']['data']['head']['name']) && (!$r['json']['data']['items'] || isset($r['json']['data']['items'][0]['dsc'], $r['json']['data']['items'][0]['tx'], $r['json']['data']['items'][0]['tot'])));
 }
 $r = $c->call('GET', '/reports/stock-summary?print=1');
 check('a report for printing answers with its rows, company and print date', $r['status'] === 200 && isset($r['json']['data']['rows'], $r['json']['data']['company'], $r['json']['data']['printed']));
-$r = $c->call('GET', '/labels/print?type=items&template=b:item-50x25&n[' . (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? LIMIT 1', [$tA]) . ']=2');
+$r = $c->call('GET', '/labels/print?type=items&template=b:item-50x25&n[' . (int)DB::val('SELECT id FROM item_variants LIMIT 1') . ']=2');
 check('labels for printing answer with the template, the page layout and the filled values', $r['status'] === 200 && isset($r['json']['data']['tpl']['elements'], $r['json']['data']['page']['mode']) && count($r['json']['data']['labels'] ?? []) === 2);
 $r = $c->call('POST', '/logout', []);
 check('signing out over JSON answers success (not an error) and ends the session', $r['status'] === 200 && ($r['json']['ok'] ?? false) === true && $c->call('GET', '/customers')['status'] === 401);

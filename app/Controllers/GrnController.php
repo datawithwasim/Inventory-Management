@@ -23,17 +23,16 @@ final class GrnController extends PurchaseBase
             'SELECT g.*, s.name AS supplier, w.name AS warehouse, p.po_no, u.name AS user_name, b.id AS bill_id, b.bill_no
              FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id
              LEFT JOIN purchase_orders p ON p.id = g.po_id LEFT JOIN users u ON u.id = g.created_by
-             LEFT JOIN purchase_bills b ON b.grn_id = g.id AND b.tenant_id = g.tenant_id
-             WHERE g.tenant_id = ? AND g.id = ?' . \Core\Scope::sql('g.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             LEFT JOIN purchase_bills b ON b.grn_id = g.id
+             WHERE g.id = ?' . \Core\Scope::sql('g.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
-        $t = $this->tid();
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'g.tenant_id = ?' . \Core\Scope::sql('g.warehouse_id');
-        $params = [$t];
+        $where = '1=1' . \Core\Scope::sql('g.warehouse_id');
+        $params = [];
         if ($supplier) { $where .= ' AND g.supplier_id = ?'; $params[] = $supplier; }
         if ($q !== '') { $where .= ' AND (g.grn_no LIKE ? OR g.supplier_ref LIKE ?)'; $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; array_push($params, $like, $like); }
         [$page, $pages, $limit] = $this->pageOf('grns g', $where, $params);
@@ -42,7 +41,7 @@ final class GrnController extends PurchaseBase
                     (SELECT COUNT(*) FROM grn_items i WHERE i.grn_id = g.id) AS line_count,
                     (SELECT GROUP_CONCAT(CONCAT(gp.po_id, ':', q.po_no) ORDER BY gp.po_id SEPARATOR ',') FROM grn_pos gp JOIN purchase_orders q ON q.id = gp.po_id WHERE gp.grn_id = g.id) AS po_list
              FROM grns g JOIN suppliers s ON s.id = g.supplier_id JOIN warehouses w ON w.id = g.warehouse_id
-             LEFT JOIN purchase_orders p ON p.id = g.po_id LEFT JOIN purchase_bills b ON b.grn_id = g.id AND b.tenant_id = g.tenant_id
+             LEFT JOIN purchase_orders p ON p.id = g.po_id LEFT JOIN purchase_bills b ON b.grn_id = g.id
              WHERE $where ORDER BY g.id DESC $limit", $params);
         $this->view('app/purchase/grn_index', ['title' => 'Goods receipts', 'rows' => $rows, 'supplier' => $supplier, 'q' => $q,
             'suppliers' => $this->suppliers(false), 'page' => $page, 'pages' => $pages]);
@@ -65,7 +64,7 @@ final class GrnController extends PurchaseBase
 
     private function openPo(string $id): array
     {
-        $po = DB::one('SELECT p.*, s.name AS supplier FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.tenant_id = ? AND p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+        $po = DB::one('SELECT p.*, s.name AS supplier FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = ?' . \Core\Scope::sql('p.warehouse_id'), [(int)$id]) ?? $this->notFound();
         if (!in_array($po['status'], ['approved', 'partial'], true)) {
             flash('danger', 'Goods can only be received against an approved purchase order that is not finished.');
             redirect("purchase/orders/{$po['id']}");
@@ -80,7 +79,7 @@ final class GrnController extends PurchaseBase
         foreach (DB::all(
             'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, u.short_name AS unit, u.allow_decimal
              FROM purchase_order_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE l.tenant_id = ? AND l.po_id = ? ORDER BY l.id', [$this->tid(), $po['id']]) as $l) {
+             WHERE l.po_id = ? ORDER BY l.id', [$po['id']]) as $l) {
             $left = round((float)$l['qty_ordered'] - (float)$l['qty_received'], 3);
             if ($left <= 0) continue;
             $lines[] = ['po_item_id' => $l['id'], 'po_id' => (int)$po['id'], 'po_no' => $po['po_no'], 'variant_id' => $l['variant_id'], 'label' => $l['item_name'] . ($l['vname'] ? ' — ' . $l['vname'] : '') . ' (' . $l['sku'] . ')',
@@ -104,7 +103,7 @@ final class GrnController extends PurchaseBase
         $out = [];
         foreach (DB::all(
             "SELECT p.id, p.po_no, p.order_date, p.status, p.warehouse_id, p.currency, p.exchange_rate, w.name AS warehouse FROM purchase_orders p JOIN warehouses w ON w.id = p.warehouse_id
-             WHERE p.tenant_id = ? AND p.supplier_id = ? AND p.status IN ('approved','partial')" . \Core\Scope::sql('p.warehouse_id') . ' ORDER BY p.id', [$this->tid(), $supplier]) as $p) {
+             WHERE p.supplier_id = ? AND p.status IN ('approved','partial')" . \Core\Scope::sql('p.warehouse_id') . ' ORDER BY p.id', [$supplier]) as $p) {
             $lines = $this->dueLines($p);
             if ($lines) $out[] = $p + ['lines' => $lines];
         }
@@ -140,7 +139,7 @@ final class GrnController extends PurchaseBase
 
         $poItems = [];
         if ($pos) {
-            foreach (DB::all('SELECT * FROM purchase_order_items WHERE tenant_id = ? AND po_id IN (' . implode(',', array_keys($pos)) . ')', [$this->tid()]) as $pi) $poItems[$pi['id']] = $pi;
+            foreach (DB::all('SELECT * FROM purchase_order_items WHERE po_id IN (' . implode(',', array_keys($pos)) . ')', []) as $pi) $poItems[$pi['id']] = $pi;
         }
         $lines = [];
         $perPoItem = [];
@@ -179,9 +178,8 @@ final class GrnController extends PurchaseBase
 
         try {
             $grnId = DB::transaction(function () use ($pos, $po, $supplier, $wh, $date, $ref, $extra, $extraNote, $note, $lines, $poItems, $cf) {
-                $t = $this->tid();
-                $grnNo = Numbering::next($t, 'GRN');
-                $grnId = DB::insert('grns', ['tenant_id' => $t, 'grn_no' => $grnNo, 'po_id' => $po['id'] ?? null, 'supplier_id' => $supplier['id'],
+                $grnNo = Numbering::next('GRN');
+                $grnId = DB::insert('grns', ['grn_no' => $grnNo, 'po_id' => $po['id'] ?? null, 'supplier_id' => $supplier['id'],
                     'warehouse_id' => $wh['id'], 'received_date' => $date, 'supplier_ref' => $ref, 'extra_cost' => $extra,
                     'extra_cost_note' => $extraNote, 'note' => $note, 'created_by' => Auth::user()['id']]);
                 // Freight / duty is spread over the lines by value (or by quantity when everything is free).
@@ -197,18 +195,18 @@ final class GrnController extends PurchaseBase
                     } catch (StockException $e) {
                         throw new StockException('Line ' . $l['n'] . ': ' . $e->getMessage());
                     }
-                    DB::insert('grn_items', ['tenant_id' => $t, 'grn_id' => $grnId, 'po_item_id' => $l['po_item']['id'] ?? null, 'variant_id' => $v['id'],
+                    DB::insert('grn_items', ['grn_id' => $grnId, 'po_item_id' => $l['po_item']['id'] ?? null, 'variant_id' => $v['id'],
                         'batch_id' => $batch, 'location_id' => $l['rack'], 'qty' => $l['qty'], 'billed_qty' => $l['billed'], 'unit_price' => $l['price'], 'tax_rate' => $l['tax'],
                         'landed_unit_cost' => $landed, 'supplier_lot' => $l['lot']]);
                     if ($l['po_item']) {
-                        DB::run('UPDATE purchase_order_items SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$l['qty'], $t, $l['po_item']['id']]);
+                        DB::run('UPDATE purchase_order_items SET qty_received = qty_received + ? WHERE id = ?', [$l['qty'], $l['po_item']['id']]);
                     }
                 }
                 \App\Models\CustomFields::save('grn', $grnId, $cf);
                 foreach ($pos as $pid => $p) {
-                    DB::run('INSERT INTO grn_pos (grn_id, po_id, tenant_id) VALUES (?, ?, ?)', [$grnId, $pid, $t]);
-                    $open = (int)DB::val('SELECT COUNT(*) FROM purchase_order_items WHERE tenant_id = ? AND po_id = ? AND qty_received < qty_ordered - 0.0005', [$t, $pid]);
-                    DB::run('UPDATE purchase_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$open ? 'partial' : 'received', $t, $pid]);
+                    DB::run('INSERT INTO grn_pos (grn_id, po_id) VALUES (?, ?)', [$grnId, $pid]);
+                    $open = (int)DB::val('SELECT COUNT(*) FROM purchase_order_items WHERE po_id = ? AND qty_received < qty_ordered - 0.0005', [$pid]);
+                    DB::run('UPDATE purchase_orders SET status = ? WHERE id = ?', [$open ? 'partial' : 'received', $pid]);
                 }
                 return $grnId;
             });
@@ -228,9 +226,9 @@ final class GrnController extends PurchaseBase
              FROM grn_items l JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
              LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations r ON r.id = l.location_id AND l.location_id > 0
              LEFT JOIN purchase_order_items poi ON poi.id = l.po_item_id LEFT JOIN purchase_orders po ON po.id = poi.po_id
-             WHERE l.tenant_id = ? AND l.grn_id = ? ORDER BY l.id', [$this->tid(), $g['id']]);
-        $returns = DB::all('SELECT id, return_no, return_date, total FROM purchase_returns WHERE tenant_id = ? AND grn_id = ? ORDER BY id', [$this->tid(), $g['id']]);
-        $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.tenant_id = ? AND gp.grn_id = ? ORDER BY p.id', [$this->tid(), $g['id']]);
+             WHERE l.grn_id = ? ORDER BY l.id', [$g['id']]);
+        $returns = DB::all('SELECT id, return_no, return_date, total FROM purchase_returns WHERE grn_id = ? ORDER BY id', [$g['id']]);
+        $pos = DB::all('SELECT p.id, p.po_no FROM grn_pos gp JOIN purchase_orders p ON p.id = gp.po_id WHERE gp.grn_id = ? ORDER BY p.id', [$g['id']]);
         $this->view('app/purchase/grn_show', ['title' => $g['grn_no'], 'g' => $g, 'items' => $items, 'returns' => $returns, 'pos' => $pos]);
     }
 }

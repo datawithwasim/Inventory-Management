@@ -12,29 +12,17 @@ require __DIR__ . '/lib.php';
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '',
-        'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Setco');
-[$b, $tB] = $mk('Other');
+[$a] = fresh_company($base, "Setco $sfx", "setco-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
 
 $val = fn(string $sql, array $p = []) => DB::val($sql, $p);
-$S = fn(string $k, int $t = null) => (string)DB::val('SELECT svalue FROM tenant_settings WHERE tenant_id = ? AND skey = ?', [$t ?? $GLOBALS['tA'], $k]);
-$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE tenant_id = ? AND name = ?', [$GLOBALS['tA'], $n]);
-$bal = fn(int $v) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$GLOBALS['tA'], $v]);
-$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ?', [$GLOBALS['tA']]);
-$count = fn(string $t) => (int)DB::val("SELECT COUNT(*) FROM `$t` WHERE tenant_id = ?", [$GLOBALS['tA']]);
-$main = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1', [$tA]);
-$walk = (int)$val('SELECT id FROM customers WHERE tenant_id = ? AND is_walkin = 1', [$tA]);
+$S = fn(string $k) => (string)DB::val('SELECT svalue FROM settings WHERE skey = ?', [$k]);
+$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE name = ?', [$n]);
+$bal = fn(int $v) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$v]);
+$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger');
+$count = fn(string $t) => (int)DB::val("SELECT COUNT(*) FROM `$t`");
+$main = (int)$val('SELECT id FROM warehouses WHERE is_default = 1');
+$walk = (int)$val('SELECT id FROM customers WHERE is_walkin = 1');
 $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
 $tmp = function (string $bytes, string $name, string $mime): CURLFile { $f = tempnam(sys_get_temp_dir(), 'up'); file_put_contents($f, $bytes); return new CURLFile($f, $mime, $name); };
 
@@ -46,12 +34,12 @@ check('an unknown settings tab is a 404', $a->get('/settings/nonsense')['status'
 echo "Company profile and logo\n";
 $post = fn(array $d, array $files = []) => $a->post('/settings/company', $d + $files, '/settings/company');
 $post(['name' => "Setco Interiors $sfx", 'legal_name' => 'Setco Interiors Pvt Ltd', 'address' => "12 MG Road\nPune", 'phone' => '020-123', 'email' => 'hello@setco.test', 'website' => 'setco.test', 'tax_no' => '27ABCDE1234F1Z5', 'bank' => 'HDFC 0001 IFSC HDFC0000123']);
-check('company name, legal name, address and tax number saved', $val('SELECT name FROM tenants WHERE id = ?', [$tA]) === "Setco Interiors $sfx" && $S('company.legal_name') === 'Setco Interiors Pvt Ltd' && $S('company.tax_no') === '27ABCDE1234F1Z5' && str_contains($S('company.address'), 'Pune'));
+check('company name, legal name, address and tax number saved', $S('company.name') === "Setco Interiors $sfx" && $S('company.legal_name') === 'Setco Interiors Pvt Ltd' && $S('company.tax_no') === '27ABCDE1234F1Z5' && str_contains($S('company.address'), 'Pune'));
 check('the new company name shows in the menu', str_contains($a->get('/dashboard')['body'], "Setco Interiors $sfx"));
 $post(['name' => 'X', 'email' => 'not-an-email']);
 check('an invalid company email is refused', $S('company.email') === 'hello@setco.test');
 $post(['name' => '']);
-check('an empty company name is refused', $val('SELECT name FROM tenants WHERE id = ?', [$tA]) === "Setco Interiors $sfx");
+check('an empty company name is refused', $S('company.name') === "Setco Interiors $sfx");
 $post(['name' => "Setco Interiors $sfx", 'phone' => str_repeat('9', 100)]);
 check('a too-long value is refused', $S('company.phone') === '020-123');
 $post(['name' => "Setco Interiors $sfx", 'legal_name' => 'Setco Interiors Pvt Ltd', 'email' => 'hello@setco.test'], ['logo' => $tmp('this is not an image', 'logo.png', 'image/png')]);
@@ -62,10 +50,9 @@ $post(['name' => "Setco Interiors $sfx"], ['logo' => $tmp($png . str_repeat("\0"
 check('a logo over 1 MB is refused', $S('company.logo') === '');
 $post(['name' => "Setco Interiors $sfx", 'legal_name' => 'Setco Interiors Pvt Ltd', 'email' => 'hello@setco.test'], ['logo' => $tmp($png, 'logo.png', 'image/png')]);
 $logo = $S('company.logo');
-check('a real PNG is accepted and stored outside the web folder', preg_match('/^logo-' . $tA . '-[a-f0-9]+\.png$/', $logo) === 1 && is_file(ROOT . '/storage/uploads/' . $logo));
+check('a real PNG is accepted and stored outside the web folder', preg_match('/^logo-[a-f0-9]+\.png$/', $logo) === 1 && is_file(ROOT . '/storage/uploads/' . $logo));
 $lg = $a->get('/company/logo');
 check('the logo is served with the right type', $lg['status'] === 200 && str_contains($lg['headers'], 'image/png') && str_contains($lg['headers'], 'nosniff') && $lg['body'] === $png);
-check("another company cannot fetch it (404)", $b->get('/company/logo')['status'] === 404);
 check('anonymous visitors cannot fetch it', str_ends_with((string)(new Client($base))->get('/company/logo')['location'], '/login'));
 $post(['name' => "Setco Interiors $sfx", 'legal_name' => 'Setco Interiors Pvt Ltd', 'email' => 'hello@setco.test', 'remove_logo' => 1]);
 clearstatcache();
@@ -76,12 +63,12 @@ check('saving the whole profile again with a logo works', $S('company.logo') !==
 
 echo "Currency and dates\n";
 $a->post('/suppliers', ['name' => 'Big Supplier'], '/suppliers/create');
-$sup = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Big Supplier'", [$tA]);
+$sup = (int)$val("SELECT id FROM suppliers WHERE name = 'Big Supplier'");
 $a->post('/items', ['name' => 'Velvet', 'unit_id' => $unit('Meter'), 'track_batch' => 1, 'variants' => [['sku' => 'VEL', 'cost_price' => 400, 'sale_price' => 700]]], '/items/create');
 $a->post('/items', ['name' => 'Side Table', 'unit_id' => $unit('Piece'), 'variants' => [['sku' => 'TBL', 'barcode' => '111', 'cost_price' => 2500, 'sale_price' => 4200]]], '/items/create');
-[$vel, $tbl] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $s]), ['VEL', 'TBL']);
+[$vel, $tbl] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE sku = ?', [$s]), ['VEL', 'TBL']);
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1000, 'unit_price' => 1234.5, 'tax_rate' => 0]]], '/purchase/orders/create');
-$po = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$po = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $pg = $a->get("/purchase/orders/$po")['body'];
 check('defaults: plain numbers with 2 decimals, ISO dates', str_contains($pg, '1,234,500.00') && str_contains($pg, date('Y-m-d')));
 $pref = fn(array $d) => $a->post('/settings/preferences', $d, '/settings/preferences');
@@ -102,7 +89,7 @@ check('formats can be set back', str_contains($a->get("/purchase/orders/$po")['b
 
 echo "Document numbers\n";
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-check('default PO number is PO-0002', $val('SELECT po_no FROM purchase_orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [$tA]) === 'PO-0002');
+check('default PO number is PO-0002', $val('SELECT po_no FROM purchase_orders ORDER BY id DESC LIMIT 1') === 'PO-0002');
 $numbers = function (array $over = []) {
     $d = [];
     foreach (Core\Numbering::DOCS as $code => $_) $d[$code] = ['prefix' => $code, 'pad' => 4];
@@ -113,13 +100,13 @@ $post = fn(array $over) => $a->post('/settings/numbering', $numbers($over), '/se
 $post(['PO' => ['prefix' => 'ord', 'pad' => 5, 'year' => 1], 'SO' => ['prefix' => 'SALE', 'pad' => 6]]);
 check('numbering saved (prefix upper-cased)', str_contains($S('numbering.PO'), 'ORD') && str_contains($S('numbering.SO'), '"pad":6'));
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-$n1 = (string)$val('SELECT po_no FROM purchase_orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [$tA]);
+$n1 = (string)$val('SELECT po_no FROM purchase_orders ORDER BY id DESC LIMIT 1');
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-$n2 = (string)$val('SELECT po_no FROM purchase_orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [$tA]);
+$n2 = (string)$val('SELECT po_no FROM purchase_orders ORDER BY id DESC LIMIT 1');
 check('new POs are ORD-<year>-00001, then 00002', $n1 === 'ORD-' . date('Y') . '-00001' && $n2 === 'ORD-' . date('Y') . '-00002');
-check('old documents keep their numbers', (int)$val("SELECT COUNT(*) FROM purchase_orders WHERE tenant_id = ? AND po_no IN ('PO-0001', 'PO-0002')", [$tA]) === 2);
+check('old documents keep their numbers', (int)$val("SELECT COUNT(*) FROM purchase_orders WHERE po_no IN ('PO-0001', 'PO-0002')") === 2);
 $a->post('/sales/orders', ['customer_id' => $walk, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], '/sales/orders/create');
-check('sales orders use SALE- with 6 digits', $val('SELECT order_no FROM sales_orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [$tA]) === 'SALE-000001');
+check('sales orders use SALE- with 6 digits', $val('SELECT order_no FROM sales_orders ORDER BY id DESC LIMIT 1') === 'SALE-000001');
 check('the numbering page previews the next number', str_contains($a->get('/settings/numbering')['body'], 'ORD-' . date('Y') . '-00003') && str_contains($a->get('/settings/numbering')['body'], 'SALE-000002'));
 $post(['PO' => ['prefix' => 'BAD PREFIX!', 'pad' => 4]]);
 $post(['PO' => ['prefix' => 'WAYTOOLONGPREFIX', 'pad' => 4]]);
@@ -128,21 +115,19 @@ $post(['PO' => ['prefix' => 'PO', 'pad' => 12]]);
 check('a bad prefix, a too-long prefix and 2 or 12 digits are refused', str_contains($S('numbering.PO'), 'ORD'));
 $post([]);
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $vel, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-check('numbers can be set back to the plain style (the counter continues)', preg_match('/^PO-\d{4}$/', (string)$val('SELECT po_no FROM purchase_orders WHERE tenant_id = ? ORDER BY id DESC LIMIT 1', [$tA])) === 1);
+check('numbers can be set back to the plain style (the counter continues)', preg_match('/^PO-\d{4}$/', (string)$val('SELECT po_no FROM purchase_orders ORDER BY id DESC LIMIT 1')) === 1);
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'opening', 'lines' => [['variant_id' => $tbl, 'qty' => 5]]], '/stock/adjustments/create');
-check('stock documents and SKUs use the same numbering', (string)$val("SELECT doc_no FROM stock_docs WHERE tenant_id = ? AND type = 'adjustment' ORDER BY id DESC LIMIT 1", [$tA]) === 'ADJ-0001');
-$b->post('/settings/numbering', ['num' => ['PO' => ['prefix' => 'ZZZ', 'pad' => 4]]], '/settings/numbering');
-check("another company's numbering is its own", $S('numbering.PO', $tA) === '' || !str_contains($S('numbering.PO', $tA), 'ZZZ'));
+check('stock documents and SKUs use the same numbering', (string)$val("SELECT doc_no FROM stock_docs WHERE type = 'adjustment' ORDER BY id DESC LIMIT 1") === 'ADJ-0001');
 
 echo "Rules: negative stock\n";
 $wf = fn(array $d) => $a->post('/settings/workflow', $d, '/settings/workflow');
 $wf([]);
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'opening', 'lines' => [['variant_id' => $vel, 'qty' => 10, 'batch_id' => 'new', 'lot_no' => 'R1'], ['variant_id' => $vel, 'qty' => 10, 'batch_id' => 'new', 'lot_no' => 'R2']]], '/stock/adjustments/create');
 $sell = function (Client $c, array $lines, array $over = []) use ($walk, $main, $val) {
-    $n = (int)$val('SELECT COUNT(*) FROM deliveries', []);
+    $n = (int)$val('SELECT COUNT(*) FROM deliveries');
     $r = $c->post('/sales/deliveries', $over + ['customer_id' => $walk, 'warehouse_id' => $main, 'delivery_date' => date('Y-m-d'), 'lines' => $lines], '/sales/deliveries/create');
     $page = $c->follow($r)['body'] ?? '';
-    return ['ok' => (int)$val('SELECT COUNT(*) FROM deliveries', []) > $n, 'error' => html_entity_decode(strip_tags((string)$page))];
+    return ['ok' => (int)$val('SELECT COUNT(*) FROM deliveries') > $n, 'error' => html_entity_decode(strip_tags((string)$page))];
 };
 $pos = fn(array $lines, array $over = []) => $sell($a, $lines, $over);
 check('stock is 5 tables, 20 m of velvet', $bal($tbl) === 5.0 && $bal($vel) === 20.0);
@@ -155,7 +140,7 @@ $r = $pos([['variant_id' => $vel, 'qty' => 25, 'unit_price' => 700]]);
 check('fabric rolls can never go negative, even with the option on', $r['ok'] === false && $bal($vel) === 20.0);
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'loss', 'lines' => [['variant_id' => $tbl, 'qty' => -4]]], '/stock/adjustments/create');
 check('an adjustment can also take ordinary stock below zero', $bal($tbl) === -7.0);
-$bad = DB::all('SELECT b.variant_id FROM stock_balances b LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger WHERE tenant_id = ? GROUP BY variant_id, warehouse_id, batch_id, location_id) l ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id WHERE b.tenant_id = ? AND ABS(b.qty - COALESCE(l.s, 0)) > 0.0005', [$tA, $tA]);
+$bad = DB::all('SELECT b.variant_id FROM stock_balances b LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger GROUP BY variant_id, warehouse_id, batch_id, location_id) l ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id WHERE ABS(b.qty - COALESCE(l.s, 0)) > 0.0005');
 check('the ledger still equals the balances', !$bad);
 $wf([]);
 $r = $pos([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 4200]]);
@@ -163,7 +148,7 @@ check('switching it off blocks selling from a negative balance again', $r['ok'] 
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'found', 'lines' => [['variant_id' => $tbl, 'qty' => 20]]], '/stock/adjustments/create');
 
 echo "Rules: shade (one roll per sale)\n";
-$r0 = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.tenant_id = ? AND b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$tA, $vel]);
+$r0 = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$vel]);
 $r = $pos([['variant_id' => $vel, 'qty' => 10, 'batch_id' => (int)$r0[0]['id'], 'location_id' => 0, 'unit_price' => 700], ['variant_id' => $vel, 'qty' => 5, 'batch_id' => (int)$r0[1]['id'], 'location_id' => 0, 'unit_price' => 700]]);
 check('default "warn": 15 m from two 10 m rolls is allowed', $r['ok'] === true && $bal($vel) === 5.0);
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'found', 'lines' => [['variant_id' => $vel, 'qty' => 15, 'batch_id' => 'new', 'lot_no' => 'R3']]], '/stock/adjustments/create');
@@ -171,12 +156,12 @@ $wf(['shade_rule' => 'block']);
 $n = $ledger();
 $r = $pos([['variant_id' => $vel, 'qty' => 18, 'unit_price' => 700]]);
 check('"block": a sale that needs two rolls is refused', $r['ok'] === false && str_contains($r['error'], 'one roll') && $ledger() === $n);
-$r3 = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.tenant_id = ? AND b.variant_id = ? AND s.qty >= 12 ORDER BY b.id', [$tA, $vel]);
+$r3 = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.variant_id = ? AND s.qty >= 12 ORDER BY b.id', [$vel]);
 $r = $pos([['variant_id' => $vel, 'qty' => 12, 'batch_id' => (int)$r3[0]['id'], 'location_id' => 0, 'unit_price' => 700]]);
 check('"block": a sale from a single roll still works', $r['ok'] === true);
-$rolls = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.tenant_id = ? AND b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$tA, $vel]);
+$rolls = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$vel]);
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'found', 'lines' => [['variant_id' => $vel, 'qty' => 6, 'batch_id' => 'new', 'lot_no' => 'R4']]], '/stock/adjustments/create');
-$rolls = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.tenant_id = ? AND b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$tA, $vel]);
+$rolls = DB::all('SELECT b.id FROM batches b JOIN stock_balances s ON s.batch_id = b.id WHERE b.variant_id = ? AND s.qty > 0 ORDER BY b.id', [$vel]);
 $n = $ledger();
 $a->post('/sales/deliveries', ['customer_id' => $walk, 'warehouse_id' => $main, 'delivery_date' => date('Y-m-d'), 'lines' => [
     ['variant_id' => $vel, 'qty' => 2, 'batch_id' => (int)$rolls[0]['id'], 'location_id' => 0, 'unit_price' => 700], ['variant_id' => $vel, 'qty' => 2, 'batch_id' => (int)$rolls[1]['id'], 'location_id' => 0, 'unit_price' => 700]]], '/sales/deliveries/create');
@@ -184,7 +169,7 @@ check('"block": picking two rolls by hand on a delivery is refused too', $ledger
 $wf([]);
 
 echo "Rules: discount limit\n";
-$staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
+$staffRole = (int)DB::val("SELECT id FROM roles WHERE name = 'Staff'");
 $a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
@@ -210,9 +195,9 @@ check('"0" removes the limit', $S('max_discount') === '0');
 
 echo "Rules: rack required, PO approval\n";
 $a->post('/warehouses', ['name' => 'Showroom', 'code' => 'SHW'], '/warehouses/create');
-$show = (int)$val("SELECT id FROM warehouses WHERE tenant_id = ? AND name = 'Showroom'", [$tA]);
-DB::insert('locations', ['tenant_id' => $tA, 'warehouse_id' => $main, 'code' => 'A-01']);
-$A1 = (int)$val("SELECT id FROM locations WHERE tenant_id = ? AND code = 'A-01'", [$tA]);
+$show = (int)$val("SELECT id FROM warehouses WHERE name = 'Showroom'");
+DB::insert('locations', ['warehouse_id' => $main, 'code' => 'A-01']);
+$A1 = (int)$val("SELECT id FROM locations WHERE code = 'A-01'");
 $wf(['require_rack' => 1]);
 $n = $ledger();
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'found', 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'location_id' => 0]]], '/stock/adjustments/create');
@@ -231,7 +216,7 @@ check('...and accepted with one', $count('grns') === $g + 1);
 $wf([]);
 $wf(['po_approval' => 1]);
 $a->post('/purchase/orders', ['supplier_id' => $sup, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], '/purchase/orders/create');
-$poA = (int)$val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$tA]);
+$poA = (int)$val('SELECT MAX(id) FROM purchase_orders');
 $a->post("/purchase/orders/$poA/submit", [], "/purchase/orders/$poA");
 check('PO approval switched on from Settings makes a PO wait for approval', $val('SELECT status FROM purchase_orders WHERE id = ?', [$poA]) === 'pending_approval');
 $wf([]);
@@ -251,8 +236,6 @@ $lab(['supplier' => ['<script>', '']]);
 check('names with symbols are refused', str_contains($S('labels'), 'Vendor'));
 $lab(['supplier' => ['', ''], 'rack' => ['', ''], 'customer' => ['', ''], 'batch' => ['', '']]);
 check('empty boxes bring the standard words back', $S('labels') === '[]' && str_contains($a->get('/dashboard')['body'], '>Suppliers<'));
-$b->post('/settings/labels', ['label' => ['supplier' => ['Vendor', 'Vendors']]], '/settings/labels');
-check("another company's labels do not leak", str_contains($a->get('/dashboard')['body'], '>Suppliers<'));
 
 echo "Custom fields\n";
 $cf = fn(array $d) => $a->post('/settings/custom-fields', $d, '/settings/custom-fields/create');
@@ -261,11 +244,11 @@ $cf(['entity' => 'item', 'type' => 'dropdown', 'label' => 'Finish', 'options' =>
 $cf(['entity' => 'customer', 'type' => 'date', 'label' => 'Birthday']);
 $cf(['entity' => 'customer', 'type' => 'checkbox', 'label' => 'Preferred dealer', 'show_in_list' => 1]);
 $cf(['entity' => 'supplier', 'type' => 'text', 'label' => 'Preferred courier', 'show_in_list' => 1]);
-$field = fn(string $e, string $l) => (int)DB::val('SELECT id FROM custom_fields WHERE tenant_id = ? AND entity = ? AND label = ?', [$GLOBALS['tA'], $e, $l]);
+$field = fn(string $e, string $l) => (int)DB::val('SELECT id FROM custom_fields WHERE entity = ? AND label = ?', [$e, $l]);
 [$fWidth, $fFinish, $fBday, $fDealer, $fCourier] = [$field('item', 'Fabric width (inch)'), $field('item', 'Finish'), $field('customer', 'Birthday'), $field('customer', 'Preferred dealer'), $field('supplier', 'Preferred courier')];
 check('five fields created', $fWidth && $fFinish && $fBday && $fDealer && $fCourier);
 $cf(['entity' => 'item', 'type' => 'text', 'label' => 'Finish']);
-check('a duplicate field name is refused', (int)$val("SELECT COUNT(*) FROM custom_fields WHERE tenant_id = ? AND entity = 'item' AND label = 'Finish'", [$tA]) === 1);
+check('a duplicate field name is refused', (int)$val("SELECT COUNT(*) FROM custom_fields WHERE entity = 'item' AND label = 'Finish'") === 1);
 $cf(['entity' => 'item', 'type' => 'dropdown', 'label' => 'Bad dropdown', 'options' => 'Only one']);
 $cf(['entity' => 'item', 'type' => 'checkbox', 'label' => 'Bad checkbox', 'is_required' => 1]);
 $cf(['entity' => 'nonsense', 'type' => 'text', 'label' => 'Nope']);
@@ -281,7 +264,7 @@ check('a number field refuses text', $count('items') === $n);
 $itemPost([$fWidth => '54', $fFinish => 'Sparkly']);
 check('a dropdown refuses a value that is not in its list', $count('items') === $n);
 $itemPost([$fWidth => '54', $fFinish => 'Matt']);
-$cot = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Cotton'", [$tA]);
+$cot = (int)$val("SELECT id FROM items WHERE name = 'Cotton'");
 check('a valid item saves its custom values', $cot > 0 && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fWidth, $cot]) === '54' && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fFinish, $cot]) === 'Matt');
 $page = $a->get("/items/$cot")['body'];
 check('the item page shows them', str_contains($page, 'Fabric width (inch)') && str_contains($page, '54') && str_contains($page, 'Matt'));
@@ -291,15 +274,15 @@ check('editing changes and clears values', $val('SELECT value FROM custom_field_
 check('the edit form is pre-filled with the saved value', str_contains($a->get("/items/$cot/edit")['body'], 'value="60"'));
 $custPost = fn(array $cfv, string $name) => $a->post('/customers', ['name' => $name, 'cf' => $cfv], '/customers/create');
 $custPost([$fBday => '1990-02-30'], 'Bad Date');
-check('an impossible date is refused', !$val("SELECT 1 FROM customers WHERE tenant_id = ? AND name = 'Bad Date'", [$tA]));
+check('an impossible date is refused', !$val("SELECT 1 FROM customers WHERE name = 'Bad Date'"));
 $custPost([$fBday => '1990-05-17', $fDealer => '1'], 'Dealer Dan');
-$dan = (int)$val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Dealer Dan'", [$tA]);
+$dan = (int)$val("SELECT id FROM customers WHERE name = 'Dealer Dan'");
 check('date and yes/no values saved on a customer', $dan > 0 && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fBday, $dan]) === '1990-05-17' && $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fDealer, $dan]) === '1');
 $cp = $a->get("/customers/$dan")['body'];
 check('the customer page shows "Yes" and the date', str_contains($cp, 'Preferred dealer') && str_contains($cp, 'Yes') && str_contains($cp, '1990-05-17'));
 check('the customer list shows the yes/no column', str_contains($a->get('/customers')['body'], '<th>Preferred dealer</th>'));
 $a->post('/suppliers', ['name' => 'Courier Co', 'cf' => [$fCourier => 'BlueDart']], '/suppliers/create');
-$cc = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Courier Co'", [$tA]);
+$cc = (int)$val("SELECT id FROM suppliers WHERE name = 'Courier Co'");
 check('supplier custom text saved, shown on the page and in the list', $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fCourier, $cc]) === 'BlueDart' && str_contains($a->get("/suppliers/$cc")['body'], 'BlueDart') && str_contains($a->get('/suppliers')['body'], 'BlueDart'));
 $a->post("/settings/custom-fields/$fFinish", ['label' => 'Surface', 'type' => 'number', 'options' => "Matt\nGloss", 'sort_order' => 5, 'is_active' => 1], "/settings/custom-fields/$fFinish/edit");
 check('a field can be renamed but its type is fixed', $val('SELECT label FROM custom_fields WHERE id = ?', [$fFinish]) === 'Surface' && $val('SELECT type FROM custom_fields WHERE id = ?', [$fFinish]) === 'dropdown');
@@ -308,18 +291,13 @@ check('an inactive field disappears from the form and is no longer required', !s
 check('...but its saved values are kept', $val('SELECT value FROM custom_field_values WHERE field_id = ? AND entity_id = ?', [$fWidth, $cot]) === '60');
 $a->post("/settings/custom-fields/$fWidth/delete", [], '/settings/custom-fields/create');
 check('deleting a field deletes its values', !$val('SELECT 1 FROM custom_fields WHERE id = ?', [$fWidth]) && !$val('SELECT 1 FROM custom_field_values WHERE field_id = ?', [$fWidth]));
-check("another company sees none of A's fields and cannot edit them", !str_contains($b->get('/items/create')['body'], 'Surface') && $b->get("/settings/custom-fields/$fBday/edit")['status'] === 404);
-$b->post("/settings/custom-fields/$fBday/delete", [], '/settings/custom-fields/create');
-check("another company cannot delete A's field", (bool)$val('SELECT 1 FROM custom_fields WHERE id = ?', [$fBday]));
-$bUnit = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Piece'", [$tB]);
-$b->post('/items', ['name' => 'B Item', 'unit_id' => $bUnit, 'variants' => [['sku' => 'BI']], 'cf' => [$fBday => 'hijack', $fCourier => 'hijack']], '/items/create');
-check("values posted for another company's field ids are ignored", !$val('SELECT 1 FROM custom_field_values WHERE tenant_id = ?', [$tB]));
+$bUnit = (int)$val("SELECT id FROM units WHERE name = 'Piece'");
 
 echo "Print templates\n";
 $tpl = fn(string $doc, array $d) => $a->post('/settings/templates', $d + ['doc' => $doc], "/settings/templates?doc=$doc");
 $a->post('/sales/deliveries', ['customer_id' => $dan, 'warehouse_id' => $main, 'delivery_date' => date('Y-m-d'), 'make_invoice' => 1, 'lines' => [['variant_id' => $vel, 'qty' => 2, 'batch_id' => (int)$rolls[0]['id'], 'location_id' => 0, 'unit_price' => 700, 'discount_pct' => 5, 'tax_rate' => 12]]], '/sales/deliveries/create');
-$inv = (int)$val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$tA]);
-$dlv = (int)$val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+$inv = (int)$val('SELECT MAX(id) FROM sales_invoices');
+$dlv = (int)$val('SELECT MAX(id) FROM deliveries');
 check('templates tab offers a preview link once a document exists', str_contains($a->get('/settings/templates?doc=invoice')['body'], "sales/invoices/$inv/print"));
 $pr = $a->get("/sales/invoices/$inv/print")['body'];
 check('default invoice shows the logo, legal name, address, tax number, discount column, bank details and roll', str_contains($pr, 'company/logo') && str_contains($pr, 'Setco Interiors Pvt Ltd') && str_contains($pr, '12 MG Road') && str_contains($pr, '27ABCDE1234F1Z5') && str_contains($pr, '>Disc<') && str_contains($pr, 'HDFC 0001') && str_contains($pr, 'Roll '));
@@ -341,8 +319,6 @@ $tpl('purchase_order', ['title' => 'Order to supplier', 'show_tax' => 1, 'show_e
 $pp = $a->get("/purchase/orders/$po/print");
 check('purchase order print: its template, supplier block, terms and bank details', $pp['status'] === 200 && str_contains($pp['body'], 'Order to supplier') && str_contains($pp['body'], 'Big Supplier') && str_contains($pp['body'], 'Deliver in 10 days') && str_contains($pp['body'], 'HDFC 0001') && str_contains($pp['body'], 'Purchaser'));
 check('print buttons are on the document pages', str_contains($a->get("/sales/deliveries/$dlv")['body'], "deliveries/$dlv/print") && str_contains($a->get("/purchase/orders/$po")['body'], "orders/$po/print"));
-check("another company cannot print A's documents (404)", $b->get("/sales/invoices/$inv/print")['status'] === 404 && $b->get("/sales/deliveries/$dlv/print")['status'] === 404 && $b->get("/purchase/orders/$po/print")['status'] === 404);
-check("another company's template is independent", $S('template.invoice', $tB) === '' && !str_contains($b->get('/settings/templates?doc=invoice')['body'], 'My Invoice'));
 
 echo "Permissions\n";
 check('staff can read the settings pages', $s->get('/settings/company')['status'] === 200 && $s->get('/settings/formdesign')['status'] === 200 && $s->get('/settings/templates')['status'] === 200 && $s->get('/company/logo')['status'] === 200);
@@ -350,7 +326,7 @@ $before = $S('company.phone');
 $s->post('/settings/company', ['name' => 'Hacked', 'phone' => '000'], '/settings/company');
 $s->post('/settings/workflow', ['negative_stock' => 1], '/settings/workflow');
 $s->post('/settings/numbering', ['num' => ['PO' => ['prefix' => 'HACK', 'pad' => 4]]], '/settings/numbering');
-check('staff cannot change company details, rules or numbers (403)', $S('company.phone') === $before && $val('SELECT name FROM tenants WHERE id = ?', [$tA]) === "Setco Interiors $sfx" && $S('negative_stock') === '0' && !str_contains($S('numbering.PO'), 'HACK'));
+check('staff cannot change company details, rules or numbers (403)', $S('company.phone') === $before && $S('company.name') === "Setco Interiors $sfx" && $S('negative_stock') === '0' && !str_contains($S('numbering.PO'), 'HACK'));
 check('staff cannot add custom fields or open the field form (403)', $s->get('/settings/custom-fields/create')['status'] === 403 && $s->get("/settings/custom-fields/$fBday/edit")['status'] === 403);
 check('staff see items with custom fields but get a clean form', $s->get("/items/$cot")['status'] === 200);
 

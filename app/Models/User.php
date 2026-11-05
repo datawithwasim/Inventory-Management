@@ -14,14 +14,14 @@ final class User extends Model
     {
         return DB::all(
             'SELECT u.*, r.name AS role_name, r.is_owner, r.warehouse_bound, w.name AS warehouse FROM users u JOIN roles r ON r.id = u.role_id
-             LEFT JOIN warehouses w ON w.id = u.warehouse_id WHERE u.tenant_id = ? ORDER BY u.name', [static::tenantId()]);
+             LEFT JOIN warehouses w ON w.id = u.warehouse_id ORDER BY u.name', []);
     }
 
     public static function withRole(int $id): ?array
     {
         return DB::one(
             'SELECT u.*, r.is_owner, w.name AS warehouse FROM users u JOIN roles r ON r.id = u.role_id LEFT JOIN warehouses w ON w.id = u.warehouse_id
-             WHERE u.tenant_id = ? AND u.id = ?', [static::tenantId(), $id]);
+             WHERE u.id = ?', [$id]);
     }
 
     public static function emailTaken(string $email, ?int $exceptId = null): bool

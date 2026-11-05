@@ -21,7 +21,7 @@ final class SalesOrderController extends SalesBase
             'SELECT o.*, c.name AS customer, c.credit_days, w.name AS warehouse, u.name AS user_name
              FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id
              LEFT JOIN users u ON u.id = o.created_by
-             WHERE o.tenant_id = ? AND o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE o.id = ?' . \Core\Scope::sql('o.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     private function items(int $id): array
@@ -29,7 +29,7 @@ final class SalesOrderController extends SalesBase
         return DB::all(
             'SELECT l.*, pr.name AS product_name, v.sku, v.name AS vname, i.name AS item_name, i.track_batch, i.is_bundle, i.id AS item_id, u.short_name AS unit, u.allow_decimal
              FROM sales_order_items l LEFT JOIN products pr ON pr.id = l.product_id JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE l.tenant_id = ? AND l.order_id = ? ORDER BY l.id', [$this->tid(), $id]);
+             WHERE l.order_id = ? ORDER BY l.id', [$id]);
     }
 
     public function index(): void
@@ -37,8 +37,8 @@ final class SalesOrderController extends SalesBase
         $status = (string)($_GET['status'] ?? '');
         $customer = (int)($_GET['customer'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'o.tenant_id = ?' . \Core\Scope::sql('o.warehouse_id');
-        $params = [$this->tid()];
+        $where = '1=1' . \Core\Scope::sql('o.warehouse_id');
+        $params = [];
         if ($status === 'open') $where .= " AND o.status IN ('confirmed','partial')";
         elseif (isset(Sales::ORDER_STATUS[$status])) { $where .= ' AND o.status = ?'; $params[] = $status; }
         if ($customer) { $where .= ' AND o.customer_id = ?'; $params[] = $customer; }
@@ -54,7 +54,7 @@ final class SalesOrderController extends SalesBase
     {
         if ($id <= 0) return null;
         $l = DB::one("SELECT l.id, l.launch_no, l.ship_to, l.note, l.warehouse_id, l.status, c.name AS catalogue FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id
-                      WHERE l.tenant_id = ? AND l.id = ? AND l.status IN ('draft','ordered','partial','dispatched')", [$this->tid(), $id]);
+                      WHERE l.id = ? AND l.status IN ('draft','ordered','partial','dispatched')", [$id]);
         return $l ? $l + ['customer_id' => \App\Controllers\LaunchController::internalCustomer()] : null;
     }
 
@@ -85,9 +85,9 @@ final class SalesOrderController extends SalesBase
 
     private function saveLines(int $id, array $lines): void
     {
-        DB::run('DELETE FROM sales_order_items WHERE tenant_id = ? AND order_id = ?', [$this->tid(), $id]);
+        DB::run('DELETE FROM sales_order_items WHERE order_id = ?', [$id]);
         foreach ($lines as $l) {
-            DB::insert('sales_order_items', ['tenant_id' => $this->tid(), 'order_id' => $id, 'variant_id' => $l['variant_id'], 'product_id' => $l['product_id'] ?? null, 'qty_ordered' => $l['qty'],
+            DB::insert('sales_order_items', ['order_id' => $id, 'variant_id' => $l['variant_id'], 'product_id' => $l['product_id'] ?? null, 'qty_ordered' => $l['qty'],
                 'unit_price' => $l['price'], 'discount_pct' => $l['disc'], 'tax_rate' => $l['tax']]);
         }
         Sales::recalc('sales_orders', 'sales_order_items', 'order_id', 'qty_ordered', $id);
@@ -105,8 +105,7 @@ final class SalesOrderController extends SalesBase
         [$cf, $cfErr] = CustomFields::validate('sales_order', $this->input());
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         $id = DB::transaction(function () use ($head, $lines, $cf) {
-            $t = $this->tid();
-            $id = DB::insert('sales_orders', ['tenant_id' => $t, 'order_no' => Numbering::next($t, 'SO'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $head);
+            $id = DB::insert('sales_orders', ['order_no' => Numbering::next('SO'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $head);
             $this->saveLines($id, $lines);
             CustomFields::save('sales_order', $id, $cf);
             return $id;
@@ -141,7 +140,7 @@ final class SalesOrderController extends SalesBase
         if ($cfErr) $this->bounce(implode(' ', $cfErr), $back);
         DB::transaction(function () use ($o, $head, $lines, $cf) {
             $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($head)));
-            DB::run("UPDATE sales_orders SET $set WHERE tenant_id = ? AND id = ?", [...array_values($head), $this->tid(), $o['id']]);
+            DB::run("UPDATE sales_orders SET $set WHERE id = ?", [...array_values($head), $o['id']]);
             $this->saveLines((int)$o['id'], $lines);
             CustomFields::save('sales_order', (int)$o['id'], $cf);
         });
@@ -153,7 +152,6 @@ final class SalesOrderController extends SalesBase
     public function show(string $id): void
     {
         $o = $this->load($id);
-        $t = $this->tid();
         $items = $this->items((int)$o['id']);
         foreach ($items as &$l) {
             $l['free'] = $l['is_bundle'] ? (float)\App\Models\Stock::bundleAvailable((int)$l['item_id']) : Sales::available((int)$l['variant_id'], (int)$o['warehouse_id']);
@@ -162,10 +160,10 @@ final class SalesOrderController extends SalesBase
         $remaining = array_sum(array_map(fn($l) => max(0, (float)$l['qty_ordered'] - (float)$l['qty_delivered']), $items));
         $this->view('app/sales/order_show', [
             'title' => $o['order_no'], 'o' => $o, 'items' => $items, 'remaining' => $remaining,
-            'launch' => $o['launch_id'] ? DB::one('SELECT l.id, l.launch_no, c.name AS catalogue FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id WHERE l.tenant_id = ? AND l.id = ?', [$t, $o['launch_id']]) : null,
+            'launch' => $o['launch_id'] ? DB::one('SELECT l.id, l.launch_no, c.name AS catalogue FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id WHERE l.id = ?', [$o['launch_id']]) : null,
             'cfFields' => CustomFields::fields('sales_order'), 'cfValues' => CustomFields::values('sales_order', (int)$o['id']),
-            'deliveries' => DB::all('SELECT d.id, d.delivery_no, d.delivery_date, i.id AS invoice_id, i.invoice_no FROM deliveries d LEFT JOIN sales_invoices i ON i.delivery_id = d.id WHERE d.tenant_id = ? AND d.order_id = ? ORDER BY d.id', [$t, $o['id']]),
-            'advances' => DB::all('SELECT * FROM customer_payments WHERE tenant_id = ? AND order_id = ? AND invoice_id IS NULL ORDER BY id', [$t, $o['id']]),
+            'deliveries' => DB::all('SELECT d.id, d.delivery_no, d.delivery_date, i.id AS invoice_id, i.invoice_no FROM deliveries d LEFT JOIN sales_invoices i ON i.delivery_id = d.id WHERE d.order_id = ? ORDER BY d.id', [$o['id']]),
+            'advances' => DB::all('SELECT * FROM customer_payments WHERE order_id = ? AND invoice_id IS NULL ORDER BY id', [$o['id']]),
         ]);
     }
 
@@ -188,7 +186,7 @@ final class SalesOrderController extends SalesBase
                 $this->bounce($e->getMessage() . ' Tick "Take the order even if stock is short" on the order to confirm anyway.', $back);
             }
         }
-        DB::run("UPDATE sales_orders SET status = 'confirmed', confirmed_at = NOW() WHERE tenant_id = ? AND id = ?", [$this->tid(), $o['id']]);
+        DB::run("UPDATE sales_orders SET status = 'confirmed', confirmed_at = NOW() WHERE id = ?", [$o['id']]);
         Audit::log('order_confirm', 'sales_order', (int)$o['id'], $o['order_no']);
         \App\Controllers\LaunchController::refreshForOrder((int)$o['id']);
         flash('success', 'Order confirmed. The stock is now reserved for this customer.');
@@ -202,7 +200,7 @@ final class SalesOrderController extends SalesBase
             flash('danger', 'That change is not possible right now.');
             redirect("sales/orders/{$o['id']}");
         }
-        DB::run('UPDATE sales_orders SET status = ? WHERE tenant_id = ? AND id = ?', [$to, $this->tid(), $o['id']]);
+        DB::run('UPDATE sales_orders SET status = ? WHERE id = ?', [$to, $o['id']]);
         Audit::log('order_' . $to, 'sales_order', (int)$o['id'], $o['order_no']);
         \App\Controllers\LaunchController::refreshForOrder((int)$o['id']);
         flash('success', $msg);
@@ -212,7 +210,7 @@ final class SalesOrderController extends SalesBase
     public function cancel(string $id): void
     {
         $o = $this->load($id);
-        if (DB::val('SELECT 1 FROM deliveries WHERE tenant_id = ? AND order_id = ? LIMIT 1', [$this->tid(), $o['id']])) {
+        if (DB::val('SELECT 1 FROM deliveries WHERE order_id = ? LIMIT 1', [$o['id']])) {
             flash('danger', 'Goods were already delivered on this order. Close it instead.');
             redirect("sales/orders/{$o['id']}");
         }
@@ -232,7 +230,7 @@ final class SalesOrderController extends SalesBase
             redirect("sales/orders/{$o['id']}");
         }
         DB::transaction(function () use ($o) {
-            DB::run('DELETE FROM sales_orders WHERE tenant_id = ? AND id = ?', [$this->tid(), $o['id']]);
+            DB::run('DELETE FROM sales_orders WHERE id = ?', [$o['id']]);
         });
         Audit::log('order_delete', 'sales_order', (int)$o['id'], $o['order_no']);
         flash('success', 'Draft deleted.');
@@ -249,7 +247,7 @@ final class SalesOrderController extends SalesBase
         if ($amount <= 0) $this->bounce('Enter the advance amount.', $back);
         $method = (string)($d['method'] ?? 'cash');
         if (!isset(Purchase::METHODS[$method])) $this->bounce('Choose a payment method.', $back);
-        DB::insert('customer_payments', ['tenant_id' => $this->tid(), 'customer_id' => $o['customer_id'], 'order_id' => $o['id'], 'amount' => $amount,
+        DB::insert('customer_payments', ['customer_id' => $o['customer_id'], 'order_id' => $o['id'], 'amount' => $amount,
             'paid_on' => $this->date($d['paid_on'] ?? '', 'Payment date', $back), 'method' => $method,
             'reference' => $this->text($d['reference'] ?? '', 80, 'Reference', $back), 'created_by' => Auth::user()['id']]);
         Audit::log('order_advance', 'sales_order', (int)$o['id'], number_format($amount, 2));
@@ -261,8 +259,8 @@ final class SalesOrderController extends SalesBase
     public function refundAdvance(string $id, string $payId): void
     {
         $o = $this->load($id);
-        DB::run("UPDATE customer_payments SET applied = amount, note = CONCAT(COALESCE(note,''), ' Refunded to customer') WHERE tenant_id = ? AND id = ? AND order_id = ? AND invoice_id IS NULL",
-            [$this->tid(), (int)$payId, $o['id']]);
+        DB::run("UPDATE customer_payments SET applied = amount, note = CONCAT(COALESCE(note,''), ' Refunded to customer') WHERE id = ? AND order_id = ? AND invoice_id IS NULL",
+            [(int)$payId, $o['id']]);
         Audit::log('order_advance_refund', 'sales_order', (int)$o['id']);
         flash('success', 'Marked as refunded to the customer.');
         redirect("sales/orders/{$o['id']}");

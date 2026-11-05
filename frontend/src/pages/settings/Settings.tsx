@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { appUrl, get, legacyUrl, post, postForm, type Msg } from '../../lib/api';
+import { appUrl, get, getCsrf, legacyUrl, post, postForm, type Msg } from '../../lib/api';
+import { fdate } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { Messages, PageHead, Spinner } from '../../components/ui';
 
@@ -10,10 +11,11 @@ const NAV: [string, [string, string, string][]][] = [
   ['Make it yours', [['appearance', 'Appearance', 'palette'], ['modules', 'Modules & menu', 'grid-1x2'], ['labels', 'Names (labels)', 'type'], ['templates', 'Print templates', 'printer']]],
   ['Rules', [['workflow', 'Rules & workflow', 'diagram-3']]],
 ];
+const stamp = (s?: string | null) => (s ? `${fdate(String(s).slice(0, 10))} ${String(s).slice(11, 16)}` : '—');
 
 /** The settings frame: grouped menu on the left, the chosen tab on the right. */
 export function SettingsLayout() {
-  const { can } = useSession();
+  const { can, session } = useSession();
   return (
     <>
       <PageHead title="Settings" />
@@ -26,6 +28,8 @@ export function SettingsLayout() {
           ))}
           {can('settings.edit') && <div><div className="settings-nav-head">Forms</div>
             <Link className="settings-nav-link" to="/settings/formdesign"><i className="bi bi-layout-text-window-reverse" />Page layout &amp; custom fields</Link></div>}
+          {session?.user?.owner && <div><div className="settings-nav-head">System</div>
+            <NavLink to="/settings/system" className={({ isActive }) => `settings-nav-link ${isActive ? 'active' : ''}`}><i className="bi bi-arrow-repeat" />Updates &amp; backup{session.updates ? <span className="badge text-bg-warning ms-auto">{session.updates}</span> : null}</NavLink></div>}
         </nav>
         <div className="settings-body"><Outlet /></div>
       </div>
@@ -297,3 +301,38 @@ export function TemplatesTab() {
   );
 }
 
+
+// ------------------------------------------------------------------ system (owner only)
+
+/** Database updates after uploading a new version, the full backup, and what was done in the app. */
+export function SystemTab() {
+  const qc = useQueryClient(); const { reload } = useSession(); const [msgs, setMsgs] = useState<Msg[]>([]); const [busy, setBusy] = useState(false);
+  const q = useQuery({ queryKey: ['settings', 'system'], gcTime: 0, queryFn: async () => (await get('/settings/system')).data });
+  if (q.isLoading) return <Spinner />;
+  const d = q.data; if (!d) return null;
+  const migrate = async () => { setBusy(true); const r = await post('/settings/system/migrate'); setBusy(false); setMsgs(r.messages ?? []); await qc.invalidateQueries({ queryKey: ['settings', 'system'] }); await reload(); };
+  return (
+    <>
+      <Messages items={msgs} onClose={() => setMsgs([])} />
+      {d.pending.length ? (
+        <div className="alert alert-warning d-flex justify-content-between align-items-center gap-3"><div><strong>{d.pending.length} database update(s) waiting:</strong> {d.pending.join(', ')}<div className="small">Run this after uploading a new version of the app. Take a backup first.</div></div>
+          <button className="btn btn-warning" disabled={busy} onClick={migrate}>{busy ? 'Running…' : 'Run updates'}</button></div>
+      ) : <div className="alert alert-success">The database is up to date.</div>}
+      <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div><strong>Backup</strong><div className="small text-muted">Downloads all the data as one .sql file. Do this before each update and keep copies away from the server. To restore: cPanel → phpMyAdmin → Import into an empty database. Uploaded logos live in <code>storage/uploads</code>; copy that folder too.</div></div>
+        {/* a real form post: the answer is a file download, not JSON */}
+        <form method="post" action={legacyUrl('/settings/system/backup')}><input type="hidden" name="_csrf" value={getCsrf()} /><button className="btn btn-primary"><i className="bi bi-download me-1" />Download backup</button></form>
+      </div></div>
+      <div className="row g-3 mb-3">
+        <div className="col-md-5"><div className="card"><div className="card-header">Environment</div><ul className="list-group list-group-flush">
+          {Object.entries(d.info as Record<string, string>).map(([k, val]) => <li className="list-group-item d-flex justify-content-between" key={k}><span>{k}</span><span className="text-muted">{val}</span></li>)}</ul></div></div>
+        <div className="col-md-7"><div className="card"><div className="card-header">Applied updates</div><div className="table-responsive" style={{ maxHeight: 320 }}><table className="table table-sm mb-0"><tbody>
+          {d.applied.map((a: any) => <tr key={a.name}><td>{a.name}</td><td className="text-muted text-nowrap">{stamp(a.applied_at)}</td></tr>)}</tbody></table></div></div></div>
+      </div>
+      <div className="card"><div className="card-header">Activity log <span className="text-muted small">· latest 200</span></div><div className="table-responsive"><table className="table table-sm mb-0">
+        <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th><th>IP</th></tr></thead><tbody>
+          {d.logs.map((l: any) => <tr key={l.id}><td className="text-nowrap">{stamp(l.created_at)}</td><td>{l.user_name ?? 'System'}</td><td>{l.action.replace(/_/g, ' ')}</td><td className="small">{l.details ?? ''}</td><td className="small text-muted">{l.ip}</td></tr>)}
+          {!d.logs.length && <tr><td colSpan={5} className="text-muted">Nothing recorded yet.</td></tr>}</tbody></table></div></div>
+    </>
+  );
+}

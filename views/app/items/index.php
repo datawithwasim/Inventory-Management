@@ -10,7 +10,7 @@
     <a class="btn btn-outline-secondary" href="<?= url('items/export') ?>"><i class="bi bi-download"></i> Export</a>
     <?php if (can('items.create')): ?>
       <a class="btn btn-outline-secondary" href="<?= url('items/import') ?>"><i class="bi bi-upload"></i> Import</a>
-      <?= $limitReached ? '<span class="text-warning ms-2">Item limit reached</span>' : '<a class="btn btn-primary" href="' . url('items/create') . '"><i class="bi bi-plus-lg"></i> Add item</a>' ?>
+      <?= '<a class="btn btn-primary" href="' . url('items/create') . '"><i class="bi bi-plus-lg"></i> Add item</a>' ?>
     <?php endif; ?>
   </div>
 </form>

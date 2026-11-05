@@ -9,7 +9,7 @@ $quick = Menu::quick();
 [$crumbGroup, $crumbItem] = Menu::current($menu, $path);
 $logo = Core\Settings::get('company.logo') !== '' ? company_logo_url() : null;
 $initial = mb_strtoupper(mb_substr($me['name'], 0, 1));
-$expiry = $me['tenant_status'] === 'trial' ? $me['trial_ends_at'] : $me['subscription_ends_at'];
+$companyName = company_name();
 $sbStyle = Theme::get('appearance.sidebar');
 $dashActive = $path === '/dashboard';
 ?>
@@ -19,13 +19,13 @@ $dashActive = $path === '/dashboard';
   <?php require __DIR__ . '/head.php'; ?>
   <meta name="csrf" content="<?= e(csrf_token()) ?>">
   <meta name="base" content="<?= e(url('')) ?>">
-  <title><?= e(($title ?? '') . ' · ' . $me['tenant_name']) ?></title>
+  <title><?= e(($title ?? '') . ' · ' . $companyName) ?></title>
 </head>
 <body class="app sbs-<?= e($sbStyle) ?> density-<?= e(Theme::get('appearance.density')) ?>">
 <aside class="sb" id="sidebar" aria-label="Main menu">
   <a class="sb-brand" href="<?= url('dashboard') ?>">
-    <?php if ($logo): ?><img src="<?= e($logo) ?>" alt="" class="sb-logo"><?php else: ?><span class="sb-mark"><?= e(mb_strtoupper(mb_substr($me['tenant_name'], 0, 1))) ?></span><?php endif; ?>
-    <span class="sb-name"><?= e($me['tenant_name']) ?></span>
+    <?php if ($logo): ?><img src="<?= e($logo) ?>" alt="" class="sb-logo"><?php else: ?><span class="sb-mark"><?= e(mb_strtoupper(mb_substr($companyName, 0, 1))) ?></span><?php endif; ?>
+    <span class="sb-name"><?= e($companyName) ?></span>
   </a>
   <nav class="sb-nav">
     <a class="sb-link <?= $dashActive ? 'active' : '' ?>" href="<?= url('dashboard') ?>" title="Dashboard"><i class="bi bi-<?= e($menu['dashboard']['icon']) ?>"></i><span>Dashboard</span></a>
@@ -43,20 +43,12 @@ $dashActive = $path === '/dashboard';
     <?php endforeach; ?>
   </nav>
   <div class="sb-foot">
-    <div class="sb-plan"><span class="badge rounded-pill"><?= e($me['plan_name']) ?></span>
-      <span class="small"><?= $me['tenant_status'] === 'trial' ? 'Trial' : 'Valid' ?><?= $expiry ? ' until ' . e(fdate($expiry)) : '' ?></span></div>
     <button type="button" class="sb-collapse" id="sbCollapse" title="Collapse menu"><i class="bi bi-chevron-bar-left"></i><span>Collapse</span></button>
   </div>
 </aside>
 <div class="sb-backdrop" id="sbBackdrop"></div>
 
 <div class="shell">
-  <?php if (Core\Auth::impersonating()): ?>
-    <div class="support-bar d-flex justify-content-between align-items-center">
-      <span><i class="bi bi-eye me-1"></i>Super Admin support mode: you are viewing <strong><?= e($me['tenant_name']) ?></strong>.</span>
-      <form method="post" action="<?= url('impersonate/stop') ?>"><?= csrf_field() ?><button class="btn btn-sm btn-dark">Back to admin</button></form>
-    </div>
-  <?php endif; ?>
   <header class="topbar">
     <button type="button" class="icon-btn d-lg-none" id="menuBtn" aria-label="Open menu"><i class="bi bi-list fs-4"></i></button>
     <?php if ($crumbItem && $path !== '/dashboard'): ?>
@@ -78,7 +70,7 @@ $dashActive = $path === '/dashboard';
         <button class="user-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Account menu"><span class="avatar"><?= e($initial) ?></span><span class="d-none d-md-block text-start lh-sm"><span class="d-block fw-semibold small"><?= e($me['name']) ?></span><span class="d-block text-muted" style="font-size:.72rem"><?= e($me['role_name']) ?></span></span><i class="bi bi-chevron-down small d-none d-md-block"></i></button>
         <div class="dropdown-menu dropdown-menu-end shadow pm">
           <div class="pm-head"><span class="avatar avatar-lg"><?= e($initial) ?></span>
-            <div class="pm-who"><div class="pm-name"><?= e($me['name']) ?></div><div class="pm-mail"><?= e($me['email'] ?? '') ?></div><div class="pm-role"><?= e($me['role_name']) ?> · <?= e($me['tenant_name']) ?></div></div></div>
+            <div class="pm-who"><div class="pm-name"><?= e($me['name']) ?></div><div class="pm-mail"><?= e($me['email'] ?? '') ?></div><div class="pm-role"><?= e($me['role_name']) ?> · <?= e($companyName) ?></div></div></div>
           <div class="pm-list">
             <?php foreach ($menu['account'] as $it): ?><a class="pm-item" href="<?= url(ltrim($it['href'], '/')) ?>"><i class="bi bi-<?= e($it['icon']) ?>"></i><span><?= e($it['label']) ?></span></a><?php endforeach; ?>
           </div>

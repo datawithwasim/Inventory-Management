@@ -23,7 +23,7 @@ final class UserController extends Controller
 
     private function warehouseChoices(): array
     {
-        return DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? AND is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', [(int)Auth::tenantId()]);
+        return DB::all('SELECT id, name FROM warehouses WHERE is_active = 1' . Scope::sql('id') . ' ORDER BY is_default DESC, name', []);
     }
 
     /** Which warehouse the person works at: a chosen one, or null for head office (all warehouses). Operators / incharges must have one. */
@@ -46,18 +46,12 @@ final class UserController extends Controller
             }
             return null;
         }
-        if (!DB::val('SELECT 1 FROM warehouses WHERE tenant_id = ? AND id = ? AND is_active = 1', [(int)Auth::tenantId(), (int)$raw])) {
+        if (!DB::val('SELECT 1 FROM warehouses WHERE id = ? AND is_active = 1', [(int)$raw])) {
             flash('danger', 'Choose a valid warehouse.');
             with_old($d);
             redirect($back);
         }
         return (int)$raw;
-    }
-
-    private function limitReached(): bool
-    {
-        $max = (int)Auth::user()['max_users'];
-        return $max > 0 && User::count() >= $max;
     }
 
     private function loadManageable(int $id): array
@@ -72,21 +66,16 @@ final class UserController extends Controller
     {
         $users = User::withRoles();
         if (Scope::restricted()) $users = array_values(array_filter($users, fn($u) => (int)$u['warehouse_id'] === Scope::warehouse()));
-        $this->view('app/users/index', ['title' => 'Users', 'users' => $users, 'limitReached' => $this->limitReached()]);
+        $this->view('app/users/index', ['title' => 'Users', 'users' => $users]);
     }
 
     public function create(): void
     {
-        if ($this->limitReached()) {
-            flash('warning', 'Your plan\'s user limit is reached. Upgrade your plan to add more users.');
-            redirect('users');
-        }
         $this->view('app/users/form', ['title' => 'Add user', 'user' => null, 'roles' => $this->assignableRoles(), 'warehouses' => $this->warehouseChoices(), 'restricted' => Scope::restricted()]);
     }
 
     public function store(): void
     {
-        if ($this->limitReached()) redirect('users');
         $d = $this->validate([
             'name' => 'required|max:120', 'email' => 'required|email|max:190',
             'password' => 'required|min:8', 'role_id' => 'required|int',

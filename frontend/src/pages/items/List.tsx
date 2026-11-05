@@ -23,7 +23,7 @@ export default function ItemList() {
         <a className="btn btn-outline-secondary" href={legacyUrl('/items/export')}><i className="bi bi-download" /> Export</a>
         {can('items.create') && <>
           <Link className="btn btn-outline-secondary" to="/items/import"><i className="bi bi-upload" /> Import</Link>
-          {d?.limitReached ? <span className="text-warning ms-2">Item limit reached</span> : <Link className="btn btn-primary" to="/items/create"><i className="bi bi-plus-lg" /> Add {term('item').toLowerCase()}</Link>}</>}
+          <Link className="btn btn-primary" to="/items/create"><i className="bi bi-plus-lg" /> Add {term('item').toLowerCase()}</Link></>}
       </PageHead>
       <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); set({ q }); }}>
         <div className="col-md-4"><input className="form-control" placeholder="Search name, SKU, barcode" value={q} onChange={(e) => setQ(e.target.value)} /></div>

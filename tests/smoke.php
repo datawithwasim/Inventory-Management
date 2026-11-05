@@ -12,58 +12,40 @@ require dirname(__DIR__) . '/core/bootstrap.php';
 require __DIR__ . '/lib.php';
 
 $suffix = bin2hex(random_bytes(3));
-$sa = config('superadmin');
 
 echo "Access control\n";
 $anon = new Client($base);
 check('dashboard redirects anonymous to login', str_ends_with((string)$anon->get('/dashboard')['location'], '/login'));
-check('admin panel redirects anonymous to admin login', str_ends_with((string)$anon->get('/admin')['location'], '/admin/login'));
+check('the old Super Admin panel is gone', in_array($anon->get('/admin')['status'], [404, 302], true) && !str_ends_with((string)$anon->get('/admin')['location'], '/admin/login'));
 check('POST without CSRF token is rejected (419)', $anon->req('POST', '/login', ['email' => 'a@b.c', 'password' => 'x'])['status'] === 419);
 
-echo "Super Admin\n";
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => 'wrong-password'], '/admin/login');
-check('bad admin password does not sign in', str_ends_with((string)$admin->get('/admin')['location'], '/admin/login'));
-$r = $admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-check('admin signs in', str_ends_with((string)$r['location'], '/admin'));
-check('admin dashboard loads', $admin->get('/admin')['status'] === 200);
-check('admin cannot use company dashboard without impersonating', str_ends_with((string)$admin->get('/dashboard')['location'], '/login'));
-
-$freePlan = (int)Core\DB::val("SELECT id FROM plans WHERE slug = 'free'");
-$mk = function (string $name, string $email) use ($admin, $freePlan) {
-    return $admin->post('/admin/tenants', [
-        'name' => $name, 'plan_id' => $freePlan, 'status' => 'active', 'subscription_ends_at' => '',
-        'owner_name' => 'Owner ' . $name, 'owner_email' => $email, 'owner_password' => 'Password123',
-    ], '/admin/tenants/create');
-};
-$mk("Acme $suffix", "owner-a-$suffix@test.local");
-$mk("Beta $suffix", "owner-b-$suffix@test.local");
-$list = $admin->get('/admin/tenants')['body'];
-check('both companies created', str_contains($list, "Acme $suffix") && str_contains($list, "Beta $suffix"));
-check('duplicate owner email rejected, company not created', substr_count($admin->get('/admin/tenants')['body'], "Dup $suffix") === 0);
-$tA = (int)Core\DB::val('SELECT id FROM tenants WHERE name = ?', ["Acme $suffix"]);
-$tB = (int)Core\DB::val('SELECT id FROM tenants WHERE name = ?', ["Beta $suffix"]);
-check('default roles provisioned', (int)Core\DB::val('SELECT COUNT(*) FROM roles WHERE tenant_id = ?', [$tA]) === 5);
+echo "One company, set up once\n";
+[, $ownerEmail] = fresh_company($base, "Acme $suffix", "owner-a-$suffix@test.local");
+check('default roles provisioned', (int)Core\DB::val('SELECT COUNT(*) FROM roles') === 5);
+check('the company has its starter masters', (int)Core\DB::val('SELECT COUNT(*) FROM units') === 6 && (int)Core\DB::val('SELECT COUNT(*) FROM warehouses') === 1);
+check('setting up again changes nothing', Core\Seeder::run('Other', 'X', 'x@test.local', 'Password123') === [] && !Core\DB::val("SELECT 1 FROM users WHERE email = 'x@test.local'"));
+check('no company table, plan or Super Admin is left in the database', !Core\DB::val("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('tenants', 'plans', 'super_admins')")
+    && !Core\DB::val("SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND column_name = 'tenant_id'"));
 
 echo "Company owner\n";
 $a = new Client($base);
+$a->post('/login', ['email' => "owner-a-$suffix@test.local", 'password' => 'wrong-password'], '/login');
+check('a wrong password does not sign in', str_ends_with((string)$a->get('/dashboard')['location'], '/login'));
 $r = $a->post('/login', ['email' => "owner-a-$suffix@test.local", 'password' => 'Password123'], '/login');
-check('owner A signs in', str_ends_with((string)$r['location'], '/dashboard'));
+check('owner signs in', str_ends_with((string)$r['location'], '/dashboard'));
 check('dashboard shows company name', str_contains($a->get('/dashboard')['body'], "Acme $suffix"));
-$staffRole = (int)Core\DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
+$staffRole = (int)Core\DB::val("SELECT id FROM roles WHERE name = 'Staff'");
 $r = $a->post('/users', ['name' => 'Staff One', 'email' => "staff-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 check('owner adds a staff user', str_contains($a->get('/users')['body'], "staff-$suffix@test.local"));
-$a->post('/users', ['name' => 'Staff Two', 'email' => "staff2-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
-check('plan user limit (3) enforced', !str_contains($a->get('/users')['body'], "staff3-$suffix") && (int)Core\DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ?', [$tA]) === 3);
-$a->post('/users', ['name' => 'Staff Three', 'email' => "staff3-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users');
-check('4th user blocked by limit', (int)Core\DB::val('SELECT COUNT(*) FROM users WHERE tenant_id = ?', [$tA]) === 3);
+for ($i = 2; $i <= 4; $i++) $a->post('/users', ['name' => "Staff $i", 'email' => "staff$i-$suffix@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
+check('there is no user limit any more', (int)Core\DB::val('SELECT COUNT(*) FROM users') === 5);
 
 echo "Roles\n";
 $a->post('/roles', ['name' => 'Storekeeper', 'perms' => ['stock.view', 'stock.adjust', 'bogus.perm']], '/roles/create');
-$roleId = (int)Core\DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Storekeeper'", [$tA]);
+$roleId = (int)Core\DB::val("SELECT id FROM roles WHERE name = 'Storekeeper'");
 check('custom role created', $roleId > 0);
 check('only valid permissions saved', (int)Core\DB::val('SELECT COUNT(*) FROM role_permissions WHERE role_id = ?', [$roleId]) === 2);
-$ownerRole = (int)Core\DB::val("SELECT id FROM roles WHERE tenant_id = ? AND is_owner = 1", [$tA]);
+$ownerRole = (int)Core\DB::val("SELECT id FROM roles WHERE is_owner = 1");
 check('owner role cannot be deleted', (function () use ($a, $ownerRole) { $a->post("/roles/$ownerRole/delete", [], '/roles'); return (int)Core\DB::val('SELECT COUNT(*) FROM roles WHERE id = ?', [$ownerRole]) === 1; })());
 
 echo "Staff permissions\n";
@@ -73,31 +55,9 @@ check('staff can open dashboard', $s->get('/dashboard')['status'] === 200);
 check('staff cannot create users (403)', $s->get('/users/create')['status'] === 403);
 check('staff cannot edit roles (403)', $s->get("/roles/$roleId/edit")['status'] === 403);
 
-echo "Tenant isolation\n";
-$userB = (int)Core\DB::val('SELECT id FROM users WHERE tenant_id = ? LIMIT 1', [$tB]);
-check('owner A cannot open company B user (404)', $a->get("/users/$userB/edit")['status'] === 404);
-$a->post("/users/$userB/delete", [], '/users');
-check('owner A cannot delete company B user', (int)Core\DB::val('SELECT COUNT(*) FROM users WHERE id = ?', [$userB]) === 1);
-$roleB = (int)Core\DB::val('SELECT id FROM roles WHERE tenant_id = ? AND name = "Staff"', [$tB]);
-check('owner A cannot open company B role (404)', $a->get("/roles/$roleB/edit")['status'] === 404);
-check('cross-tenant role assignment rejected', (function () use ($a, $roleB, $suffix) {
-    $a->post('/users', ['name' => 'X', 'email' => "x-$suffix@test.local", 'password' => 'Password123', 'role_id' => $roleB, 'warehouse_id' => '0'], '/users');
-    return !Core\DB::val('SELECT 1 FROM users WHERE email = ?', ["x-$suffix@test.local"]);
-})());
-
-echo "Support login & suspension\n";
-$r = $admin->post("/admin/tenants/$tB/impersonate", [], '/admin/tenants');
-check('admin opens company B as owner', str_ends_with((string)$r['location'], '/dashboard'));
-check('support banner visible', str_contains($admin->get('/dashboard')['body'], 'support mode'));
-$admin->post('/impersonate/stop', [], '/dashboard');
-check('stop returns to admin', str_ends_with((string)$admin->get('/dashboard')['location'], '/login') && $admin->get('/admin')['status'] === 200);
-$admin->post("/admin/tenants/$tA/status", [], '/admin/tenants');
-check('suspended company: logged-in user kicked out', str_ends_with((string)$a->get('/dashboard')['location'], '/login'));
-$a2 = new Client($base);
-$a2->post('/login', ['email' => "owner-a-$suffix@test.local", 'password' => 'Password123'], '/login');
-check('suspended company cannot sign in', str_ends_with((string)$a2->get('/dashboard')['location'], '/login'));
-$admin->post("/admin/tenants/$tA/status", [], '/admin/tenants');
-check('reactivated company can sign in', str_ends_with((string)$a2->post('/login', ['email' => "owner-a-$suffix@test.local", 'password' => 'Password123'], '/login')['location'], '/dashboard'));
+echo "Updates & backup (owner only)\n";
+check('the owner sees Settings → Updates & backup, up to date', str_contains($a->get('/settings/system')['body'], 'up to date'));
+check('staff cannot open it or run updates (403)', $s->get('/settings/system')['status'] === 403 && $s->post('/settings/system/migrate', [], '/dashboard')['status'] === 403);
 
 echo "Password reset & lockout\n";
 $p = new Client($base);

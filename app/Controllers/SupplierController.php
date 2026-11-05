@@ -18,8 +18,8 @@ final class SupplierController extends PurchaseBase
     public function index(): void
     {
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 's.tenant_id = ?';
-        $params = [$this->tid()];
+        $where = '1=1';
+        $params = [];
         if ($q !== '') {
             $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
             $where .= ' AND (s.name LIKE ? OR s.phone LIKE ? OR s.contact_person LIKE ? OR s.email LIKE ?)';
@@ -44,7 +44,7 @@ final class SupplierController extends PurchaseBase
         $name = trim((string)($d['name'] ?? ''));
         if ($name === '') $this->bounce('Supplier name is required.', $back);
         if (mb_strlen($name) > 150) $this->bounce('Supplier name is too long.', $back);
-        if (DB::val('SELECT 1 FROM suppliers WHERE tenant_id = ? AND name = ? AND id <> ?', [$this->tid(), $name, $exceptId ?? 0])) {
+        if (DB::val('SELECT 1 FROM suppliers WHERE name = ? AND id <> ?', [$name, $exceptId ?? 0])) {
             $this->bounce('A supplier with that name already exists.', $back);
         }
         $email = $this->text($d['email'] ?? '', 190, 'Email', $back);
@@ -108,8 +108,8 @@ final class SupplierController extends PurchaseBase
 
     private function saveContacts(int $supplierId, array $contacts): void
     {
-        DB::run('DELETE FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ?', [$this->tid(), $supplierId]);
-        foreach ($contacts as $c) DB::insert('supplier_contacts', ['tenant_id' => $this->tid(), 'supplier_id' => $supplierId] + $c);
+        DB::run('DELETE FROM supplier_contacts WHERE supplier_id = ?', [$supplierId]);
+        foreach ($contacts as $c) DB::insert('supplier_contacts', ['supplier_id' => $supplierId] + $c);
     }
 
     public function store(): void
@@ -118,7 +118,7 @@ final class SupplierController extends PurchaseBase
         [$cf, $cfErr] = CustomFields::validate('supplier', $this->input());
         if ($cfErr) $this->bounce(implode(' ', $cfErr), 'suppliers/create');
         $contacts = $this->contacts('suppliers/create');
-        $id = DB::insert('suppliers', ['tenant_id' => $this->tid()] + $data);
+        $id = DB::insert('suppliers', $data);
         $this->saveContacts($id, $contacts);
         CustomFields::save('supplier', $id, $cf);
         Audit::log('supplier_create', 'supplier', $id, $data['name']);
@@ -129,14 +129,13 @@ final class SupplierController extends PurchaseBase
     public function show(string $id): void
     {
         $s = $this->load($id);
-        $t = $this->tid();
         $this->view('app/suppliers/show', [
             'title' => $s['name'], 's' => $s, 'cfFields' => CustomFields::fields('supplier'), 'cfValues' => CustomFields::values('supplier', (int)$s['id']), 'outstanding' => Purchase::supplierOutstanding((int)$s['id']),
-            'pos' => DB::all('SELECT id, po_no, order_date, status, total FROM purchase_orders WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
-            'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 10', [$t, $s['id']]),
-            'contacts' => DB::all('SELECT * FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ? ORDER BY id', [$t, $s['id']]),
+            'pos' => DB::all('SELECT id, po_no, order_date, status, total FROM purchase_orders WHERE supplier_id = ? ORDER BY id DESC LIMIT 10', [$s['id']]),
+            'grns' => DB::all('SELECT id, grn_no, received_date FROM grns WHERE supplier_id = ? ORDER BY id DESC LIMIT 10', [$s['id']]),
+            'contacts' => DB::all('SELECT * FROM supplier_contacts WHERE supplier_id = ? ORDER BY id', [$s['id']]),
             'rates' => Purchase::ratesOf((int)$s['id']), 'products' => Purchase::productsOf((int)$s['id']),
-            'bills' => DB::all('SELECT * FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ? ORDER BY id DESC LIMIT 20', [$t, $s['id']]),
+            'bills' => DB::all('SELECT * FROM purchase_bills WHERE supplier_id = ? ORDER BY id DESC LIMIT 20', [$s['id']]),
         ]);
     }
 
@@ -144,7 +143,7 @@ final class SupplierController extends PurchaseBase
     {
         $s = $this->load($id);
         $this->view('app/suppliers/form', ['title' => 'Edit ' . term('supplier', true), 'row' => $s, 'cfFields' => CustomFields::fields('supplier'), 'cfValues' => CustomFields::formValues('supplier', (int)$s['id']),
-            'contacts' => $_SESSION['_old']['contacts'] ?? DB::all('SELECT * FROM supplier_contacts WHERE tenant_id = ? AND supplier_id = ? ORDER BY id', [$this->tid(), $s['id']])]);
+            'contacts' => $_SESSION['_old']['contacts'] ?? DB::all('SELECT * FROM supplier_contacts WHERE supplier_id = ? ORDER BY id', [$s['id']])]);
     }
 
     public function update(string $id): void
@@ -158,7 +157,7 @@ final class SupplierController extends PurchaseBase
         CustomFields::save('supplier', (int)$s['id'], $cf);
         $data['is_active'] = empty($this->input()['is_active']) ? 0 : 1;
         $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
-        DB::run("UPDATE suppliers SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), $this->tid(), $s['id']]);
+        DB::run("UPDATE suppliers SET $set WHERE id = ?", [...array_values($data), $s['id']]);
         Audit::log('supplier_update', 'supplier', (int)$s['id']);
         flash('success', 'Supplier updated.');
         redirect("suppliers/{$s['id']}");
@@ -167,15 +166,14 @@ final class SupplierController extends PurchaseBase
     public function destroy(string $id): void
     {
         $s = $this->load($id);
-        $t = $this->tid();
-        $used = DB::val('SELECT 1 FROM purchase_orders WHERE tenant_id = ? AND supplier_id = ? LIMIT 1', [$t, $s['id']])
-            || DB::val('SELECT 1 FROM grns WHERE tenant_id = ? AND supplier_id = ? LIMIT 1', [$t, $s['id']])
-            || DB::val('SELECT 1 FROM purchase_bills WHERE tenant_id = ? AND supplier_id = ? LIMIT 1', [$t, $s['id']]);
+        $used = DB::val('SELECT 1 FROM purchase_orders WHERE supplier_id = ? LIMIT 1', [$s['id']])
+            || DB::val('SELECT 1 FROM grns WHERE supplier_id = ? LIMIT 1', [$s['id']])
+            || DB::val('SELECT 1 FROM purchase_bills WHERE supplier_id = ? LIMIT 1', [$s['id']]);
         if ($used) {
             flash('danger', 'This supplier has purchase history and cannot be deleted. Mark it inactive instead.');
             redirect("suppliers/{$s['id']}");
         }
-        DB::run('DELETE FROM suppliers WHERE tenant_id = ? AND id = ?', [$t, $s['id']]);
+        DB::run('DELETE FROM suppliers WHERE id = ?', [$s['id']]);
         Audit::log('supplier_delete', 'supplier', (int)$s['id'], $s['name']);
         flash('success', 'Supplier deleted.');
         redirect('suppliers');

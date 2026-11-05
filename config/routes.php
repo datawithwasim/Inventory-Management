@@ -2,7 +2,6 @@
 /** @var Core\Router $router */
 
 $A = 'App\\Controllers\\';
-$S = 'App\\Admin\\';
 
 // ---- One-time installer ----
 $router->get('/install', $A . 'InstallController@show');
@@ -11,7 +10,6 @@ $router->post('/install', $A . 'InstallController@run');
 // ---- Company app ----
 $router->get('/', $A . 'AuthController@home');
 $router->get('/session', $A . 'ApiController@session');
-$router->get('/admin/session', $A . 'ApiController@adminSession');
 $router->get('/columns/{list}', $A . 'ApiController@columns', ['auth']);
 $router->get('/schema/{entity}', $A . 'ApiController@schema', ['auth']);
 $router->get('/options/{source}', $A . 'ApiController@options', ['auth']);
@@ -285,42 +283,11 @@ $router->post('/settings/templates/save', $A . 'PrintTemplateController@save', [
 $router->post('/settings/templates/{id}/default', $A . 'PrintTemplateController@makeDefault', ['auth', 'perm:settings.edit']);
 $router->post('/settings/templates/{id}/duplicate', $A . 'PrintTemplateController@duplicate', ['auth', 'perm:settings.edit']);
 $router->post('/settings/templates/{id}/delete', $A . 'PrintTemplateController@destroy', ['auth', 'perm:settings.edit']);
+$router->post('/settings/system/migrate', $A . 'SettingsController@migrate', ['auth']);
+$router->post('/settings/system/backup', $A . 'SettingsController@backup', ['auth']);
 $router->get('/settings/{tab}', $A . 'SettingsController@show', ['auth', 'perm:settings.view']);
 $router->post('/settings/{tab}', $A . 'SettingsController@save', ['auth', 'perm:settings.edit']);
 $router->get('/company/logo', $A . 'SettingsController@logo', ['auth']);
-
-$router->post('/impersonate/stop', $S . 'TenantController@stopImpersonating');
-
-// ---- Super Admin panel ----
-$router->get('/admin/login', $S . 'AuthController@showLogin', ['admin_guest']);
-$router->post('/admin/login', $S . 'AuthController@login', ['admin_guest']);
-$router->get('/admin/forgot-password', $S . 'AuthController@showForgot', ['admin_guest']);
-$router->post('/admin/forgot-password', $S . 'AuthController@forgot', ['admin_guest']);
-$router->get('/admin/reset-password/{token}', $S . 'AuthController@showReset', ['admin_guest']);
-$router->post('/admin/reset-password/{token}', $S . 'AuthController@reset', ['admin_guest']);
-$router->post('/admin/logout', $S . 'AuthController@logout', ['admin']);
-
-$router->get('/admin', $S . 'DashboardController@index', ['admin']);
-
-$router->get('/admin/tenants', $S . 'TenantController@index', ['admin']);
-$router->get('/admin/tenants/create', $S . 'TenantController@create', ['admin']);
-$router->post('/admin/tenants', $S . 'TenantController@store', ['admin']);
-$router->get('/admin/tenants/{id}/edit', $S . 'TenantController@edit', ['admin']);
-$router->post('/admin/tenants/{id}', $S . 'TenantController@update', ['admin']);
-$router->post('/admin/tenants/{id}/status', $S . 'TenantController@status', ['admin']);
-$router->post('/admin/tenants/{id}/impersonate', $S . 'TenantController@impersonate', ['admin']);
-
-$router->get('/admin/plans', $S . 'PlanController@index', ['admin']);
-$router->get('/admin/plans/create', $S . 'PlanController@create', ['admin']);
-$router->post('/admin/plans', $S . 'PlanController@store', ['admin']);
-$router->get('/admin/plans/{id}/edit', $S . 'PlanController@edit', ['admin']);
-$router->post('/admin/plans/{id}', $S . 'PlanController@update', ['admin']);
-
-$router->get('/admin/audit', $S . 'DashboardController@audit', ['admin']);
-
-$router->get('/admin/system', $S . 'SystemController@index', ['admin']);
-$router->post('/admin/system/migrate', $S . 'SystemController@migrate', ['admin']);
-$router->post('/admin/system/backup', $S . 'SystemController@backup', ['admin']);
 
 // ---- Reports ----
 $router->get('/reports', $A . 'ReportController@index', ['auth', 'perm:reports.view']);

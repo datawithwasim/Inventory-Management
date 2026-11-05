@@ -30,8 +30,7 @@ final class DashboardController extends Controller
     private function setupSteps(): ?array
     {
         if (!can('settings.view') || Prefs::get('setup.dismissed')) return null;
-        $t = (int)Auth::tenantId();
-        $has = fn(string $table) => (bool)DB::val("SELECT 1 FROM `$table` WHERE tenant_id = ? LIMIT 1", [$t]);
+        $has = fn(string $table) => (bool)DB::val("SELECT 1 FROM `$table` LIMIT 1");
         $customised = $has('custom_fields') || \Core\Modules::off() !== [] || \Core\Settings::get('fields.hidden', '[]') !== '[]' || \Core\Settings::get('fields.required', '[]') !== '[]';
         $steps = [
             ['Add your company details and logo', \Core\Settings::get('company.address') !== '' || \Core\Settings::get('company.phone') !== '' || \Core\Settings::get('company.logo') !== '', url('settings/company')],
@@ -70,7 +69,6 @@ final class DashboardController extends Controller
         $p = Metrics::period($_GET);
         [$labels, $sales] = Metrics::series('sales_invoices', 'invoice_date', $p['from'], $p['to']);
         [, $buys] = Metrics::series('purchase_bills', 'bill_date', $p['from'], $p['to']);
-        $t = (int)Auth::tenantId();
         $scoped = \Core\Scope::restricted();   // warehouse staff: their warehouse's stock and transfers, no company money figures
         if ($scoped) { $sales = array_map(fn() => 0, $sales); $buys = array_map(fn() => 0, $buys); }
         $mine = \Core\Scope::sqlEither('warehouse_id', 'to_warehouse_id');
@@ -82,11 +80,11 @@ final class DashboardController extends Controller
             'salesNow' => $scoped ? 0 : array_sum($sales), 'salesPrev' => $scoped ? 0 : Metrics::sales($p['prev_from'], $p['prev_to']),
             'buyNow' => $scoped ? 0 : array_sum($buys), 'buyPrev' => $scoped ? 0 : Metrics::purchases($p['prev_from'], $p['prev_to']),
             'receivable' => $scoped ? 0 : Metrics::due('sales'), 'payable' => $scoped ? 0 : Metrics::due('purchase'),
-            'ordersOpen' => (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ? AND status IN ('confirmed','partial')" . \Core\Scope::sql('warehouse_id'), [$t]),
-            'transitOpen' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')$mine", [$t]),
-            'transitLate' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()$mine", [$t]),
+            'ordersOpen' => (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE status IN ('confirmed','partial')" . \Core\Scope::sql('warehouse_id'), []),
+            'transitOpen' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE type = 'transfer' AND status IN ('in_transit','partial')$mine"),
+            'transitLate' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()$mine"),
             'lowCount' => $scoped ? 0 : Metrics::lowStockCount(), 'stockValue' => Metrics::stockValue(),
-            'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE tenant_id = ? AND batch_id > 0' . \Core\Scope::sql('warehouse_id') . ' GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', [$t]),
+            'rolls' => (int)DB::val('SELECT COUNT(*) FROM (SELECT batch_id FROM stock_balances WHERE batch_id > 0' . \Core\Scope::sql('warehouse_id') . ' GROUP BY batch_id HAVING SUM(qty) > 0.0005) x', []),
             'topItems' => $scoped ? [] : Metrics::topItems($p['from'], $p['to']),
             'byCategory' => Metrics::stockByCategory(),
             'ageRec' => $scoped ? [] : Metrics::ageing('sales'), 'agePay' => $scoped ? [] : Metrics::ageing('purchase'),

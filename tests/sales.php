@@ -12,59 +12,47 @@ require __DIR__ . '/lib.php';
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '',
-        'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Seller');
-[$b, $tB] = $mk('Other');
+[$a] = fresh_company($base, "Seller $sfx", "seller-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
 
 $val = fn(string $sql, array $p = []) => DB::val($sql, $p);
 $near = fn($x, $y, $eps = 0.011) => abs((float)$x - (float)$y) < $eps;
-$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE tenant_id = ? AND name = ?', [$GLOBALS['tA'], $n]);
-$bal = fn(int $v, int $w, int $batch, int $loc) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?', [$GLOBALS['tA'], $v, $w, $batch, $loc]);
-$onhand = fn(int $v) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE tenant_id = ? AND variant_id = ?', [$GLOBALS['tA'], $v]);
-$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ?', [$GLOBALS['tA']]);
-$count = fn(string $t) => (int)DB::val("SELECT COUNT(*) FROM `$t` WHERE tenant_id = ?", [$GLOBALS['tA']]);
+$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE name = ?', [$n]);
+$bal = fn(int $v, int $w, int $batch, int $loc) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ? AND warehouse_id = ? AND batch_id = ? AND location_id = ?', [$v, $w, $batch, $loc]);
+$onhand = fn(int $v) => (float)DB::val('SELECT COALESCE(SUM(qty),0) FROM stock_balances WHERE variant_id = ?', [$v]);
+$ledger = fn() => (int)DB::val('SELECT COUNT(*) FROM stock_ledger');
+$count = fn(string $t) => (int)DB::val("SELECT COUNT(*) FROM `$t`");
 
-$main = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1', [$tA]);
-foreach (['A-01', 'B-01'] as $c) DB::insert('locations', ['tenant_id' => $tA, 'warehouse_id' => $main, 'code' => $c]);
-$A1 = (int)$val("SELECT id FROM locations WHERE tenant_id = ? AND code = 'A-01'", [$tA]);
-$B1 = (int)$val("SELECT id FROM locations WHERE tenant_id = ? AND code = 'B-01'", [$tA]);
+$main = (int)$val('SELECT id FROM warehouses WHERE is_default = 1');
+foreach (['A-01', 'B-01'] as $c) DB::insert('locations', ['warehouse_id' => $main, 'code' => $c]);
+$A1 = (int)$val("SELECT id FROM locations WHERE code = 'A-01'");
+$B1 = (int)$val("SELECT id FROM locations WHERE code = 'B-01'");
 $a->post('/masters/taxes', ['name' => 'GST 12', 'rate' => '12'], '/masters/taxes/create');
-$tax = (int)$val("SELECT id FROM taxes WHERE tenant_id = ? AND name = 'GST 12'", [$tA]);
+$tax = (int)$val("SELECT id FROM taxes WHERE name = 'GST 12'");
 $a->post('/items', ['name' => 'Velvet', 'unit_id' => $unit('Meter'), 'tax_id' => $tax, 'track_batch' => 1, 'variants' => [['sku' => 'VEL', 'cost_price' => 400, 'sale_price' => 700]]], '/items/create');
 $a->post('/items', ['name' => 'Side Table', 'unit_id' => $unit('Piece'), 'tax_id' => $tax, 'variants' => [['sku' => 'TBL', 'barcode' => '111', 'cost_price' => 2500, 'sale_price' => 4200]]], '/items/create');
 $a->post('/items', ['name' => 'Chair', 'unit_id' => $unit('Piece'), 'tax_id' => $tax, 'variants' => [['sku' => 'CHR', 'barcode' => '222', 'cost_price' => 900, 'sale_price' => 1500]]], '/items/create');
-[$vel, $tbl, $chr] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $s]), ['VEL', 'TBL', 'CHR']);
+[$vel, $tbl, $chr] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE sku = ?', [$s]), ['VEL', 'TBL', 'CHR']);
 $a->post('/items', ['name' => 'Dining Set', 'is_bundle' => 1, 'unit_id' => $unit('Set'), 'tax_id' => $tax, 'variants' => [['sku' => 'SET', 'sale_price' => 8000]],
     'components' => [['variant_id' => $tbl, 'qty' => 1], ['variant_id' => $chr, 'qty' => 2]]], '/items/create');
-$set = (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'SET'", [$tA]);
+$set = (int)$val("SELECT id FROM item_variants WHERE sku = 'SET'");
 
 // Stock: two rolls (roll 1 older), tables and chairs on racks
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'opening', 'lines' => [['variant_id' => $vel, 'qty' => 50, 'batch_id' => 'new', 'lot_no' => 'L1', 'location_id' => $B1]]], '/stock/adjustments/create');
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'opening', 'lines' => [['variant_id' => $vel, 'qty' => 30, 'batch_id' => 'new', 'lot_no' => 'L2', 'location_id' => $A1], ['variant_id' => $tbl, 'qty' => 10, 'location_id' => $A1], ['variant_id' => $chr, 'qty' => 20, 'location_id' => $B1]]], '/stock/adjustments/create');
-$rolls = DB::all('SELECT id, batch_no FROM batches WHERE tenant_id = ? AND variant_id = ? ORDER BY id', [$tA, $vel]);
+$rolls = DB::all('SELECT id, batch_no FROM batches WHERE variant_id = ? ORDER BY id', [$vel]);
 [$r1, $r2] = [(int)$rolls[0]['id'], (int)$rolls[1]['id']];
 check('stock set up: 2 rolls, 10 tables, 20 chairs', count($rolls) === 2 && $onhand($vel) === 80.0 && $onhand($tbl) === 10.0 && $onhand($chr) === 20.0);
 
 echo "Customers, groups and prices\n";
-check('walk-in customer exists from the start', (int)$val('SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND is_walkin = 1', [$tA]) === 1);
+check('walk-in customer exists from the start', (int)$val('SELECT COUNT(*) FROM customers WHERE is_walkin = 1') === 1);
 $a->post('/customers/groups', ['name' => 'Dealer', 'discount_pct' => 10], '/customers/groups/create');
-$grp = (int)$val("SELECT id FROM customer_groups WHERE tenant_id = ? AND name = 'Dealer'", [$tA]);
+$grp = (int)$val("SELECT id FROM customer_groups WHERE name = 'Dealer'");
 check('group created with 10% default discount', $grp > 0 && $near($val('SELECT discount_pct FROM customer_groups WHERE id = ?', [$grp]), 10));
 $a->post('/customers/groups', ['name' => 'Dealer', 'discount_pct' => 5], '/customers/groups/create');
-check('duplicate group refused', (int)$val("SELECT COUNT(*) FROM customer_groups WHERE tenant_id = ? AND name = 'Dealer'", [$tA]) === 1);
+check('duplicate group refused', (int)$val("SELECT COUNT(*) FROM customer_groups WHERE name = 'Dealer'") === 1);
 $a->post('/customers/groups', ['name' => 'Bad', 'discount_pct' => 150], '/customers/groups/create');
-check('discount above 100% refused', !$val("SELECT 1 FROM customer_groups WHERE tenant_id = ? AND name = 'Bad'", [$tA]));
+check('discount above 100% refused', !$val("SELECT 1 FROM customer_groups WHERE name = 'Bad'"));
 $a->post("/customers/groups/$grp/prices", ['variant_id' => $tbl, 'price' => 3900], "/customers/groups/$grp/edit");
 check('special group price saved for the table', $near($val('SELECT price FROM group_prices WHERE group_id = ? AND variant_id = ?', [$grp, $tbl]), 3900));
 $a->post("/customers/groups/$grp/prices", ['variant_id' => $tbl, 'price' => 3950], "/customers/groups/$grp/edit");
@@ -72,13 +60,13 @@ check('setting it again updates, not duplicates', (int)$val('SELECT COUNT(*) FRO
 $a->post("/customers/groups/$grp/prices", ['variant_id' => $tbl, 'price' => 3900], "/customers/groups/$grp/edit");
 $a->post('/customers', ['name' => 'Acme Interiors', 'group_id' => $grp, 'phone' => '999', 'credit_days' => 15, 'address' => 'MG Road'], '/customers/create');
 $a->post('/customers', ['name' => 'Ravi Kumar', 'phone' => '888'], '/customers/create');
-[$acme, $ravi] = array_map(fn($n) => (int)DB::val('SELECT id FROM customers WHERE tenant_id = ? AND name = ?', [$tA, $n]), ['Acme Interiors', 'Ravi Kumar']);
-$walk = (int)$val('SELECT id FROM customers WHERE tenant_id = ? AND is_walkin = 1', [$tA]);
+[$acme, $ravi] = array_map(fn($n) => (int)DB::val('SELECT id FROM customers WHERE name = ?', [$n]), ['Acme Interiors', 'Ravi Kumar']);
+$walk = (int)$val('SELECT id FROM customers WHERE is_walkin = 1');
 check('customers created (group + credit days)', $acme > 0 && $ravi > 0 && (int)$val('SELECT group_id FROM customers WHERE id = ?', [$acme]) === $grp && (int)$val('SELECT credit_days FROM customers WHERE id = ?', [$acme]) === 15);
 $a->post('/customers', ['name' => 'Ravi Kumar'], '/customers/create');
-check('duplicate customer name refused', (int)$val("SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND name = 'Ravi Kumar'", [$tA]) === 1);
+check('duplicate customer name refused', (int)$val("SELECT COUNT(*) FROM customers WHERE name = 'Ravi Kumar'") === 1);
 $a->post('/customers', ['name' => 'Bad', 'email' => 'x'], '/customers/create');
-check('invalid email refused', !$val("SELECT 1 FROM customers WHERE tenant_id = ? AND name = 'Bad'", [$tA]));
+check('invalid email refused', !$val("SELECT 1 FROM customers WHERE name = 'Bad'"));
 $a->post("/customers/$walk/delete", [], "/customers/$walk");
 check('walk-in customer cannot be deleted', (bool)$val('SELECT 1 FROM customers WHERE id = ?', [$walk]));
 $js = fn(string $path) => json_decode($a->get($path)['body'], true);
@@ -94,7 +82,7 @@ check('customer pages load', $a->get('/customers')['status'] === 200 && $a->get(
 echo "Order input checks\n";
 $qt = fn(array $lines, array $over = []) => $a->post('/sales/orders', $over + ['customer_id' => $ravi, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'delivery_charge' => 500, 'installation_charge' => 300, 'lines' => $lines], '/sales/orders/create');
 $qt([['variant_id' => $tbl, 'qty' => 2, 'unit_price' => 4200, 'tax_rate' => 12], ['variant_id' => $vel, 'qty' => 10, 'unit_price' => 700, 'discount_pct' => 5, 'tax_rate' => 12]]);
-$oq = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$oq = (int)$val('SELECT MAX(id) FROM sales_orders');
 check('order saved; totals: gross 15400, discount 350, tax 1806, + 800 charges = 17656', $oq > 0 && $near($val('SELECT subtotal FROM sales_orders WHERE id = ?', [$oq]), 15400) && $near($val('SELECT discount_total FROM sales_orders WHERE id = ?', [$oq]), 350) && $near($val('SELECT tax_total FROM sales_orders WHERE id = ?', [$oq]), 1806) && $near($val('SELECT total FROM sales_orders WHERE id = ?', [$oq]), 17656));
 $n = $count('sales_orders');
 $qt([['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1], ['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]);
@@ -111,13 +99,13 @@ check('a draft order can be deleted', !$val('SELECT 1 FROM sales_orders WHERE id
 echo "Orders and stock reservation\n";
 $so = fn(int $cust, array $lines, array $over = []) => $a->post('/sales/orders', $over + ['customer_id' => $cust, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'delivery_charge' => 0, 'installation_charge' => 0, 'lines' => $lines], '/sales/orders/create');
 $so($acme, [['variant_id' => $vel, 'qty' => 40, 'unit_price' => 700, 'discount_pct' => 10, 'tax_rate' => 12], ['variant_id' => $tbl, 'qty' => 4, 'unit_price' => 3900, 'tax_rate' => 12], ['variant_id' => $set, 'qty' => 1, 'unit_price' => 8000, 'tax_rate' => 12]], ['delivery_charge' => 500, 'installation_charge' => 300, 'ship_to' => 'Site 7']);
-$o1 = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$o1 = (int)$val('SELECT MAX(id) FROM sales_orders');
 check('order saved as a draft with its number', $val('SELECT status FROM sales_orders WHERE id = ?', [$o1]) === 'draft' && str_starts_with((string)$val('SELECT order_no FROM sales_orders WHERE id = ?', [$o1]), 'SO-'));
 $a->post("/sales/orders/$o1/confirm", [], "/sales/orders/$o1");
 check('order confirmed (stock reserved)', $val('SELECT status FROM sales_orders WHERE id = ?', [$o1]) === 'confirmed');
 check('order page shows free stock after the reservation (tables: 10 − 4 − 1 in the set = 5)', str_contains($a->get("/sales/orders/$o1")['body'], 'free for others now: 5'));
 $so($ravi, [['variant_id' => $tbl, 'qty' => 6, 'unit_price' => 4200, 'tax_rate' => 12]]);
-$o2 = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$o2 = (int)$val('SELECT MAX(id) FROM sales_orders');
 $r = $a->post("/sales/orders/$o2/confirm", [], "/sales/orders/$o2");
 check('a second order cannot take stock reserved for the first', $val('SELECT status FROM sales_orders WHERE id = ?', [$o2]) === 'draft' && str_contains($a->follow($r)['body'], 'reserved'));
 $a->post("/sales/orders/$o2", ['customer_id' => $ravi, 'warehouse_id' => $main, 'order_date' => date('Y-m-d'), 'allow_backorder' => 1, 'lines' => [['variant_id' => $tbl, 'qty' => 6, 'unit_price' => 4200, 'tax_rate' => 12]]], "/sales/orders/$o2/edit");
@@ -130,14 +118,14 @@ check('a direct sale cannot eat into reserved stock', $ledger() === $n && $count
 $a->post("/sales/orders/$o2/cancel", [], "/sales/orders/$o2");
 check('cancelling an order frees its reservation', $val('SELECT status FROM sales_orders WHERE id = ?', [$o2]) === 'cancelled');
 $dd([['variant_id' => $tbl, 'qty' => 5, 'batch_id' => 0, 'location_id' => $A1, 'unit_price' => 4200, 'tax_rate' => 12]], ['make_invoice' => 1]);
-$dir = (int)$val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$tA]);
+$dir = (int)$val('SELECT MAX(id) FROM deliveries');
 check('direct delivery of the 5 free tables works and takes stock out', $bal($tbl, $main, 0, $A1) === 5.0 && $val("SELECT source FROM deliveries WHERE id = ?", [$dir]) === 'direct');
 $dirInv = (int)$val('SELECT id FROM sales_invoices WHERE delivery_id = ?', [$dir]);
 check('invoice created with the delivery: 5 × 4200 + 12% = 23520', $dirInv > 0 && $near($val('SELECT total FROM sales_invoices WHERE id = ?', [$dirInv]), 23520));
 $a->post("/sales/orders/$o1/advance", ['amount' => 5000, 'paid_on' => date('Y-m-d'), 'method' => 'upi', 'reference' => 'ADV1'], "/sales/orders/$o1");
 check('advance of 5000 recorded on the order', $near($val('SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE order_id = ? AND invoice_id IS NULL', [$o1]), 5000));
 $so($acme, [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]], []);
-$oS = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$oS = (int)$val('SELECT MAX(id) FROM sales_orders');
 $a->post("/sales/orders/$oS/confirm", [], "/sales/orders/$oS");
 check('order pages load', $a->get('/sales/orders')['status'] === 200 && $a->get('/sales/orders?status=open')['status'] === 200 && $a->get("/sales/orders/$o1")['status'] === 200 && $a->get('/sales/orders/create?customer=' . $acme)['status'] === 200);
 $a->post("/sales/orders/$oS/cancel", [], "/sales/orders/$oS");
@@ -161,10 +149,10 @@ check('a line that is not on the order is refused', $ledger() === $n);
 $dl([['order_item_id' => $vi, 'variant_id' => $vel, 'qty' => 25, 'batch_id' => $r1, 'location_id' => $B1], ['order_item_id' => $ti, 'variant_id' => $tbl, 'qty' => 99, 'batch_id' => 0, 'location_id' => $A1]]);
 check('one bad line cancels the whole delivery (all-or-nothing)', $ledger() === $n && $bal($vel, $main, $r1, $B1) === 50.0);
 $dl([['order_item_id' => $vi, 'variant_id' => $vel, 'qty' => 25, 'batch_id' => $r1, 'location_id' => $B1], ['order_item_id' => $ti, 'variant_id' => $tbl, 'qty' => 4, 'batch_id' => 0, 'location_id' => $A1]], ['make_invoice' => 1]);
-$d1 = (int)$val("SELECT MAX(id) FROM deliveries WHERE tenant_id = ? AND source = 'order'", [$tA]);
+$d1 = (int)$val("SELECT MAX(id) FROM deliveries WHERE source = 'order'");
 check('partial delivery: 25 m cut from roll 1, 4 tables from A-01', $bal($vel, $main, $r1, $B1) === 25.0 && $bal($tbl, $main, 0, $A1) === 1.0);
 check('order is now "partial"; velvet 15 m still due', $val('SELECT status FROM sales_orders WHERE id = ?', [$o1]) === 'partial' && $near($val('SELECT qty_delivered FROM sales_order_items WHERE id = ?', [$vi]), 25));
-check('stock rows are typed "sale", linked to the delivery with the roll and rack', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND type = 'sale' AND ref_type = 'delivery' AND ref_id = ? AND batch_id = ? AND location_id = ?", [$tA, $d1, $r1, $B1]) === 1);
+check('stock rows are typed "sale", linked to the delivery with the roll and rack', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE type = 'sale' AND ref_type = 'delivery' AND ref_id = ? AND batch_id = ? AND location_id = ?", [$d1, $r1, $B1]) === 1);
 $inv1 = (int)$val('SELECT id FROM sales_invoices WHERE delivery_id = ?', [$d1]);
 check('first invoice: goods 17640 + 17472, order charges 800 added once = 35912', $near($val('SELECT total FROM sales_invoices WHERE id = ?', [$inv1]), 35912) && $near($val('SELECT delivery_charge + installation_charge FROM sales_invoices WHERE id = ?', [$inv1]), 800));
 check('the advance of 5000 was applied to the invoice automatically', $near($val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$inv1]), 5000) && $near($val('SELECT applied FROM customer_payments WHERE order_id = ? AND invoice_id IS NULL', [$o1]), 5000));
@@ -172,7 +160,7 @@ check('due date follows the customer\'s 15 credit days', $val('SELECT due_date F
 $formAgain = $a->get("/sales/orders/$o1/deliver")['body'];
 check('second delivery form shows only what is still due (15 m of velvet, the set)', str_contains($formAgain, '"left":15') && !str_contains($formAgain, 'Side Table (TBL)'));
 $dl([['order_item_id' => $vi, 'variant_id' => $vel, 'qty' => 15, 'batch_id' => $r2, 'location_id' => $A1], ['order_item_id' => $si, 'variant_id' => $set, 'qty' => 1]], ['make_invoice' => 1]);
-$d2 = (int)$val("SELECT MAX(id) FROM deliveries WHERE tenant_id = ? AND source = 'order'", [$tA]);
+$d2 = (int)$val("SELECT MAX(id) FROM deliveries WHERE source = 'order'");
 check('rest delivered: 15 m from roll 2; the set took 1 table + 2 chairs', $bal($vel, $main, $r2, $A1) === 15.0 && $bal($tbl, $main, 0, $A1) === 0.0 && $onhand($chr) === 18.0);
 check('order is "delivered"', $val('SELECT status FROM sales_orders WHERE id = ?', [$o1]) === 'delivered');
 $rows = DB::all('SELECT * FROM delivery_items WHERE delivery_id = ? ORDER BY id', [$d2]);
@@ -188,13 +176,13 @@ check('delivery pages load', $a->get('/sales/deliveries')['status'] === 200 && $
 
 echo "Shade warning and closing\n";
 $so($ravi, [['variant_id' => $vel, 'qty' => 52, 'unit_price' => 700, 'tax_rate' => 12]], ['allow_backorder' => 1]);
-$o3 = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$o3 = (int)$val('SELECT MAX(id) FROM sales_orders');
 $a->post("/sales/orders/$o3/confirm", [], "/sales/orders/$o3");
 $f3 = $a->get("/sales/orders/$o3/deliver")['body'];
 check('52 m is more than all rolls hold (40 m): the suggestion takes what exists from both rolls, flags a shade warning and says what is short', str_contains($f3, '"multi":1') && str_contains($f3, 'only 40'));
 $a->post("/sales/orders/$o3/cancel", [], "/sales/orders/$o3");
 $so($ravi, [['variant_id' => $vel, 'qty' => 30, 'unit_price' => 700, 'tax_rate' => 12]]);
-$o4 = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$o4 = (int)$val('SELECT MAX(id) FROM sales_orders');
 $a->post("/sales/orders/$o4/confirm", [], "/sales/orders/$o4");
 $f4 = $a->get("/sales/orders/$o4/deliver")['body'];
 check('30 m needs two rolls (25 + 15 left): flagged with two rows', str_contains($f4, '"multi":1') && substr_count($f4, '"batch_id":') >= 2);
@@ -249,14 +237,14 @@ check('whole-number items refuse decimal returns', $count('sales_returns') === $
 $retn($inv1, [$diT => ['qty' => 1, 'location_id' => 999999, 'restock' => 1]]);
 check('an unknown rack is refused', $ledger() === $n);
 $retn($inv1, [$diT => ['qty' => 1, 'location_id' => $B1, 'restock' => 1], $diV => ['qty' => 3, 'location_id' => $A1, 'restock' => 1]]);
-$sr = (int)$val('SELECT MAX(id) FROM sales_returns WHERE tenant_id = ?', [$tA]);
+$sr = (int)$val('SELECT MAX(id) FROM sales_returns');
 check('return recorded; 1 table back on B-01, 3 m back into roll 1 (its own batch) on A-01', $bal($tbl, $main, 0, $B1) === 1.0 && $bal($vel, $main, $r1, $A1) === 3.0);
 check('credit = 3900×1.12 + 3×700×0.9×1.12 = 4368 + 2116.80', $near($val('SELECT total FROM sales_returns WHERE id = ?', [$sr]), 6484.80) && $near($val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv1]), 6484.80));
 check('returned quantities are tracked on the delivery lines', $near($val('SELECT qty_returned FROM delivery_items WHERE id = ?', [$diT]), 1) && $near($val('SELECT qty_returned FROM delivery_items WHERE id = ?', [$diV]), 3));
-check('ledger rows typed "sales_return" with the cost', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE tenant_id = ? AND type = 'sales_return' AND qty_change > 0 AND unit_cost > 0", [$tA]) === 2);
+check('ledger rows typed "sales_return" with the cost', (int)$val("SELECT COUNT(*) FROM stock_ledger WHERE type = 'sales_return' AND qty_change > 0 AND unit_cost > 0") === 2);
 $velBefore = $onhand($vel);
 $retn($inv1, [$diV => ['qty' => 2, 'location_id' => 0]]);
-$sr2 = (int)$val('SELECT MAX(id) FROM sales_returns WHERE tenant_id = ?', [$tA]);
+$sr2 = (int)$val('SELECT MAX(id) FROM sales_returns');
 check('damaged goods ("put back" unticked): credit given, stock unchanged', $sr2 !== $sr && $onhand($vel) === $velBefore && (int)$val('SELECT restock FROM sales_return_items WHERE return_id = ?', [$sr2]) === 0 && $near($val('SELECT total FROM sales_returns WHERE id = ?', [$sr2]), 1411.2));
 check('invoice shows the credit; return pages load', $a->get("/sales/returns/$sr")['status'] === 200 && str_contains($a->get("/sales/invoices/$inv1")['body'], 'Returns credited'));
 $diSet = (int)$val('SELECT id FROM delivery_items WHERE delivery_id = ? AND variant_id = ?', [$d2, $set]);
@@ -266,7 +254,7 @@ $retn($inv2, [$diSet => ['qty' => 1], $diPartT => ['qty' => 1, 'location_id' => 
 check('a set is returned as the set line (credit 8960) plus its parts back on racks', $bal($tbl, $main, 0, $A1) === 1.0 && $onhand($chr) === 20.0 && $near($val('SELECT returned_amount FROM sales_invoices WHERE id = ?', [$inv2]), 8960));
 
 echo "Permissions\n";
-$staffRole = (int)DB::val("SELECT id FROM roles WHERE tenant_id = ? AND name = 'Staff'", [$tA]);
+$staffRole = (int)DB::val("SELECT id FROM roles WHERE name = 'Staff'");
 $a->post('/users', ['name' => 'Staff', 'email' => "staff-$sfx@test.local", 'password' => 'Password123', 'role_id' => $staffRole, 'warehouse_id' => '0'], '/users/create');
 $s = new Client($base);
 $s->post('/login', ['email' => "staff-$sfx@test.local", 'password' => 'Password123'], '/login');
@@ -276,43 +264,25 @@ $n = $count('customer_payments');
 $s->post("/sales/invoices/$inv2/payments/1/delete", [], '/sales/invoices');
 check('staff cannot delete payments or cancel orders', $count('customer_payments') === $n);
 $so($ravi, [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1500]]);
-$oX = (int)$val('SELECT MAX(id) FROM sales_orders WHERE tenant_id = ?', [$tA]);
+$oX = (int)$val('SELECT MAX(id) FROM sales_orders');
 $s->post("/sales/orders/$oX/cancel", [], "/sales/orders/$oX");
 check('cancel is blocked for staff', $val('SELECT status FROM sales_orders WHERE id = ?', [$oX]) === 'draft');
 
 echo "Stock stays consistent\n";
 $bad = DB::all(
     'SELECT b.variant_id FROM stock_balances b
-     LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger WHERE tenant_id = ? GROUP BY variant_id, warehouse_id, batch_id, location_id) l
+     LEFT JOIN (SELECT variant_id, warehouse_id, batch_id, location_id, SUM(qty_change) AS s FROM stock_ledger GROUP BY variant_id, warehouse_id, batch_id, location_id) l
        ON l.variant_id = b.variant_id AND l.warehouse_id = b.warehouse_id AND l.batch_id = b.batch_id AND l.location_id = b.location_id
-     WHERE b.tenant_id = ? AND ABS(b.qty - COALESCE(l.s, 0)) > 0.0005', [$tA, $tA]);
+     WHERE ABS(b.qty - COALESCE(l.s, 0)) > 0.0005', []);
 check('every balance equals the sum of its ledger rows', !$bad);
-check('no negative balances anywhere', !DB::val('SELECT 1 FROM stock_balances WHERE tenant_id = ? AND qty < -0.0005', [$tA]));
-check('every invoice total equals goods − discount + tax + charges', !DB::val('SELECT 1 FROM sales_invoices WHERE tenant_id = ? AND ABS(total - (subtotal - discount_total + tax_total + delivery_charge + installation_charge)) > 0.011', [$tA]));
+check('no negative balances anywhere', !DB::val('SELECT 1 FROM stock_balances WHERE qty < -0.0005'));
+check('every invoice total equals goods − discount + tax + charges', !DB::val('SELECT 1 FROM sales_invoices WHERE ABS(total - (subtotal - discount_total + tax_total + delivery_charge + installation_charge)) > 0.011'));
 
 echo "Tenant isolation\n";
-check("company B cannot open A's customer / order / delivery / invoice / return (404)",
-    $b->get("/customers/$acme")['status'] === 404 && $b->get("/sales/orders/$o1")['status'] === 404
-    && $b->get("/sales/deliveries/$d1")['status'] === 404 && $b->get("/sales/invoices/$inv1")['status'] === 404 && $b->get("/sales/returns/$sr")['status'] === 404 && $b->get("/sales/invoices/$inv1/print")['status'] === 404);
-$bMain = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1', [$tB]);
-$bWalk = (int)$val('SELECT id FROM customers WHERE tenant_id = ? AND is_walkin = 1', [$tB]);
-$nO = (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tB]);
-$b->post('/sales/orders', ['customer_id' => $acme, 'warehouse_id' => $bMain, 'order_date' => date('Y-m-d'), 'lines' => [['variant_id' => $tbl, 'qty' => 1, 'unit_price' => 1]]], '/sales/orders/create');
-check("B cannot create an order for A's customer or items", (int)$val('SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ?', [$tB]) === $nO);
+$nO = (int)$val('SELECT COUNT(*) FROM sales_orders');
 $nL = $ledger();
-$b->post('/sales/deliveries', ['customer_id' => $bWalk, 'warehouse_id' => $bMain, 'delivery_date' => date('Y-m-d'), 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1]]], '/sales/deliveries/create');
-check("B cannot deliver A's items", $ledger() === $nL);
-$nD = (int)$val('SELECT COUNT(*) FROM deliveries WHERE tenant_id = ?', [$tB]);
-$b->post('/sales/deliveries', ['customer_id' => $walk, 'warehouse_id' => $bMain, 'delivery_date' => date('Y-m-d'), 'lines' => [['variant_id' => $chr, 'qty' => 1, 'unit_price' => 1]]], '/sales/deliveries/create');
-check("B cannot use A's customer on a delivery", (int)$val('SELECT COUNT(*) FROM deliveries WHERE tenant_id = ?', [$tB]) === $nD);
-$b->post("/sales/invoices/$inv2/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/sales/invoices');
+$nD = (int)$val('SELECT COUNT(*) FROM deliveries');
 $paidBefore = (float)$val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$inv2]);
-$b->post("/sales/invoices/$inv2/payments", ['amount' => 1, 'paid_on' => date('Y-m-d'), 'method' => 'cash'], '/sales/invoices');
-check("B cannot pay A's invoice", $near($val('SELECT paid_amount FROM sales_invoices WHERE id = ?', [$inv2]), $paidBefore));
-$b->post("/customers/groups/$grp/prices", ['variant_id' => $tbl, 'price' => 1], '/customers/groups');
-check("B cannot change A's group prices", $near($val('SELECT price FROM group_prices WHERE group_id = ?', [$grp]), 3900));
-check("item lookup and stock lookup reveal nothing to B", !str_contains($b->get('/lookup/sale-items?q=velvet')['body'], 'Velvet') && trim($b->get("/lookup/stock?variant=$vel&warehouse=$main")['body']) === '{"tb":false,"batches":[],"racks":[]}');
-check("A's walk-in and B's walk-in are different customers", $walk !== $bWalk);
 
 echo "Record pages (Zoho-style) for sales documents\n";
 $h = $a->get("/sales/orders/$o1")['body'];
@@ -327,8 +297,7 @@ $rackNos = array_column(DB::all('SELECT DISTINCT k.code FROM delivery_items l JO
 check('stock-out voucher: title, the exact roll(s) and rack(s) to take from, issue qty, blank cut / left columns, signatures', $vch['status'] === 200 && str_contains($vch['body'], 'Stock-out voucher') && $rollNos && str_contains($vch['body'], $rollNos[0]) && $rackNos && str_contains($vch['body'], $rackNos[0])
     && str_contains($vch['body'], 'Issue qty') && str_contains($vch['body'], 'Actual cut') && str_contains($vch['body'], 'Received by (cutter)') && str_contains($vch['body'], 'Roll length before'));
 check('the delivery page has a button for it', str_contains($h, '/voucher'));
-check('another company cannot open the voucher', $b->get("/sales/deliveries/$d1/voucher")['status'] === 404);
-$inv = (int)$val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$tA]);
+$inv = (int)$val('SELECT MAX(id) FROM sales_invoices');
 $h = $a->get("/sales/invoices/$inv")['body'];
 check('invoice page: shell, amounts, payments, record-payment form and print buttons', str_contains($h, 'class="rec-top"') && str_contains($h, 'id="totals"') && str_contains($h, 'id="payments"') && str_contains($h, 'Print invoice') && str_contains($h, 'Edit page layout'));
 $h = $a->get("/sales/returns/$sr")['body'];

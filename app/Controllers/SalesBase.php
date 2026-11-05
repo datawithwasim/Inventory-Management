@@ -22,7 +22,7 @@ abstract class SalesBase extends PurchaseBase
     protected function productFor(mixed $id, int $variantId): ?int
     {
         $id = (int)$id;
-        return $id > 0 && DB::val('SELECT 1 FROM products WHERE tenant_id = ? AND id = ? AND variant_id = ?', [$this->tid(), $id, $variantId]) ? $id : null;
+        return $id > 0 && DB::val('SELECT 1 FROM products WHERE id = ? AND variant_id = ?', [$id, $variantId]) ? $id : null;
     }
 
     protected function activeCustomer(mixed $id, string $back): array
@@ -34,7 +34,7 @@ abstract class SalesBase extends PurchaseBase
 
     protected function customers(bool $onlyActive = true): array
     {
-        return DB::all('SELECT id, name, is_walkin FROM customers WHERE tenant_id = ?' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY is_walkin DESC, name', [$this->tid()]);
+        return DB::all('SELECT id, name, is_walkin FROM customers WHERE 1=1' . ($onlyActive ? ' AND is_active = 1' : '') . ' ORDER BY is_walkin DESC, name', []);
     }
 
     protected function percent(mixed $raw, string $label, string $back): float

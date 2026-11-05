@@ -35,7 +35,7 @@ final class LaunchController extends StockDocController
         return DB::one(
             'SELECT l.*, c.name AS catalogue, c.code AS catalogue_code, w.name AS warehouse, u.name AS user_name
              FROM catalogue_launches l JOIN catalogues c ON c.id = l.catalogue_id JOIN warehouses w ON w.id = l.warehouse_id LEFT JOIN users u ON u.id = l.created_by
-             WHERE l.tenant_id = ? AND l.id = ?' . Scope::sql('l.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             WHERE l.id = ?' . Scope::sql('l.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     /** The sales orders asked for this launch (cancelled ones too, so nothing seems to vanish). */
@@ -45,41 +45,40 @@ final class LaunchController extends StockDocController
             "SELECT o.id, o.order_no, o.status, o.order_date, o.ship_to, o.warehouse_id, w.name AS warehouse, c.name AS customer,
                     (SELECT COUNT(*) FROM deliveries d WHERE d.order_id = o.id) AS deliveries
              FROM sales_orders o JOIN customers c ON c.id = o.customer_id JOIN warehouses w ON w.id = o.warehouse_id
-             WHERE o.tenant_id = ? AND o.launch_id = ? ORDER BY o.id", [$this->tid(), $launchId]);
+             WHERE o.launch_id = ? ORDER BY o.id", [$launchId]);
     }
 
     /** The fabric of this launch, from its sales orders: asked, delivered, sent back, and what the delivered fabric cost. */
     private function fabric(int $launchId): array
     {
-        $t = $this->tid();
         $rows = DB::all(
             "SELECT v.id AS variant_id, v.sku, i.name AS item_name, u.short_name AS unit,
                     (SELECT COALESCE(SUM(CASE WHEN o.status = 'closed' THEN oi.qty_delivered ELSE oi.qty_ordered END), 0) FROM sales_order_items oi JOIN sales_orders o ON o.id = oi.order_id
-                      WHERE o.tenant_id = ? AND o.launch_id = ? AND o.status <> 'cancelled' AND oi.variant_id = v.id) AS qty_ordered,
+                      WHERE o.launch_id = ? AND o.status <> 'cancelled' AND oi.variant_id = v.id) AS qty_ordered,
                     (SELECT COALESCE(SUM(di.qty), 0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o ON o.id = d.order_id
-                      WHERE o.tenant_id = ? AND o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS qty_issued,
+                      WHERE o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS qty_issued,
                     (SELECT COALESCE(SUM(di.qty_returned), 0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o ON o.id = d.order_id
-                      WHERE o.tenant_id = ? AND o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS qty_returned,
+                      WHERE o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS qty_returned,
                     (SELECT COALESCE(SUM((di.qty - di.qty_returned) * di.unit_cost), 0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o ON o.id = d.order_id
-                      WHERE o.tenant_id = ? AND o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS value_issued
+                      WHERE o.launch_id = ? AND di.parent_id IS NULL AND di.variant_id = v.id) AS value_issued
              FROM item_variants v JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-             WHERE v.tenant_id = ? AND v.id IN (SELECT oi.variant_id FROM sales_order_items oi JOIN sales_orders o ON o.id = oi.order_id WHERE o.tenant_id = ? AND o.launch_id = ?)
+             WHERE v.id IN (SELECT oi.variant_id FROM sales_order_items oi JOIN sales_orders o ON o.id = oi.order_id WHERE o.launch_id = ?)
              ORDER BY i.name",
-            [$t, $launchId, $t, $launchId, $t, $launchId, $t, $launchId, $t, $t, $launchId]);
+            [$launchId, $launchId, $launchId, $launchId, $launchId]);
         foreach ($rows as &$r) $r['value_issued'] = round((float)$r['value_issued'], 2);
         return $rows;
     }
 
     private function sizes(int $launchId): array
     {
-        return DB::all('SELECT s.*, v.item_id FROM launch_sizes s LEFT JOIN item_variants v ON v.id = s.variant_id WHERE s.tenant_id = ? AND s.launch_id = ? ORDER BY s.id', [$this->tid(), $launchId]);
+        return DB::all('SELECT s.*, v.item_id FROM launch_sizes s LEFT JOIN item_variants v ON v.id = s.variant_id WHERE s.launch_id = ? ORDER BY s.id', [$launchId]);
     }
 
     /** What the launch has cost so far and what each received copy cost. */
     private function money(array $l, array $fabric): array
     {
         $value = round(array_sum(array_map(fn($f) => (float)$f['value_issued'], $fabric)), 2);
-        $copies = (int)DB::val('SELECT COALESCE(SUM(qty_received),0) FROM launch_sizes WHERE tenant_id = ? AND launch_id = ?', [$this->tid(), $l['id']]);
+        $copies = (int)DB::val('SELECT COALESCE(SUM(qty_received),0) FROM launch_sizes WHERE launch_id = ?', [$l['id']]);
         $total = round($value + (float)$l['extra_cost'], 2);
         return ['fabric_value' => $value, 'extra_cost' => (float)$l['extra_cost'], 'total_cost' => $total, 'copies' => $copies, 'cost_per_copy' => $copies > 0 ? round($total / $copies, 2) : null,
             'unabsorbed' => round($value - (float)$l['fabric_absorbed'], 2)];
@@ -91,35 +90,33 @@ final class LaunchController extends StockDocController
      */
     public static function refresh(int $launchId): void
     {
-        $t = (int)Auth::tenantId();
-        $l = DB::one('SELECT status FROM catalogue_launches WHERE tenant_id = ? AND id = ?', [$t, $launchId]);
+        $l = DB::one('SELECT status FROM catalogue_launches WHERE id = ?', [$launchId]);
         if (!$l || !in_array($l['status'], ['draft', ...self::OPEN], true)) return;
-        $sent = (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE tenant_id = ? AND launch_id = ? AND status NOT IN ('cancelled','draft')", [$t, $launchId]);
-        if ($sent === 0) { DB::run("UPDATE catalogue_launches SET status = 'draft' WHERE tenant_id = ? AND id = ?", [$t, $launchId]); return; }
+        $sent = (int)DB::val("SELECT COUNT(*) FROM sales_orders WHERE launch_id = ? AND status NOT IN ('cancelled','draft')", [$launchId]);
+        if ($sent === 0) { DB::run("UPDATE catalogue_launches SET status = 'draft' WHERE id = ?", [$launchId]); return; }
         $rows = DB::all(
             "SELECT oi.variant_id, SUM(CASE WHEN o.status = 'closed' THEN oi.qty_delivered ELSE oi.qty_ordered END) AS asked,
                     (SELECT COALESCE(SUM(di.qty), 0) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id JOIN sales_orders o2 ON o2.id = d.order_id
-                      WHERE o2.tenant_id = o.tenant_id AND o2.launch_id = o.launch_id AND di.parent_id IS NULL AND di.variant_id = oi.variant_id) AS got
+                      WHERE o2.launch_id = o.launch_id AND di.parent_id IS NULL AND di.variant_id = oi.variant_id) AS got
              FROM sales_order_items oi JOIN sales_orders o ON o.id = oi.order_id
-             WHERE o.tenant_id = ? AND o.launch_id = ? AND o.status NOT IN ('cancelled','draft') GROUP BY oi.variant_id, o.tenant_id, o.launch_id", [$t, $launchId]);
+             WHERE o.launch_id = ? AND o.status NOT IN ('cancelled','draft') GROUP BY oi.variant_id, o.launch_id", [$launchId]);
         $all = (bool)$rows; $any = false;
         foreach ($rows as $r) { if ((float)$r['got'] > 0.0005) $any = true; if ((float)$r['got'] + 0.0005 < (float)$r['asked']) $all = false; }
-        DB::run('UPDATE catalogue_launches SET status = ? WHERE tenant_id = ? AND id = ?', [$all ? 'dispatched' : ($any ? 'partial' : 'ordered'), $t, $launchId]);
+        DB::run('UPDATE catalogue_launches SET status = ? WHERE id = ?', [$all ? 'dispatched' : ($any ? 'partial' : 'ordered'), $launchId]);
     }
 
     /** The same, starting from a sales order (does nothing for an ordinary one). */
     public static function refreshForOrder(int $orderId): void
     {
-        $id = (int)DB::val('SELECT launch_id FROM sales_orders WHERE tenant_id = ? AND id = ?', [(int)Auth::tenantId(), $orderId]);
+        $id = (int)DB::val('SELECT launch_id FROM sales_orders WHERE id = ?', [$orderId]);
         if ($id > 0) self::refresh($id);
     }
 
     /** The customer that fabric orders are addressed to: the catalogue department. Made the first time it is needed. */
     public static function internalCustomer(): int
     {
-        $t = (int)Auth::tenantId();
-        $id = (int)DB::val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Catalogue Department' LIMIT 1", [$t]);
-        return $id ?: DB::insert('customers', ['tenant_id' => $t, 'name' => 'Catalogue Department', 'notes' => 'Internal: fabric the catalogue team orders from the warehouse for catalogue launches.', 'is_active' => 1]);
+        $id = (int)DB::val("SELECT id FROM customers WHERE name = 'Catalogue Department' LIMIT 1");
+        return $id ?: DB::insert('customers', ['name' => 'Catalogue Department', 'notes' => 'Internal: fabric the catalogue team orders from the warehouse for catalogue launches.', 'is_active' => 1]);
     }
 
     /* ---------- list ---------- */
@@ -127,10 +124,9 @@ final class LaunchController extends StockDocController
     public function index(): void
     {
         $this->mayView();
-        $t = $this->tid();
         $q = trim((string)($_GET['q'] ?? ''));
         $status = (string)($_GET['status'] ?? '');
-        $where = 'l.tenant_id = ?' . Scope::sql('l.warehouse_id'); $p = [$t];
+        $where = '1=1' . Scope::sql('l.warehouse_id'); $p = [];
         if ($q !== '') { $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%'; $where .= ' AND (l.launch_no LIKE ? OR c.name LIKE ? OR c.code LIKE ?)'; array_push($p, $like, $like, $like); }
         if (isset(self::STATUS[$status])) { $where .= ' AND l.status = ?'; $p[] = $status; }
         elseif ($status === 'todo') $where .= " AND l.status IN ('ordered','partial')";
@@ -153,7 +149,7 @@ final class LaunchController extends StockDocController
     private function formData(?array $l, array $extra = []): array
     {
         return $extra + [
-            'catalogues' => DB::all('SELECT id, name, code, named FROM catalogues WHERE tenant_id = ? AND is_active = 1 ORDER BY name', [$this->tid()]),
+            'catalogues' => DB::all('SELECT id, name, code, named FROM catalogues WHERE is_active = 1 ORDER BY name'),
             'warehouses' => $this->allActiveWarehouses(), 'launch' => $l, 'sizes' => $l ? $this->sizes((int)$l['id']) : [],
         ];
     }
@@ -177,8 +173,7 @@ final class LaunchController extends StockDocController
     private function collect(string $back): array
     {
         $d = $this->input();
-        $t = $this->tid();
-        $cat = DB::one('SELECT id FROM catalogues WHERE tenant_id = ? AND id = ?', [$t, (int)($d['catalogue_id'] ?? 0)]);
+        $cat = DB::one('SELECT id FROM catalogues WHERE id = ?', [(int)($d['catalogue_id'] ?? 0)]);
         if (!$cat) $this->bounce('Choose the catalogue this launch is for.', $back);
         $wh = Stock::warehouse((int)($d['warehouse_id'] ?? 0));
         if (!$wh || !$wh['is_active']) $this->bounce('Choose the warehouse that gives the fabric.', $back);
@@ -204,9 +199,8 @@ final class LaunchController extends StockDocController
     {
         $in = $this->collect('launches/create');
         $id = DB::transaction(function () use ($in) {
-            $t = $this->tid();
-            $id = DB::insert('catalogue_launches', ['tenant_id' => $t, 'launch_no' => Numbering::next($t, 'CL'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $in['head']);
-            foreach ($in['sizes'] as $s) DB::insert('launch_sizes', ['tenant_id' => $t, 'launch_id' => $id, 'size_name' => $s['size_name'], 'qty_planned' => $s['qty']]);
+            $id = DB::insert('catalogue_launches', ['launch_no' => Numbering::next('CL'), 'status' => 'draft', 'created_by' => Auth::user()['id']] + $in['head']);
+            foreach ($in['sizes'] as $s) DB::insert('launch_sizes', ['launch_id' => $id, 'size_name' => $s['size_name'], 'qty_planned' => $s['qty']]);
             return $id;
         });
         Audit::log('launch_create', 'catalogue_launch', $id);
@@ -220,19 +214,18 @@ final class LaunchController extends StockDocController
         $back = "launches/{$l['id']}/edit";
         if (!in_array($l['status'], ['draft', ...self::OPEN], true)) $this->bounce('This launch can no longer be changed.', "launches/{$l['id']}");
         $in = $this->collect($back);
-        $t = $this->tid();
         $sizesHave = [];
         foreach ($this->sizes((int)$l['id']) as $s) $sizesHave[mb_strtolower($s['size_name'])] = $s;
         $sizesPosted = [];
         foreach ($in['sizes'] as $s) $sizesPosted[mb_strtolower($s['size_name'])] = $s;
         foreach ($sizesHave as $k => $s) if (!isset($sizesPosted[$k]) && ((int)$s['qty_received'] > 0 || $s['variant_id'])) $this->bounce('Size ' . $s['size_name'] . ' already has books received, so it cannot be removed.', $back);
-        DB::transaction(function () use ($l, $in, $sizesHave, $sizesPosted, $t) {
-            DB::run('UPDATE catalogue_launches SET catalogue_id = ?, warehouse_id = ?, ship_to = ?, note = ? WHERE tenant_id = ? AND id = ?', [$in['head']['catalogue_id'], $in['head']['warehouse_id'], $in['head']['ship_to'], $in['head']['note'], $t, $l['id']]);
+        DB::transaction(function () use ($l, $in, $sizesHave, $sizesPosted) {
+            DB::run('UPDATE catalogue_launches SET catalogue_id = ?, warehouse_id = ?, ship_to = ?, note = ? WHERE id = ?', [$in['head']['catalogue_id'], $in['head']['warehouse_id'], $in['head']['ship_to'], $in['head']['note'], $l['id']]);
             foreach ($sizesPosted as $k => $s) {
-                if (isset($sizesHave[$k])) DB::run('UPDATE launch_sizes SET size_name = ?, qty_planned = ? WHERE tenant_id = ? AND id = ?', [$s['size_name'], $s['qty'], $t, $sizesHave[$k]['id']]);
-                else DB::insert('launch_sizes', ['tenant_id' => $t, 'launch_id' => $l['id'], 'size_name' => $s['size_name'], 'qty_planned' => $s['qty']]);
+                if (isset($sizesHave[$k])) DB::run('UPDATE launch_sizes SET size_name = ?, qty_planned = ? WHERE id = ?', [$s['size_name'], $s['qty'], $sizesHave[$k]['id']]);
+                else DB::insert('launch_sizes', ['launch_id' => $l['id'], 'size_name' => $s['size_name'], 'qty_planned' => $s['qty']]);
             }
-            foreach ($sizesHave as $k => $s) if (!isset($sizesPosted[$k])) DB::run('DELETE FROM launch_sizes WHERE tenant_id = ? AND id = ?', [$t, $s['id']]);
+            foreach ($sizesHave as $k => $s) if (!isset($sizesPosted[$k])) DB::run('DELETE FROM launch_sizes WHERE id = ?', [$s['id']]);
         });
         Audit::log('launch_update', 'catalogue_launch', (int)$l['id']);
         flash('success', 'Launch updated.');
@@ -249,13 +242,13 @@ final class LaunchController extends StockDocController
         $docs = DB::all(
             "SELECT d.id, d.type, d.doc_no, d.note, d.created_at, d.warehouse_id, w.name AS warehouse, u.name AS user_name
              FROM stock_docs d JOIN warehouses w ON w.id = d.warehouse_id LEFT JOIN users u ON u.id = d.created_by
-             WHERE d.tenant_id = ? AND d.launch_id = ? AND d.type = 'launch_receipt' ORDER BY d.id", [$this->tid(), $l['id']]);
+             WHERE d.launch_id = ? AND d.type = 'launch_receipt' ORDER BY d.id", [$l['id']]);
         foreach ($docs as &$d) {
             $d['lines'] = DB::all(
                 'SELECT x.qty, x.unit_cost, i.name AS item_name, v.sku, r.code AS rack
                  FROM stock_doc_lines x JOIN item_variants v ON v.id = x.variant_id JOIN items i ON i.id = v.item_id
                  LEFT JOIN locations r ON r.id = x.location_id AND x.location_id > 0
-                 WHERE x.tenant_id = ? AND x.doc_id = ? ORDER BY x.id', [$this->tid(), $d['id']]);
+                 WHERE x.doc_id = ? ORDER BY x.id', [$d['id']]);
         }
         unset($d);
         $live = array_filter($orders, fn($o) => $o['status'] !== 'cancelled');
@@ -276,8 +269,8 @@ final class LaunchController extends StockDocController
         $l = $this->load($id);
         $back = "launches/{$l['id']}";
         if (!in_array($l['status'], ['draft', 'ordered'], true)) $this->bounce('Only a launch whose fabric has not started going out can be cancelled.', $back);
-        if (DB::val("SELECT 1 FROM sales_orders WHERE tenant_id = ? AND launch_id = ? AND status <> 'cancelled' LIMIT 1", [$this->tid(), $l['id']])) $this->bounce('Cancel its fabric orders (sales orders) first.', $back);
-        DB::run("UPDATE catalogue_launches SET status = 'cancelled' WHERE tenant_id = ? AND id = ?", [$this->tid(), $l['id']]);
+        if (DB::val("SELECT 1 FROM sales_orders WHERE launch_id = ? AND status <> 'cancelled' LIMIT 1", [$l['id']])) $this->bounce('Cancel its fabric orders (sales orders) first.', $back);
+        DB::run("UPDATE catalogue_launches SET status = 'cancelled' WHERE id = ?", [$l['id']]);
         Audit::log('launch_cancel', 'catalogue_launch', (int)$l['id']);
         flash('success', 'Launch cancelled.');
         redirect($back);
@@ -288,7 +281,7 @@ final class LaunchController extends StockDocController
         $l = $this->load($id);
         $back = "launches/{$l['id']}";
         if (!in_array($l['status'], ['partial', 'dispatched', 'received'], true)) $this->bounce('This launch cannot be closed yet.', $back);
-        DB::run("UPDATE catalogue_launches SET status = 'closed' WHERE tenant_id = ? AND id = ?", [$this->tid(), $l['id']]);
+        DB::run("UPDATE catalogue_launches SET status = 'closed' WHERE id = ?", [$l['id']]);
         Audit::log('launch_close', 'catalogue_launch', (int)$l['id']);
         flash('success', 'Launch closed.');
         redirect($back);
@@ -312,15 +305,14 @@ final class LaunchController extends StockDocController
     private function sizeItem(array $l, array $size): int
     {
         if ($size['variant_id']) return (int)$size['variant_id'];
-        $t = $this->tid();
         $name = $l['catalogue'] . ' (catalogue) — ' . $size['size_name'];
-        $v = DB::val("SELECT v.id FROM item_variants v JOIN items i ON i.id = v.item_id WHERE v.tenant_id = ? AND i.item_type = 'catalogue' AND i.name = ? AND v.is_active = 1 LIMIT 1", [$t, $name]);
+        $v = DB::val("SELECT v.id FROM item_variants v JOIN items i ON i.id = v.item_id WHERE i.item_type = 'catalogue' AND i.name = ? AND v.is_active = 1 LIMIT 1", [$name]);
         if (!$v) {
-            $unit = (int)(DB::val("SELECT id FROM units WHERE tenant_id = ? AND allow_decimal = 0 ORDER BY (short_name = 'pcs') DESC, id LIMIT 1", [$t]) ?: DB::val('SELECT id FROM units WHERE tenant_id = ? ORDER BY id LIMIT 1', [$t]));
-            $itemId = DB::insert('items', ['tenant_id' => $t, 'name' => mb_substr($name, 0, 190), 'item_type' => 'catalogue', 'unit_id' => $unit, 'description' => 'Printed catalogue, size ' . $size['size_name'] . '. Given free to showrooms and dealers.']);
-            $v = DB::insert('item_variants', ['tenant_id' => $t, 'item_id' => $itemId, 'sku' => Numbering::next($t, 'SKU'), 'size' => $size['size_name'], 'cost_price' => 0, 'sale_price' => 0, 'is_active' => 1]);
+            $unit = (int)(DB::val("SELECT id FROM units WHERE allow_decimal = 0 ORDER BY (short_name = 'pcs') DESC, id LIMIT 1") ?: DB::val('SELECT id FROM units ORDER BY id LIMIT 1'));
+            $itemId = DB::insert('items', ['name' => mb_substr($name, 0, 190), 'item_type' => 'catalogue', 'unit_id' => $unit, 'description' => 'Printed catalogue, size ' . $size['size_name'] . '. Given free to showrooms and dealers.']);
+            $v = DB::insert('item_variants', ['item_id' => $itemId, 'sku' => Numbering::next('SKU'), 'size' => $size['size_name'], 'cost_price' => 0, 'sale_price' => 0, 'is_active' => 1]);
         }
-        DB::run('UPDATE launch_sizes SET variant_id = ? WHERE tenant_id = ? AND id = ?', [(int)$v, $t, $size['id']]);
+        DB::run('UPDATE launch_sizes SET variant_id = ? WHERE id = ?', [(int)$v, $size['id']]);
         return (int)$v;
     }
 
@@ -350,22 +342,21 @@ final class LaunchController extends StockDocController
         if (!$lines) $this->bounce('Enter how many books of each size were received.', $back);
         try {
             $docId = DB::transaction(function () use ($l, $wh, $lines, $copies, $extra, $d) {
-                $t = $this->tid();
                 $fabric = $this->fabric((int)$l['id']);
                 $value = round(array_sum(array_map(fn($f) => (float)$f['value_issued'], $fabric)), 2);
                 $pool = round($value - (float)$l['fabric_absorbed'] + $extra, 2);
                 $unit = round($pool / $copies, 2);
-                $no = Numbering::next($t, 'LRC');
-                $docId = DB::insert('stock_docs', ['tenant_id' => $t, 'type' => 'launch_receipt', 'doc_no' => $no, 'warehouse_id' => $wh['id'], 'launch_id' => $l['id'], 'status' => 'posted',
+                $no = Numbering::next('LRC');
+                $docId = DB::insert('stock_docs', ['type' => 'launch_receipt', 'doc_no' => $no, 'warehouse_id' => $wh['id'], 'launch_id' => $l['id'], 'status' => 'posted',
                     'note' => trim((string)($d['note'] ?? '')) ?: null, 'created_by' => Auth::user()['id'], 'posted_at' => date('Y-m-d H:i:s')]);
                 foreach ($lines as $x) {
                     $vid = $this->sizeItem($l, $x['s']);
                     Stock::move($vid, (int)$wh['id'], 0, (float)$x['qty'], 'launch_receipt', 'stock_doc', $docId, $unit, $no . ' · ' . $l['catalogue'] . ' ' . $x['s']['size_name'] . ' from ' . $l['launch_no'], $x['rack']);
-                    DB::insert('stock_doc_lines', ['tenant_id' => $t, 'doc_id' => $docId, 'variant_id' => $vid, 'batch_id' => 0, 'location_id' => $x['rack'], 'qty' => $x['qty'], 'unit_cost' => $unit]);
-                    DB::run('UPDATE launch_sizes SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$x['qty'], $t, $x['s']['id']]);
-                    DB::run('UPDATE item_variants SET cost_price = ? WHERE tenant_id = ? AND id = ?', [$unit, $t, $vid]);
+                    DB::insert('stock_doc_lines', ['doc_id' => $docId, 'variant_id' => $vid, 'batch_id' => 0, 'location_id' => $x['rack'], 'qty' => $x['qty'], 'unit_cost' => $unit]);
+                    DB::run('UPDATE launch_sizes SET qty_received = qty_received + ? WHERE id = ?', [$x['qty'], $x['s']['id']]);
+                    DB::run('UPDATE item_variants SET cost_price = ? WHERE id = ?', [$unit, $vid]);
                 }
-                DB::run("UPDATE catalogue_launches SET status = 'received', extra_cost = extra_cost + ?, fabric_absorbed = ? WHERE tenant_id = ? AND id = ?", [$extra, $value, $t, $l['id']]);
+                DB::run("UPDATE catalogue_launches SET status = 'received', extra_cost = extra_cost + ?, fabric_absorbed = ? WHERE id = ?", [$extra, $value, $l['id']]);
                 return $docId;
             });
         } catch (StockException $e) {

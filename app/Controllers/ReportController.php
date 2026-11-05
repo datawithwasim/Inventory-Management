@@ -85,7 +85,6 @@ final class ReportController extends PurchaseBase
     /** Low-stock → draft POs grouped by last supplier; items with no supplier history go to one requisition. */
     public function createPos(): void
     {
-        $t = $this->tid();
         $back = 'reports/low-stock';
         if (\Core\Scope::restricted()) {
             flash('warning', 'Purchase orders from the low-stock list are raised by head office.');
@@ -97,24 +96,24 @@ final class ReportController extends PurchaseBase
             flash('info', 'Nothing to order: every low item is already covered by open purchase orders.');
             redirect($back);
         }
-        $wh = (int)DB::val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_active = 1 ORDER BY is_default DESC, id LIMIT 1', [$t]);
+        $wh = (int)DB::val('SELECT id FROM warehouses WHERE is_active = 1 ORDER BY is_default DESC, id LIMIT 1');
         $by = [];
         foreach ($rows as $r) $by[(int)($r['supplier_id'] ?? 0)][] = $r;
         $made = [];
-        DB::transaction(function () use ($by, $t, $wh, &$made) {
+        DB::transaction(function () use ($by, $wh, &$made) {
             foreach ($by as $sid => $list) {
                 if ($sid === 0) {
-                    $id = DB::insert('purchase_requisitions', ['tenant_id' => $t, 'req_no' => Numbering::next($t, 'REQ'), 'note' => 'Low stock — no supplier history', 'created_by' => Auth::user()['id']]);
-                    foreach ($list as $r) DB::insert('purchase_requisition_items', ['tenant_id' => $t, 'requisition_id' => $id, 'variant_id' => $r['variant_id'], 'qty' => $r['suggest'], 'note' => 'Low stock']);
+                    $id = DB::insert('purchase_requisitions', ['req_no' => Numbering::next('REQ'), 'note' => 'Low stock — no supplier history', 'created_by' => Auth::user()['id']]);
+                    foreach ($list as $r) DB::insert('purchase_requisition_items', ['requisition_id' => $id, 'variant_id' => $r['variant_id'], 'qty' => $r['suggest'], 'note' => 'Low stock']);
                     $made[] = "requisition (" . count($list) . ' items)';
                     continue;
                 }
                 [$cur, $ex] = \App\Models\Currencies::forSupplier(Purchase::supplier($sid) ?? []);
-                $poId = DB::insert('purchase_orders', ['tenant_id' => $t, 'po_no' => Numbering::next($t, 'PO'), 'supplier_id' => $sid, 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh,
+                $poId = DB::insert('purchase_orders', ['po_no' => Numbering::next('PO'), 'supplier_id' => $sid, 'currency' => $cur, 'exchange_rate' => $ex, 'warehouse_id' => $wh,
                     'order_date' => date('Y-m-d'), 'status' => 'draft', 'notes' => 'Created from low-stock report', 'created_by' => Auth::user()['id']]);
                 foreach ($list as $r) {
                     $tax = (float)DB::val('SELECT COALESCE(x.rate,0) FROM items i LEFT JOIN taxes x ON x.id = i.tax_id WHERE i.id = ?', [$r['item_id']]);
-                    DB::insert('purchase_order_items', ['tenant_id' => $t, 'po_id' => $poId, 'variant_id' => $r['variant_id'], 'qty_ordered' => $r['suggest'], 'unit_price' => Purchase::priceFor($sid, (int)$r['variant_id'], (float)$r['cost'], (float)$r['suggest'], $cur, $ex), 'tax_rate' => $tax]);
+                    DB::insert('purchase_order_items', ['po_id' => $poId, 'variant_id' => $r['variant_id'], 'qty_ordered' => $r['suggest'], 'unit_price' => Purchase::priceFor($sid, (int)$r['variant_id'], (float)$r['cost'], (float)$r['suggest'], $cur, $ex), 'tax_rate' => $tax]);
                 }
                 Purchase::recalcPo($poId);
                 $made[] = (string)DB::val('SELECT po_no FROM purchase_orders WHERE id = ?', [$poId]);

@@ -152,10 +152,20 @@ function term(string $key, bool $lower = false): string
         $key = $found;
         $plural = true;
     }
-    $tid = (int)Core\Auth::tenantId();
-    $labels = $cache[$tid] ??= Core\Settings::json('labels', []);
+    $labels = $cache['labels'] ??= Core\Settings::json('labels', []);
     $word = $labels[$key][$plural ? 1 : 0] ?? TERMS[$key][$plural ? 1 : 0];
     return $lower ? mb_strtolower($word) : $word;
+}
+
+/** The company's name (Settings → Company profile), else the app name. */
+function company_name(): string
+{
+    try {
+        $n = Core\Settings::get('company.name');
+    } catch (\Throwable) {
+        $n = '';   // before the database is set up
+    }
+    return $n !== '' ? $n : (string)config('name');
 }
 
 function company_logo_url(): ?string

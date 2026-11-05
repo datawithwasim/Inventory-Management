@@ -72,8 +72,28 @@ function receive_all(Client $c, int $docId, array $racks = []): void
     }
     if ($lines) $c->post("/stock/transfers/$docId/receive", ['lines' => $lines], "/stock/transfers/$docId");
 }
-/** The newest transfer document of a company. */
-function last_transfer(int $tenantId): int
+/** The newest transfer document. */
+function last_transfer(): int
 {
-    return (int)Core\DB::val("SELECT MAX(id) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer'", [$tenantId]);
+    return (int)Core\DB::val("SELECT MAX(id) FROM stock_docs WHERE type = 'transfer'");
+}
+
+/**
+ * Empties the test database and sets it up again for one company with its owner (password Password123).
+ * Run the tests against a throw-away database only. Returns the owner's signed-in client and e-mail.
+ */
+function fresh_company(string $base, string $name = 'Test Company', ?string $email = null): array
+{
+    $pdo = Core\DB::pdo();
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach ($pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $t) $pdo->exec("DROP TABLE `$t`");
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+    Core\Migrator::run();
+    Core\Settings::flush();
+    $email ??= 'owner-' . bin2hex(random_bytes(3)) . '@test.local';
+    Core\Seeder::run($name, 'Owner', $email, 'Password123');
+    Core\Settings::flush();
+    $c = new Client($base);
+    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
+    return [$c, $email];
 }

@@ -1,11 +1,7 @@
 <div class="d-flex justify-content-between mb-3">
   <div class="text-muted"><?= count($users) ?> user(s)</div>
   <?php if (can('users.create')): ?>
-    <?php if ($limitReached): ?>
-      <span class="text-warning">User limit reached for your plan</span>
-    <?php else: ?>
       <a class="btn btn-primary" href="<?= url('users/create') ?>"><i class="bi bi-plus-lg"></i> Add user</a>
-    <?php endif; ?>
   <?php endif; ?>
 </div>
 <div class="card"><div class="table-responsive">

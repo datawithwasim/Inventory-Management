@@ -218,16 +218,13 @@ final class PrintDoc
 
     /* ---------------- keeping and listing ---------------- */
 
-    private static function tid(): int { return (int)Auth::tenantId(); }
-
     /** Latest document of this kind, so a layout can be tried with real data. */
     public static function latestId(string $doc): ?int
     {
-        $t = self::tid();
         $id = match ($doc) {
-            'invoice' => DB::val('SELECT MAX(id) FROM sales_invoices WHERE tenant_id = ?', [$t]),
-            'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries WHERE tenant_id = ?', [$t]),
-            'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders WHERE tenant_id = ?', [$t]),
+            'invoice' => DB::val('SELECT MAX(id) FROM sales_invoices'),
+            'delivery_note' => DB::val('SELECT MAX(id) FROM deliveries'),
+            'purchase_order' => DB::val('SELECT MAX(id) FROM purchase_orders'),
             default => null,
         };
         return $id ? (int)$id : null;
@@ -236,7 +233,7 @@ final class PrintDoc
     /** Every layout of a document: Standard first, then the company's own. */
     public static function list(string $doc): array
     {
-        $rows = DB::all('SELECT id, name, is_default, updated_at FROM print_templates WHERE tenant_id = ? AND doc = ? ORDER BY name', [self::tid(), $doc]);
+        $rows = DB::all('SELECT id, name, is_default, updated_at FROM print_templates WHERE doc = ? ORDER BY name', [$doc]);
         $anyDefault = (bool)array_filter($rows, fn($r) => (int)$r['is_default'] === 1);
         $out = [['id' => self::STD, 'name' => 'Standard', 'builtin' => true, 'is_default' => !$anyDefault]];
         foreach ($rows as $r) $out[] = ['id' => (string)$r['id'], 'name' => $r['name'], 'builtin' => false, 'is_default' => (int)$r['is_default'] === 1, 'updated_at' => $r['updated_at']];
@@ -246,7 +243,7 @@ final class PrintDoc
     public static function find(string $doc, ?string $id): ?array
     {
         if ($id === null || $id === '' || $id === self::STD) return ['id' => self::STD, 'name' => 'Standard', 'builtin' => true, 'cfg' => self::standard($doc)];
-        $r = DB::one('SELECT * FROM print_templates WHERE tenant_id = ? AND doc = ? AND id = ?', [self::tid(), $doc, (int)$id]);
+        $r = DB::one('SELECT * FROM print_templates WHERE doc = ? AND id = ?', [$doc, (int)$id]);
         return $r ? ['id' => (string)$r['id'], 'name' => $r['name'], 'builtin' => false, 'cfg' => self::clean($doc, json_decode((string)$r['config'], true))] : null;
     }
 
@@ -255,7 +252,7 @@ final class PrintDoc
     {
         $found = ($id !== null && $id !== '') ? self::find($doc, $id) : null;
         if (!$found) {
-            $d = DB::val('SELECT id FROM print_templates WHERE tenant_id = ? AND doc = ? AND is_default = 1 LIMIT 1', [self::tid(), $doc]);
+            $d = DB::val('SELECT id FROM print_templates WHERE doc = ? AND is_default = 1 LIMIT 1', [$doc]);
             $found = self::find($doc, $d ? (string)$d : self::STD);
         }
         return ['id' => $found['id'], 'name' => $found['name'], 'cfg' => $found['cfg'], 'list' => array_map(fn($x) => ['id' => $x['id'], 'name' => $x['name'], 'is_default' => $x['is_default']], self::list($doc))];

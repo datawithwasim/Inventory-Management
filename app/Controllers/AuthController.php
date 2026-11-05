@@ -67,7 +67,7 @@ final class AuthController extends Controller
     private function validReset(string $token): ?array
     {
         return DB::one(
-            "SELECT * FROM password_resets WHERE token_hash = ? AND email NOT LIKE 'admin:%' AND used_at IS NULL AND expires_at > NOW()",
+            "SELECT * FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()",
             [hash('sha256', $token)]);
     }
 
@@ -101,8 +101,8 @@ final class AuthController extends Controller
             DB::run('UPDATE password_resets SET used_at = NOW() WHERE id = ?', [$row['id']]);
             DB::run('DELETE FROM login_attempts WHERE email = ?', [$row['email']]);
         });
-        $u = DB::one('SELECT id, tenant_id FROM users WHERE email = ?', [$row['email']]);
-        Audit::log('password_reset', 'user', (int)$u['id'], null, (int)$u['tenant_id'], 'user', (int)$u['id']);
+        $u = DB::one('SELECT id FROM users WHERE email = ?', [$row['email']]);
+        Audit::log('password_reset', 'user', (int)$u['id'], null, 'user', (int)$u['id']);
         flash('success', 'Password updated. You can sign in now.');
         redirect('login');
     }

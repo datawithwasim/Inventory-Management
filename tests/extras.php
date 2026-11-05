@@ -13,22 +13,10 @@ use Core\Code128;
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '',
-        'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Labeler');
-[$b, $tB] = $mk('Rival');
-$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE tenant_id = ? AND name = ?', [$GLOBALS['tA'], $n]);
-$main = (int)DB::val('SELECT id FROM warehouses WHERE tenant_id = ? AND is_default = 1', [$tA]);
+[$a] = fresh_company($base, "Labeler $sfx", "labeler-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
+$unit = fn(string $n) => (int)DB::val('SELECT id FROM units WHERE name = ?', [$n]);
+$main = (int)DB::val('SELECT id FROM warehouses WHERE is_default = 1');
 
 echo "Barcode encoder\n";
 $svg = Code128::svg('A');
@@ -42,13 +30,12 @@ check('longer text makes a wider barcode', preg_match('/viewBox="0 0 (\d+)/', $l
 echo "Labels\n";
 $a->post('/items', ['name' => 'Velvet', 'unit_id' => $unit('Meter'), 'track_batch' => 1, 'variants' => [['sku' => 'VEL', 'cost_price' => 400, 'sale_price' => 700]]], '/items/create');
 $a->post('/items', ['name' => 'Side Table', 'unit_id' => $unit('Piece'), 'variants' => [['sku' => 'TBL', 'barcode' => '8901234', 'cost_price' => 2500, 'sale_price' => 4200]]], '/items/create');
-$b->post('/items', ['name' => 'Rival Lamp', 'unit_id' => (int)DB::val('SELECT id FROM units WHERE tenant_id = ? AND name = ?', [$tB, 'Piece']), 'variants' => [['sku' => 'LMP', 'cost_price' => 1, 'sale_price' => 2]]], '/items/create');
-[$vel, $tbl] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tA, $s]), ['VEL', 'TBL']);
-$lamp = (int)DB::val('SELECT id FROM item_variants WHERE tenant_id = ? AND sku = ?', [$tB, 'LMP']);
-DB::insert('locations', ['tenant_id' => $tA, 'warehouse_id' => $main, 'code' => 'R-07']);
-$loc = (int)DB::val("SELECT id FROM locations WHERE tenant_id = ? AND code = 'R-07'", [$tA]);
+[$vel, $tbl] = array_map(fn($s) => (int)DB::val('SELECT id FROM item_variants WHERE sku = ?', [$s]), ['VEL', 'TBL']);
+$lamp = (int)DB::val('SELECT id FROM item_variants WHERE sku = ?', ['LMP']);
+DB::insert('locations', ['warehouse_id' => $main, 'code' => 'R-07']);
+$loc = (int)DB::val("SELECT id FROM locations WHERE code = 'R-07'");
 $a->post('/stock/adjustments', ['warehouse_id' => $main, 'reason' => 'opening', 'lines' => [['variant_id' => $vel, 'qty' => 50, 'batch_id' => 'new', 'lot_no' => 'L1', 'location_id' => $loc]]], '/stock/adjustments/create');
-$roll = (int)DB::val('SELECT id FROM batches WHERE tenant_id = ?', [$tA]);
+$roll = (int)DB::val('SELECT id FROM batches');
 $batchNo = (string)DB::val('SELECT batch_no FROM batches WHERE id = ?', [$roll]);
 
 $api = fn(string $path) => json_decode($a->get('/api/v1' . $path)['body'], true);
@@ -56,7 +43,6 @@ $d = $api('/labels')['data'];
 check('label picker (items) lists items with SKU, price and stock', in_array('Side Table', array_column($d['rows'], 'item'), true) && in_array('8901234', array_column($d['rows'], 'code'), true));
 check('item without barcode falls back to its SKU', in_array('VEL', array_column($d['rows'], 'code'), true));
 check('roll picker lists the roll with its batch number, balance and rack', ($rr = array_values(array_filter($api('/labels?type=rolls')['data']['rows'], fn($x) => $x['code'] === $batchNo))[0] ?? null) && (float)$rr['bal'] === 50.0 && $rr['rack'] === 'R-07');
-check('other company\'s items are not offered', !in_array('Rival Lamp', array_column($d['rows'], 'item'), true) && !in_array('Rival Lamp', array_column($api('/labels?q=Rival')['data']['rows'], 'item'), true));
 check('ready-made templates are offered and one is the default', count(array_filter($d['templates'], fn($t) => $t['builtin'])) >= 6 && in_array($d['default'], array_column($d['templates'], 'id'), true));
 $r = $a->get("/labels/print?type=items&n[$tbl]=3&n[$vel]=1");
 check('item labels (default template): 4 labels (3 + 1), barcode SVGs, price shown', $r['status'] === 200 && substr_count($r['body'], 'class="lbl') === 4 && substr_count($r['body'], '<svg') === 4 && str_contains($r['body'], '4,200'));
@@ -67,7 +53,6 @@ $r = $a->get("/labels/print?type=items&template=b:item-sheet&n[$tbl]=1");
 check('an A4 sheet template makes an A4 page; a roll template a label-size page', str_contains($r['body'], 'size: 210mm 297mm') && str_contains($a->get("/labels/print?n[$tbl]=1")['body'], 'size: 50mm 25mm'));
 check('copies are capped (999 → 200)', substr_count($a->get("/labels/print?n[$tbl]=999")['body'], 'class="lbl') === 200);
 check('negative / junk copies print nothing', str_contains($a->get("/labels/print?n[$tbl]=-5&n[abc]=2")['body'], 'No labels selected'));
-check('another company\'s item id prints nothing', str_contains($a->get("/labels/print?n[$lamp]=2")['body'], 'No labels selected') && !str_contains($a->get("/labels/print?n[$lamp]=2")['body'], 'Rival'));
 check('an unknown template falls back to the default one', $a->get("/labels/print?n[$tbl]=1&template=nope")['status'] === 200 && str_contains($a->get("/labels/print?n[$tbl]=1&template=nope")['body'], '50mm'));
 $r = $a->get("/labels/print?type=items&template=b:item-sheet&n[$tbl]=2&start=5");
 check('a part-used sheet starts at the chosen label (5th = second column, second row)', substr_count($r['body'], 'class="lbl') === 2 && str_contains($r['body'], 'left:72.5mm;top:49.5mm'));
@@ -84,13 +69,13 @@ check('a QR code has the right size for its text and refuses too much text', cou
 check('every symbology gives an SVG that stretches to its box', array_reduce(['code128', 'ean13', 'code39', 'qr'], fn($ok, $sym) => $ok && str_starts_with(Barcode::svg($sym, $sym === 'ean13' ? '890123456789' : 'AB-12'), '<svg'), true));
 
 echo "Backup\n";
-$sysPage = $admin->get('/admin/system');
-check('Super Admin system page has the backup button', str_contains($sysPage['body'], 'admin/system/backup') && str_contains($sysPage['body'], 'Download backup'));
-check('backup cannot be triggered with GET', $admin->get('/admin/system/backup')['status'] === 404 || $admin->get('/admin/system/backup')['status'] === 405);
-check('a company user cannot download a backup', in_array($a->post('/admin/system/backup', [], '/dashboard')['status'], [302, 403, 404], true));
-$noCsrf = $admin->req('POST', '/admin/system/backup', []);
+$sysPage = $a->get('/settings/system');
+check('the owner\'s Updates & backup page has the backup button', str_contains($sysPage['body'], 'settings/system/backup') && str_contains($sysPage['body'], 'Download backup'));
+check('backup cannot be triggered with GET', in_array($a->get('/settings/system/backup')['status'], [404, 405], true));
+check('someone signed out cannot download a backup', !str_contains((new Client($base))->req('POST', '/settings/system/backup', [])['body'], 'CREATE TABLE'));
+$noCsrf = $a->req('POST', '/settings/system/backup', []);
 check('backup without CSRF token is refused', !str_contains($noCsrf['body'], 'CREATE TABLE'));
-$dump = $admin->post('/admin/system/backup', [], '/admin/system');
+$dump = $a->post('/settings/system/backup', [], '/settings/system');
 check('backup downloads as an .sql attachment', $dump['status'] === 200 && str_contains($dump['headers'], 'attachment') && str_contains($dump['headers'], '.sql'));
 check('dump contains structure and data for this test company', str_contains($dump['body'], 'CREATE TABLE `items`') && str_contains($dump['body'], 'Side Table') && str_contains($dump['body'], 'INSERT INTO `stock_ledger`'));
 $scratch = 'inv_restore_' . $sfx;
@@ -110,7 +95,7 @@ foreach ($tables as $t) {
     if ($orig !== $copy) { $same = false; $diff[] = "$t {$orig}≠{$copy}"; }
 }
 check('every table has the same row count after restore' . ($diff ? ' — ' . implode(', ', $diff) : '') . ' (' . count($tables) . ' tables)', $same && count($tables) > 20);
-$o = trim((string)shell_exec('mysql -uroot -N ' . $scratch . ' -e ' . escapeshellarg("SELECT name FROM items WHERE tenant_id = $tA ORDER BY id") . ' 2>&1'));
+$o = trim((string)shell_exec('mysql -uroot -N ' . $scratch . ' -e ' . escapeshellarg("SELECT name FROM items ORDER BY id") . ' 2>&1'));
 check('restored data is intact (item names)', $o === "Velvet\nSide Table");
 $root("DROP DATABASE `$scratch`");
 @unlink($tmp);

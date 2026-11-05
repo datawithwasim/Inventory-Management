@@ -16,17 +16,16 @@ final class BillController extends PurchaseBase
     {
         return DB::one(
             'SELECT b.*, s.name AS supplier, g.grn_no FROM purchase_bills b JOIN suppliers s ON s.id = b.supplier_id
-             LEFT JOIN grns g ON g.id = b.grn_id WHERE b.tenant_id = ? AND b.id = ?' . \Core\Scope::sql('g.warehouse_id'), [$this->tid(), (int)$id]) ?? $this->notFound();
+             LEFT JOIN grns g ON g.id = b.grn_id WHERE b.id = ?' . \Core\Scope::sql('g.warehouse_id'), [(int)$id]) ?? $this->notFound();
     }
 
     public function index(): void
     {
-        $t = $this->tid();
         $status = (string)($_GET['status'] ?? '');
         $supplier = (int)($_GET['supplier'] ?? 0);
         $q = trim((string)($_GET['q'] ?? ''));
-        $where = 'b.tenant_id = ?' . \Core\Scope::sql('(SELECT gg.warehouse_id FROM grns gg WHERE gg.id = b.grn_id)');
-        $params = [$t];
+        $where = '1=1' . \Core\Scope::sql('(SELECT gg.warehouse_id FROM grns gg WHERE gg.id = b.grn_id)');
+        $params = [];
         $due = '(b.total - b.returned_amount - b.paid_amount)';
         $where .= match ($status) {
             'unpaid' => " AND b.paid_amount <= 0.004 AND $due > 0.004",
@@ -46,29 +45,28 @@ final class BillController extends PurchaseBase
 
     public function createFromGrn(string $id): void
     {
-        $t = $this->tid();
-        $g = DB::one('SELECT g.*, s.payment_terms_days FROM grns g JOIN suppliers s ON s.id = g.supplier_id WHERE g.tenant_id = ? AND g.id = ?', [$t, (int)$id]) ?? $this->notFound();
-        if ($existing = DB::val('SELECT id FROM purchase_bills WHERE tenant_id = ? AND grn_id = ?', [$t, $g['id']])) {
+        $g = DB::one('SELECT g.*, s.payment_terms_days FROM grns g JOIN suppliers s ON s.id = g.supplier_id WHERE g.id = ?', [(int)$id]) ?? $this->notFound();
+        if ($existing = DB::val('SELECT id FROM purchase_bills WHERE grn_id = ?', [$g['id']])) {
             flash('info', 'This receipt already has a bill.');
             redirect("purchase/bills/$existing");
         }
         $sub = $tax = 0.0;
-        foreach (DB::all('SELECT qty, unit_price, tax_rate FROM grn_items WHERE tenant_id = ? AND grn_id = ?', [$t, $g['id']]) as $l) {
+        foreach (DB::all('SELECT qty, unit_price, tax_rate FROM grn_items WHERE grn_id = ?', [$g['id']]) as $l) {
             [$n, $x] = Purchase::line((float)$l['qty'], (float)$l['unit_price'], (float)$l['tax_rate']);
             $sub += $n;
             $tax += $x;
         }
         $billDate = date('Y-m-d');
-        $billId = DB::transaction(function () use ($t, $g, $sub, $tax, $billDate) {
-            $returned = (float)DB::val('SELECT COALESCE(SUM(total),0) FROM purchase_returns WHERE tenant_id = ? AND grn_id = ?', [$t, $g['id']]);
+        $billId = DB::transaction(function () use ($g, $sub, $tax, $billDate) {
+            $returned = (float)DB::val('SELECT COALESCE(SUM(total),0) FROM purchase_returns WHERE grn_id = ?', [$g['id']]);
             $id = DB::insert('purchase_bills', [
-                'tenant_id' => $t, 'bill_no' => Numbering::next($t, 'PB'), 'supplier_id' => $g['supplier_id'], 'grn_id' => $g['id'],
+                'bill_no' => Numbering::next('PB'), 'supplier_id' => $g['supplier_id'], 'grn_id' => $g['id'],
                 'supplier_bill_no' => $g['supplier_ref'], 'bill_date' => $billDate,
                 'due_date' => $g['payment_terms_days'] ? date('Y-m-d', strtotime("$billDate +{$g['payment_terms_days']} days")) : null,
                 'subtotal' => round($sub, 2), 'tax_total' => round($tax, 2), 'total' => round($sub + $tax, 2),
                 'returned_amount' => $returned, 'created_by' => Auth::user()['id'],
             ]);
-            DB::run('UPDATE purchase_returns SET bill_id = ? WHERE tenant_id = ? AND grn_id = ?', [$id, $t, $g['id']]);
+            DB::run('UPDATE purchase_returns SET bill_id = ? WHERE grn_id = ?', [$id, $g['id']]);
             return $id;
         });
         Audit::log('bill_create', 'purchase_bill', $billId);
@@ -79,15 +77,14 @@ final class BillController extends PurchaseBase
     public function show(string $id): void
     {
         $b = $this->load($id);
-        $t = $this->tid();
         $this->view('app/purchase/bill_show', [
             'title' => $b['bill_no'], 'b' => $b, 'due' => Purchase::outstanding($b), 'status' => Purchase::payStatus($b),
             'items' => $b['grn_id'] ? DB::all(
                 'SELECT l.*, v.sku, v.name AS vname, i.name AS item_name, u.short_name AS unit' . Purchase::theirCols('SELECT supplier_id FROM grns WHERE id = l.grn_id') . ' FROM grn_items l
                  JOIN item_variants v ON v.id = l.variant_id JOIN items i ON i.id = v.item_id JOIN units u ON u.id = i.unit_id
-                 WHERE l.tenant_id = ? AND l.grn_id = ? ORDER BY l.id', [$t, $b['grn_id']]) : [],
-            'payments' => DB::all('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.tenant_id = ? AND p.bill_id = ? ORDER BY p.paid_on, p.id', [$t, $b['id']]),
-            'returns' => DB::all('SELECT id, return_no, return_date, total FROM purchase_returns WHERE tenant_id = ? AND bill_id = ? ORDER BY id', [$t, $b['id']]),
+                 WHERE l.grn_id = ? ORDER BY l.id', [$b['grn_id']]) : [],
+            'payments' => DB::all('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.bill_id = ? ORDER BY p.paid_on, p.id', [$b['id']]),
+            'returns' => DB::all('SELECT id, return_no, return_date, total FROM purchase_returns WHERE bill_id = ? ORDER BY id', [$b['id']]),
         ]);
     }
 
@@ -109,9 +106,9 @@ final class BillController extends PurchaseBase
         $other = $this->money($d['other_charges'] ?? '', 'Other charges', $back);
         $total = round((float)$b['subtotal'] + (float)$b['tax_total'] + $other, 2);
         if ($total + 0.004 < (float)$b['paid_amount']) $this->bounce('The total cannot be less than what is already paid.', $back);
-        DB::run('UPDATE purchase_bills SET supplier_bill_no = ?, bill_date = ?, due_date = ?, other_charges = ?, total = ?, notes = ? WHERE tenant_id = ? AND id = ?',
+        DB::run('UPDATE purchase_bills SET supplier_bill_no = ?, bill_date = ?, due_date = ?, other_charges = ?, total = ?, notes = ? WHERE id = ?',
             [$this->text($d['supplier_bill_no'] ?? '', 60, 'Supplier bill no.', $back), $billDate, $dueDate, $other, $total,
-             $this->text($d['notes'] ?? '', 255, 'Notes', $back), $this->tid(), $b['id']]);
+             $this->text($d['notes'] ?? '', 255, 'Notes', $back), $b['id']]);
         \App\Models\CustomFields::save('bill', (int)$b['id'], $cf);
         Audit::log('bill_update', 'purchase_bill', (int)$b['id']);
         flash('success', 'Bill updated.');
@@ -120,8 +117,8 @@ final class BillController extends PurchaseBase
 
     private function refreshPaid(int $billId): void
     {
-        DB::run('UPDATE purchase_bills SET paid_amount = (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE bill_id = ?) WHERE tenant_id = ? AND id = ?',
-            [$billId, $this->tid(), $billId]);
+        DB::run('UPDATE purchase_bills SET paid_amount = (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE bill_id = ?) WHERE id = ?',
+            [$billId, $billId]);
     }
 
     public function pay(string $id): void
@@ -137,7 +134,7 @@ final class BillController extends PurchaseBase
         if (!isset(Purchase::METHODS[$method])) $this->bounce('Choose a payment method.', $back);
         $paidOn = $this->date($d['paid_on'] ?? '', 'Payment date', $back);
         DB::transaction(function () use ($b, $amount, $method, $paidOn, $d, $back) {
-            DB::insert('supplier_payments', ['tenant_id' => $this->tid(), 'bill_id' => $b['id'], 'amount' => $amount, 'paid_on' => $paidOn, 'method' => $method,
+            DB::insert('supplier_payments', ['bill_id' => $b['id'], 'amount' => $amount, 'paid_on' => $paidOn, 'method' => $method,
                 'reference' => $this->text($d['reference'] ?? '', 80, 'Reference', $back), 'note' => $this->text($d['note'] ?? '', 150, 'Note', $back), 'created_by' => Auth::user()['id']]);
             $this->refreshPaid((int)$b['id']);
         });
@@ -149,9 +146,9 @@ final class BillController extends PurchaseBase
     public function deletePayment(string $id, string $payId): void
     {
         $b = $this->load($id);
-        $p = DB::one('SELECT * FROM supplier_payments WHERE tenant_id = ? AND id = ? AND bill_id = ?', [$this->tid(), (int)$payId, $b['id']]) ?? $this->notFound();
+        $p = DB::one('SELECT * FROM supplier_payments WHERE id = ? AND bill_id = ?', [(int)$payId, $b['id']]) ?? $this->notFound();
         DB::transaction(function () use ($p, $b) {
-            DB::run('DELETE FROM supplier_payments WHERE tenant_id = ? AND id = ?', [$this->tid(), $p['id']]);
+            DB::run('DELETE FROM supplier_payments WHERE id = ?', [$p['id']]);
             $this->refreshPaid((int)$b['id']);
         });
         Audit::log('supplier_payment_delete', 'purchase_bill', (int)$b['id'], $p['amount']);

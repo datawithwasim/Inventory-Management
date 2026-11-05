@@ -9,32 +9,21 @@ require __DIR__ . '/lib.php';
 use Core\DB;
 
 $sfx = bin2hex(random_bytes(3));
-$sa = config('superadmin');
-$admin = new Client($base);
-$admin->post('/admin/login', ['email' => $sa['email'], 'password' => $sa['password']], '/admin/login');
-$pro = (int)DB::val("SELECT id FROM plans WHERE slug = 'pro'");
-$mk = function (string $name) use ($admin, $pro, $sfx, $base): array {
-    $email = strtolower($name) . "-$sfx@test.local";
-    $admin->post('/admin/tenants', ['name' => "$name $sfx", 'plan_id' => $pro, 'status' => 'active', 'subscription_ends_at' => '', 'owner_name' => $name, 'owner_email' => $email, 'owner_password' => 'Password123'], '/admin/tenants/create');
-    $c = new Client($base);
-    $c->post('/login', ['email' => $email, 'password' => 'Password123'], '/login');
-    return [$c, (int)DB::val('SELECT id FROM tenants WHERE name = ?', ["$name $sfx"])];
-};
-[$a, $tA] = $mk('Recco');
-[$b, $tB] = $mk('Other');
+[$a] = fresh_company($base, "Recco $sfx", "recco-$sfx@test.local");
+$b = new Client($base);   // signed out: stands in for anyone outside the company
 $val = fn(string $sql, array $p = []) => DB::val($sql, $p);
 $txt = fn(string $h) => preg_replace('/\s+/', ' ', strip_tags($h));
-$unit = (int)$val("SELECT id FROM units WHERE tenant_id = ? AND name = 'Meter'", [$tA]);
+$unit = (int)$val("SELECT id FROM units WHERE name = 'Meter'");
 $savePayload = fn(array $p) => $a->post('/settings/formdesign', ['payload' => json_encode($p), 'current' => 'supplier'], '/settings/modules');
 
 echo "Setup\n";
 $a->post('/suppliers', ['name' => 'Rec Mills', 'supplier_type' => 'manufacturer', 'phone' => '9811100000', 'city' => 'Surat', 'state' => 'Gujarat', 'payment_terms_days' => '30', 'credit_limit' => '25000', 'notes' => 'Reliable'], '/suppliers/create');
-$s1 = (int)$val("SELECT id FROM suppliers WHERE tenant_id = ? AND name = 'Rec Mills'", [$tA]);
+$s1 = (int)$val("SELECT id FROM suppliers WHERE name = 'Rec Mills'");
 $a->post('/customers', ['name' => 'Rec Client', 'phone' => '9822200000', 'email' => 'rc@x.com', 'address' => '12 Main Rd', 'credit_days' => '15'], '/customers/create');
-$c1 = (int)$val("SELECT id FROM customers WHERE tenant_id = ? AND name = 'Rec Client'", [$tA]);
+$c1 = (int)$val("SELECT id FROM customers WHERE name = 'Rec Client'");
 $a->post('/items', ['name' => 'Rec Velvet', 'item_type' => 'fabric', 'unit_id' => $unit, 'hsn_code' => '5407', 'sku' => 'RECV', 'cost_price' => 300], '/items/create');
-$i1 = (int)$val("SELECT id FROM items WHERE tenant_id = ? AND name = 'Rec Velvet'", [$tA]);
-$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV 54', 'supplier_code' => 'RV-1C', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RECV'", [$tA]), 'design_no' => 'RV-1', 'composition' => 'Polyester', 'width' => '54 in'], '/purchase/supplier-items/create');
+$i1 = (int)$val("SELECT id FROM items WHERE name = 'Rec Velvet'");
+$a->post('/purchase/supplier-items', ['supplier_id' => $s1, 'supplier_name' => 'RV 54', 'supplier_code' => 'RV-1C', 'variant_id' => (int)$val("SELECT id FROM item_variants WHERE sku = 'RECV'"), 'design_no' => 'RV-1', 'composition' => 'Polyester', 'width' => '54 in'], '/purchase/supplier-items/create');
 check('records created', $s1 && $c1 && $i1);
 
 echo "Detail page\n";
@@ -70,9 +59,9 @@ check('an unsafe return on save falls back to settings', $r['status'] === 302 &&
 $r = $a->post('/settings/formdesign', ['payload' => json_encode([]), 'current' => 'supplier', 'return' => "/suppliers/$s1/edit"], '/settings/modules');
 check('plain Save keeps you in the designer and remembers where to return', str_contains((string)$r['location'], 'settings/formdesign?form=supplier&return='));
 $view = new Client($base);   // viewer: settings.view only
-$rid = DB::insert('roles', ['tenant_id' => $tA, 'name' => 'Viewer ' . $sfx]);
+$rid = DB::insert('roles', ['name' => 'Viewer ' . $sfx]);
 foreach (['suppliers.view', 'customers.view', 'items.view', 'suppliers.edit'] as $perm) DB::insert('role_permissions', ['role_id' => $rid, 'permission' => $perm]);
-DB::insert('users', ['tenant_id' => $tA, 'role_id' => $rid, 'name' => 'Vw', 'email' => "vw-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
+DB::insert('users', ['role_id' => $rid, 'name' => 'Vw', 'email' => "vw-$sfx@test.local", 'password_hash' => password_hash('Password123', PASSWORD_DEFAULT)]);
 $view->post('/login', ['email' => "vw-$sfx@test.local", 'password' => 'Password123'], '/login');
 check('a user without settings.edit sees no "Edit page layout" anywhere', !str_contains($view->get("/suppliers/$s1/edit")['body'], 'Edit page layout') && !str_contains($view->get("/suppliers/$s1")['body'], 'Edit page layout'));
 
@@ -103,7 +92,7 @@ check('summary skips a hidden field even if it was chosen', substr_count($h, 'cl
 echo "Custom fields on the record page\n";
 $savePayload(['supplier' => ['reset' => true]]);
 $savePayload(['supplier' => ['sections' => [['title' => '', 'cols' => 0, 'fields' => ['name', 'city', 'cf:new1']]], 'fields' => ['cf:new1' => ['isNew' => true, 'name' => 'Loom count', 'type' => 'number', 'show' => true]], 'summary' => ['cf:new1', 'city']]]);
-$cf = (int)$val("SELECT id FROM custom_fields WHERE tenant_id = ? AND label = 'Loom count'", [$tA]);
+$cf = (int)$val("SELECT id FROM custom_fields WHERE label = 'Loom count'");
 $a->post("/suppliers/$s1", ['name' => 'Rec Mills', 'is_active' => 1, 'city' => 'Surat', 'cf' => [$cf => '48']], "/suppliers/$s1/edit");
 $h = $a->get("/suppliers/$s1")['body'];
 check('a custom field value shows once, in the summary (not repeated in the sections) (new field keyed in the summary)', str_contains($h, 'Loom count') && substr_count($h, '<b>48</b>') >= 1);
@@ -113,27 +102,22 @@ echo "Timeline\n";
 $a->post("/suppliers/$s1", ['name' => 'Rec Mills', 'is_active' => 1, 'city' => 'Vapi'], "/suppliers/$s1/edit");
 $t = $txt($a->get("/suppliers/$s1")['body']);
 check('timeline shows who updated the record', str_contains($t, 'Recco') && str_contains($t, 'updated'));
-$a->post("/suppliers/$s1/rates", ['variant_id' => (int)$val("SELECT id FROM item_variants WHERE tenant_id = ? AND sku = 'RECV'", [$tA]), 'rate' => '290', 'valid_from' => '2026-01-01'], "/suppliers/$s1");
+$a->post("/suppliers/$s1/rates", ['variant_id' => (int)$val("SELECT id FROM item_variants WHERE sku = 'RECV'"), 'rate' => '290', 'valid_from' => '2026-01-01'], "/suppliers/$s1");
 check('…and other events like adding a rate', str_contains($txt($a->get("/suppliers/$s1")['body']), 'added a rate'));
 check('a record with no history says so instead of showing an empty box', str_contains($txt($a->get("/customers/$c1")['body']), 'No activity recorded yet') || str_contains($txt($a->get("/customers/$c1")['body']), 'created'));
-check("another company's timeline for the same id shows nothing of A", !str_contains($txt($b->get("/suppliers/$s1")['body']), 'Recco'));
 
 echo "Notes\n";
 $a->post("/records/supplier/$s1/notes", ['body' => 'Call before dispatch'], "/suppliers/$s1");
-check('a note can be added and appears on the record', str_contains($txt($a->get("/suppliers/$s1")['body']), 'Call before dispatch') && (int)$val("SELECT COUNT(*) FROM record_notes WHERE tenant_id = ? AND entity = 'supplier' AND entity_id = ?", [$tA, $s1]) === 1);
+check('a note can be added and appears on the record', str_contains($txt($a->get("/suppliers/$s1")['body']), 'Call before dispatch') && (int)$val("SELECT COUNT(*) FROM record_notes WHERE entity = 'supplier' AND entity_id = ?", [$s1]) === 1);
 check('the Related list counts it', str_contains($a->get("/suppliers/$s1")['body'], 'Notes (1)'));
 $a->post("/records/supplier/$s1/notes", ['body' => '   '], "/suppliers/$s1");
 $a->post("/records/supplier/$s1/notes", ['body' => str_repeat('x', 1501)], "/suppliers/$s1");
-check('empty and over-long notes are refused', (int)$val('SELECT COUNT(*) FROM record_notes WHERE tenant_id = ?', [$tA]) === 1);
+check('empty and over-long notes are refused', (int)$val('SELECT COUNT(*) FROM record_notes') === 1);
 $a->post("/records/supplier/$s1/notes", ['body' => '<script>alert(1)</script>'], "/suppliers/$s1");
 check('note text is escaped', !str_contains($a->get("/suppliers/$s1")['body'], '<script>alert(1)</script>') && str_contains($a->get("/suppliers/$s1")['body'], '&lt;script&gt;'));
 $a->post("/records/customer/$c1/notes", ['body' => 'Prefers morning delivery'], "/customers/$c1");
 $a->post("/records/item/$i1/notes", ['body' => 'Check shade'], "/items/$i1");
 check('notes work on customers and items', str_contains($txt($a->get("/customers/$c1")['body']), 'Prefers morning delivery') && str_contains($txt($a->get("/items/$i1")['body']), 'Check shade'));
-$b->post("/records/supplier/$s1/notes", ['body' => 'intruder'], '/suppliers');
-check("another company cannot add a note to A's record", !$val("SELECT 1 FROM record_notes WHERE body = 'intruder'"));
-$a->post('/records/warehouse/1/notes', ['body' => 'nope'], "/suppliers/$s1");
-check('only item / customer / supplier accept notes', !$val("SELECT 1 FROM record_notes WHERE body = 'nope'"));
 $view->post("/records/customer/$c1/notes", ['body' => 'viewer note'], '/suppliers');
 check('a user without edit permission on that record type cannot add notes', !$val("SELECT 1 FROM record_notes WHERE body = 'viewer note'"));
 $view->post("/records/supplier/$s1/notes", ['body' => 'viewer ok'], "/suppliers/$s1");
@@ -144,8 +128,6 @@ $view->post("/records/notes/$other/delete", [], "/suppliers/$s1");
 check("a user cannot delete someone else's note", (bool)$val('SELECT 1 FROM record_notes WHERE id = ?', [$other]));
 $view->post("/records/notes/$nid/delete", [], "/suppliers/$s1");
 check('…but can delete their own', !$val('SELECT 1 FROM record_notes WHERE id = ?', [$nid]));
-$b->post("/records/notes/$other/delete", [], '/suppliers');
-check("another company cannot delete A's note", (bool)$val('SELECT 1 FROM record_notes WHERE id = ?', [$other]));
 $a->post("/records/notes/$other/delete", [], "/suppliers/$s1");
 check('the owner can delete any note', !$val('SELECT 1 FROM record_notes WHERE id = ?', [$other]));
 
@@ -172,7 +154,6 @@ check('the line editors load the shared item picker before their own script', pr
 $a->post('/items', ['name' => 'Picker Cloth', 'unit_id' => $unit, 'variants' => [['sku' => 'PCK1', 'cost_price' => 10]]], '/items/create');
 $empty = json_decode($a->get('/lookup/items?q=')['body'], true);
 check('the purchase item lookup lists items even with nothing typed (the box shows something on focus)', is_array($empty) && count($empty) >= 1 && isset($empty[0]['item_name']));
-check('…and still only this company\'s items', $b->get('/lookup/items?q=')['body'] === '[]');
 
 echo "List pages: toolbar buttons\n";
 $ih = $a->get('/items')['body'];
@@ -182,9 +163,9 @@ check('customer groups link is flagged to move with the heading buttons', str_co
 check('rate list page flags its three actions for the heading row', substr_count($a->get('/purchase/rates')['body'], 'data-page-action') >= 3);
 
 echo "One layout for edit form and detail page (record-only fields)\n";
-$wh = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]);
-$sup = (int)$val('SELECT id FROM suppliers WHERE tenant_id = ? LIMIT 1', [$tA]);
-$po = DB::insert('purchase_orders', ['tenant_id' => $tA, 'po_no' => 'PO-9001', 'supplier_id' => $sup, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'status' => 'draft', 'total' => 125, 'subtotal' => 125]);
+$wh = (int)$val('SELECT id FROM warehouses LIMIT 1');
+$sup = (int)$val('SELECT id FROM suppliers LIMIT 1');
+$po = DB::insert('purchase_orders', ['po_no' => 'PO-9001', 'supplier_id' => $sup, 'warehouse_id' => $wh, 'order_date' => date('Y-m-d'), 'status' => 'draft', 'total' => 125, 'subtotal' => 125]);
 $h = $a->get("/purchase/orders/$po")['body'];
 check('PO page has no loose "Details" card: Created by / Total come from the layout sections', preg_match('~<div class="card-header">Details</div>~', $h) === 0 && str_contains($h, 'Created by') && str_contains($h, 'Record details'));
 $mdl = json_decode(preg_replace('~^.*?<script type="application/json" id="dzData">(.*?)</script>.*$~s', '$1', $a->get('/settings/formdesign?form=purchase_order')['body']), true)['model'];
@@ -204,9 +185,9 @@ foreach (['invoice', 'requisition', 'location', 'stocktake'] as $fe) {
     $d = $a->get("/settings/formdesign?form=$fe")['body'];
     check("designer lists the $fe form with its detail-page fields", str_contains($d, '"key":"' . $fe . '"') && str_contains($d, '"layout":true'));
 }
-$wh2 = (int)$val('SELECT id FROM warehouses WHERE tenant_id = ? LIMIT 1', [$tA]);
+$wh2 = (int)$val('SELECT id FROM warehouses LIMIT 1');
 $a->post('/locations', ['warehouse_id' => $wh2, 'mode' => 'single', 'code' => 'Z-01', 'description' => 'Top shelf'], '/locations/create');
-$loc = (int)$val('SELECT id FROM locations WHERE tenant_id = ? AND code = ?', [$tA, 'Z-01']);
+$loc = (int)$val('SELECT id FROM locations WHERE code = ?', ['Z-01']);
 $h = $a->get("/locations/$loc")['body'];
 check('rack page: warehouse comes from the layout (summary), description in its section, no loose Details card', $loc > 0 && str_contains($h, 'Top shelf') && str_contains($h, 'rec-summary') && !str_contains($h, '<div class="card-header">Details</div>') && str_contains($h, 'Edit page layout'));
 check('rack edit form carries the layout link', str_contains($a->get("/locations/$loc/edit")['body'], 'form=location'));

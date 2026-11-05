@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace Core;
 
-/** Per-company settings (tenant_settings key/value) with defaults and a per-request cache. */
+/** Company settings (key/value) with defaults and a per-request cache. */
 final class Settings
 {
-    /** @var array<int, array<string,string>> */
-    private static array $cache = [];
+    /** @var array<string,string>|null */
+    private static ?array $cache = null;
 
     public const DEFAULTS = [
         // company profile
@@ -19,66 +19,62 @@ final class Settings
         'po_approval' => '0', 'negative_stock' => '0', 'shade_rule' => 'warn', 'max_discount' => '0', 'require_rack' => '0',
     ];
 
-    private static function tid(?int $tenantId): int
+    private static function load(): array
     {
-        return $tenantId ?? (int)Auth::tenantId();
-    }
-
-    private static function load(int $tenantId): array
-    {
-        if (!isset(self::$cache[$tenantId])) {
-            $rows = $tenantId ? DB::all('SELECT skey, svalue FROM tenant_settings WHERE tenant_id = ?', [$tenantId]) : [];
-            self::$cache[$tenantId] = array_column($rows, 'svalue', 'skey');
+        if (self::$cache === null) {
+            try {
+                self::$cache = array_column(DB::all('SELECT skey, svalue FROM settings'), 'svalue', 'skey');
+            } catch (\PDOException) {
+                self::$cache = [];   // an older database waiting for its update (Settings → Updates & backup): run on the defaults until then
+            }
         }
-        return self::$cache[$tenantId];
+        return self::$cache;
     }
 
-    public static function get(string $key, ?string $default = null, ?int $tenantId = null): string
+    public static function get(string $key, ?string $default = null): string
     {
-        $all = self::load(self::tid($tenantId));
+        $all = self::load();
         if (array_key_exists($key, $all)) return (string)$all[$key];
         return $default ?? (string)(self::DEFAULTS[$key] ?? '');
     }
 
-    public static function set(string $key, string $value, ?int $tenantId = null): void
+    public static function set(string $key, string $value): void
     {
-        $t = self::tid($tenantId);
-        DB::run('INSERT INTO tenant_settings (tenant_id, skey, svalue) VALUES (?,?,?) ON DUPLICATE KEY UPDATE svalue = VALUES(svalue)', [$t, $key, $value]);
-        self::$cache[$t][$key] = $value;
+        DB::run('INSERT INTO settings (skey, svalue) VALUES (?,?) ON DUPLICATE KEY UPDATE svalue = VALUES(svalue)', [$key, $value]);
+        if (self::$cache !== null) self::$cache[$key] = $value;
     }
 
-    public static function delete(string $key, ?int $tenantId = null): void
+    public static function delete(string $key): void
     {
-        $t = self::tid($tenantId);
-        DB::run('DELETE FROM tenant_settings WHERE tenant_id = ? AND skey = ?', [$t, $key]);
-        unset(self::$cache[$t][$key]);
+        DB::run('DELETE FROM settings WHERE skey = ?', [$key]);
+        unset(self::$cache[$key]);
     }
 
-    public static function bool(string $key, ?int $tenantId = null): bool
+    public static function bool(string $key): bool
     {
-        return self::get($key, null, $tenantId) === '1';
+        return self::get($key) === '1';
     }
 
-    public static function float(string $key, ?int $tenantId = null): float
+    public static function float(string $key): float
     {
-        return (float)self::get($key, null, $tenantId);
+        return (float)self::get($key);
     }
 
     /** JSON settings (print templates, label sets). Missing keys fall back to $defaults. */
-    public static function json(string $key, array $defaults = [], ?int $tenantId = null): array
+    public static function json(string $key, array $defaults = []): array
     {
-        $raw = self::get($key, '', $tenantId);
+        $raw = self::get($key, '');
         $saved = $raw !== '' ? json_decode($raw, true) : null;
         return is_array($saved) ? array_replace($defaults, $saved) : $defaults;
     }
 
-    public static function setJson(string $key, array $value, ?int $tenantId = null): void
+    public static function setJson(string $key, array $value): void
     {
-        self::set($key, (string)json_encode($value, JSON_UNESCAPED_UNICODE), $tenantId);
+        self::set($key, (string)json_encode($value, JSON_UNESCAPED_UNICODE));
     }
 
     public static function flush(): void
     {
-        self::$cache = [];
+        self::$cache = null;
     }
 }

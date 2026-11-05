@@ -11,14 +11,9 @@ use Core\DB;
 
 final class CustomFieldController extends Controller
 {
-    private function tid(): int
-    {
-        return (int)Auth::tenantId();
-    }
-
     private function load(string $id): array
     {
-        return DB::one('SELECT * FROM custom_fields WHERE tenant_id = ? AND id = ?', [$this->tid(), (int)$id]) ?? $this->notFound();
+        return DB::one('SELECT * FROM custom_fields WHERE id = ?', [(int)$id]) ?? $this->notFound();
     }
 
     /** Custom fields are now managed in the Form designer; the old list lives there. */
@@ -46,7 +41,7 @@ final class CustomFieldController extends Controller
         if (!isset(CustomFields::ENTITIES[$entity])) $bounce('Choose where the field belongs.');
         $type = $row['type'] ?? (string)($d['type'] ?? '');
         if (!isset(CustomFields::TYPES[$type])) $bounce('Choose a field type.');
-        if (DB::val('SELECT 1 FROM custom_fields WHERE tenant_id = ? AND entity = ? AND label = ? AND id <> ?', [$this->tid(), $entity, $label, $row['id'] ?? 0])) $bounce('A field with that name already exists there.');
+        if (DB::val('SELECT 1 FROM custom_fields WHERE entity = ? AND label = ? AND id <> ?', [$entity, $label, $row['id'] ?? 0])) $bounce('A field with that name already exists there.');
         $options = null;
         if (in_array($type, CustomFields::CHOICE_TYPES, true)) { $choices = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($d['options'] ?? ''))))));
             if (count($choices) < 2 || count($choices) > 50) $bounce('A dropdown needs 2 to 50 choices, one per line.');
@@ -63,7 +58,7 @@ final class CustomFieldController extends Controller
     public function store(): void
     {
         [$entity, $type, $data] = $this->collect(null, 'settings/custom-fields/create');
-        $id = DB::insert('custom_fields', ['tenant_id' => $this->tid(), 'entity' => $entity, 'type' => $type] + $data);
+        $id = DB::insert('custom_fields', ['entity' => $entity, 'type' => $type] + $data);
         Audit::log('custom_field_create', 'custom_field', $id, $data['label']);
         flash('success', 'Field added. It now appears on the ' . strtolower(rtrim(CustomFields::ENTITIES[$entity], 's')) . ' screens.');
         redirect('settings/custom-fields');
@@ -79,7 +74,7 @@ final class CustomFieldController extends Controller
         $row = $this->load($id);
         [, , $data] = $this->collect($row, "settings/custom-fields/{$row['id']}/edit");
         $set = implode(',', array_map(fn($c) => "`$c` = ?", array_keys($data)));
-        DB::run("UPDATE custom_fields SET $set WHERE tenant_id = ? AND id = ?", [...array_values($data), $this->tid(), $row['id']]);
+        DB::run("UPDATE custom_fields SET $set WHERE id = ?", [...array_values($data), $row['id']]);
         Audit::log('custom_field_update', 'custom_field', (int)$row['id']);
         flash('success', 'Field updated.');
         redirect('settings/custom-fields');
@@ -88,7 +83,7 @@ final class CustomFieldController extends Controller
     public function destroy(string $id): void
     {
         $row = $this->load($id);
-        DB::run('DELETE FROM custom_fields WHERE tenant_id = ? AND id = ?', [$this->tid(), $row['id']]);
+        DB::run('DELETE FROM custom_fields WHERE id = ?', [$row['id']]);
         Audit::log('custom_field_delete', 'custom_field', (int)$row['id'], $row['label']);
         flash('success', 'Field and the values entered in it were deleted.');
         redirect('settings/custom-fields');

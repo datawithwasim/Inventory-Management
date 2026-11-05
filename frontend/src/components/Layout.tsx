@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { legacyUrl, post } from '../lib/api';
-import { fdate } from '../lib/format';
 import { isReact, isScreen, localPath } from '../lib/routes';
 import { useSession, type MenuItem } from '../lib/session';
 import { useQueryClient } from '@tanstack/react-query';
@@ -64,13 +63,13 @@ export default function Layout() {
   }, [nav]);
   // the tab title the classic pages had: page · company
   useEffect(() => {
-    if (!session?.tenant || !session.menu) return;
+    if (!session?.company || !session.menu) return;
     const p = loc.pathname.replace(/\/+$/, '') || '/dashboard';
     const item = bestMatch(p, session)[1];
-    document.title = `${item ? item.label : 'Dashboard'} · ${session.tenant.name}`;
+    document.title = `${item ? item.label : 'Dashboard'} · ${session.company.name}`;
   }, [loc.pathname, session]);
-  if (!session?.authenticated || !session.menu || !session.user || !session.tenant) return null;
-  const { menu, user, tenant } = session;
+  if (!session?.authenticated || !session.menu || !session.user || !session.company) return null;
+  const { menu, user, company } = session;
   const path = loc.pathname.replace(/\/+$/, '') || '/';
   const [crumbGroup, crumbItem] = bestMatch(path, session);
   const initial = user.name.slice(0, 1).toUpperCase();
@@ -81,14 +80,13 @@ export default function Layout() {
     await reload(); nav('/login', { replace: true });
   };
   const chooseMode = (m: string) => { setMode(m); setModeState(m); };
-  const stopSupport = async () => { await post('/impersonate/stop'); nav('/admin/tenants'); await reload(); };
 
   return (
     <>
       <aside className={`sb ${mobile ? 'open' : ''}`} id="sidebar" aria-label="Main menu">
         <Link className="sb-brand" to="/dashboard" onClick={() => setMobile(false)}>
-          {tenant.logo ? <img src={legacyUrl('/company/logo')} alt="" className="sb-logo" /> : <span className="sb-mark">{tenant.name.slice(0, 1).toUpperCase()}</span>}
-          <span className="sb-name">{tenant.name}</span>
+          {company.logo ? <img src={legacyUrl('/company/logo')} alt="" className="sb-logo" /> : <span className="sb-mark">{company.name.slice(0, 1).toUpperCase()}</span>}
+          <span className="sb-name">{company.name}</span>
         </Link>
         <nav className="sb-nav">
           <AppLink item={menu.dashboard} className="sb-link" onClick={() => setMobile(false)}><i className={`bi bi-${menu.dashboard.icon}`} /><span>Dashboard</span></AppLink>
@@ -108,14 +106,12 @@ export default function Layout() {
           })}
         </nav>
         <div className="sb-foot">
-          <div className="sb-plan"><span className="badge rounded-pill">{tenant.plan}</span><span className="small">{tenant.status === 'trial' ? 'Trial' : 'Valid'}{tenant.expires ? ' until ' + fdate(tenant.expires) : ''}</span></div>
           <button type="button" className="sb-collapse" title="Collapse menu" onClick={toggleCollapse}><i className="bi bi-chevron-bar-left" /><span>Collapse</span></button>
         </div>
       </aside>
       <div className="sb-backdrop" style={mobile ? { display: 'block' } : undefined} onClick={() => setMobile(false)} />
 
       <div className="shell">
-        {session.supportMode && <div className="support-bar d-flex justify-content-between align-items-center"><span><i className="bi bi-eye me-1" />Super Admin support mode: you are viewing <strong>{tenant.name}</strong>.</span><button className="btn btn-sm btn-dark" onClick={stopSupport}>Back to admin</button></div>}
         <header className="topbar">
           <button type="button" className="icon-btn d-lg-none" aria-label="Open menu" onClick={() => setMobile(true)}><i className="bi bi-list fs-4" /></button>
           <nav className="crumbs" aria-label="Breadcrumb">
@@ -134,7 +130,7 @@ export default function Layout() {
                 <span className="d-none d-md-block text-start lh-sm"><span className="d-block fw-semibold small">{user.name}</span><span className="d-block text-muted" style={{ fontSize: '.72rem' }}>{user.role}{user.warehouse ? ` · ${user.warehouse.name}` : ''}</span></span><i className="bi bi-chevron-down small d-none d-md-block" /></button>
             )} menuClass="pm">
               {(close) => <>
-                <div className="pm-head"><span className="avatar avatar-lg">{initial}</span><div className="pm-who"><div className="pm-name">{user.name}</div><div className="pm-mail">{user.email}</div><div className="pm-role">{user.role} · {user.warehouse ? user.warehouse.name : tenant.name}</div></div></div>
+                <div className="pm-head"><span className="avatar avatar-lg">{initial}</span><div className="pm-who"><div className="pm-name">{user.name}</div><div className="pm-mail">{user.email}</div><div className="pm-role">{user.role} · {user.warehouse ? user.warehouse.name : company.name}</div></div></div>
                 <div className="pm-list">{menu.account.map((it) => <AppLink key={it.path} item={it} className="pm-item" onClick={close}><i className={`bi bi-${it.icon}`} /><span>{it.label}</span></AppLink>)}</div>
                 <div className="pm-theme"><span><i className="bi bi-circle-half" /> Theme</span>
                   <div className="pm-seg" role="group" aria-label="Theme">

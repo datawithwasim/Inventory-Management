@@ -30,12 +30,11 @@ final class TransferController extends StockDocController
 
     public function index(): void
     {
-        $t = $this->tid();
         $status = (string)($_GET['status'] ?? '');
         $wh = (int)($_GET['warehouse'] ?? 0);
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $where = "d.tenant_id = ? AND d.type = 'transfer'";
-        $params = [$t];
+        $where = "d.type = 'transfer'";
+        $params = [];
         if ($status === 'open') $where .= " AND d.status IN ('in_transit','partial')";
         elseif ($status === 'overdue') $where .= " AND d.status IN ('in_transit','partial') AND d.expected_date IS NOT NULL AND d.expected_date < CURDATE()";
         elseif (isset(self::STATUS[$status])) { $where .= ' AND d.status = ?'; $params[] = $status; }
@@ -52,11 +51,11 @@ final class TransferController extends StockDocController
              LEFT JOIN users u ON u.id = d.created_by WHERE $where ORDER BY d.id DESC LIMIT 30 OFFSET " . (($page - 1) * 30), $params);
         $this->view('app/stock/transfers', [
             'title' => 'Stock transfers', 'rows' => $rows, 'page' => $page, 'pages' => max(1, (int)ceil($total / 30)), 'status' => $status, 'wh' => $wh,
-            'warehouses' => DB::all('SELECT id, name FROM warehouses WHERE tenant_id = ? ORDER BY name', [$t]), 'statuses' => self::STATUS,
+            'warehouses' => DB::all('SELECT id, name FROM warehouses ORDER BY name'), 'statuses' => self::STATUS,
             'counts' => [
-                'open' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial')" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
-                'overdue' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
-                'short' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE tenant_id = ? AND type = 'transfer' AND status = 'received_short'" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), [$t]),
+                'open' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE type = 'transfer' AND status IN ('in_transit','partial')" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), []),
+                'overdue' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE type = 'transfer' AND status IN ('in_transit','partial') AND expected_date IS NOT NULL AND expected_date < CURDATE()" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), []),
+                'short' => (int)DB::val("SELECT COUNT(*) FROM stock_docs WHERE type = 'transfer' AND status = 'received_short'" . Scope::sqlEither('warehouse_id', 'to_warehouse_id'), []),
             ],
         ]);
     }
@@ -103,10 +102,9 @@ final class TransferController extends StockDocController
 
         try {
             $docId = DB::transaction(function () use ($from, $to, $note, $lines, $sameWh, $transport, $vehicle, $lr, $expected, $cf) {
-                $t = $this->tid();
                 $now = date('Y-m-d H:i:s');
                 $docId = DB::insert('stock_docs', [
-                    'tenant_id' => $t, 'type' => 'transfer', 'doc_no' => Numbering::next($t, 'TRF'),
+                    'type' => 'transfer', 'doc_no' => Numbering::next('TRF'),
                     'warehouse_id' => $from['id'], 'to_warehouse_id' => $to['id'], 'note' => $note, 'status' => $sameWh ? 'posted' : 'in_transit',
                     'created_by' => Auth::user()['id'], 'posted_at' => $now, 'dispatched_at' => $sameWh ? null : $now,
                     'expected_date' => $expected, 'transport' => $sameWh ? null : $transport, 'vehicle_no' => $sameWh ? null : $vehicle, 'lr_no' => $sameWh ? null : $lr,
@@ -138,13 +136,13 @@ final class TransferController extends StockDocController
                             $text = 'Transfer ' . $from['name'] . ' → ' . $to['name'];
                             Stock::move((int)$v['id'], (int)$from['id'], $batchId, -$qty, 'transfer_out', 'stock_doc', $docId, null, $text, $fromRack);
                             Stock::move((int)$v['id'], (int)$to['id'], $batchId, $qty, 'transfer_in', 'stock_doc', $docId, null, $text, $toRack);
-                            DB::insert('stock_doc_lines', ['tenant_id' => $t, 'doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,
+                            DB::insert('stock_doc_lines', ['doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,
                                 'location_id' => $fromRack, 'to_location_id' => $toRack, 'qty' => $qty, 'qty_received' => $qty]);
                         } else {
                             Stock::move((int)$v['id'], (int)$from['id'], $batchId, -$qty, 'transfer_out', 'stock_doc', $docId, null, 'Dispatched to ' . $to['name'] . ' (in transit)', $fromRack);
-                            $lineId = DB::insert('stock_doc_lines', ['tenant_id' => $t, 'doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,
+                            $lineId = DB::insert('stock_doc_lines', ['doc_id' => $docId, 'variant_id' => $v['id'], 'batch_id' => $batchId,
                                 'location_id' => $fromRack, 'to_location_id' => $toRack, 'qty' => $qty]);
-                            DB::insert('stock_transfer_events', ['tenant_id' => $t, 'doc_id' => $docId, 'line_id' => $lineId, 'event' => 'dispatch', 'qty' => $qty,
+                            DB::insert('stock_transfer_events', ['doc_id' => $docId, 'line_id' => $lineId, 'event' => 'dispatch', 'qty' => $qty,
                                 'location_id' => $fromRack, 'user_id' => Auth::user()['id']]);
                         }
                     } catch (StockException $e) {
@@ -181,7 +179,7 @@ final class TransferController extends StockDocController
              FROM stock_transfer_events e LEFT JOIN users u ON u.id = e.user_id
              LEFT JOIN stock_doc_lines l ON l.id = e.line_id LEFT JOIN item_variants v ON v.id = l.variant_id LEFT JOIN items i ON i.id = v.item_id
              LEFT JOIN units un ON un.id = i.unit_id LEFT JOIN batches b ON b.id = l.batch_id AND l.batch_id > 0 LEFT JOIN locations k ON k.id = e.location_id AND e.location_id > 0
-             WHERE e.tenant_id = ? AND e.doc_id = ? ORDER BY e.id", [$this->tid(), $docId]);
+             WHERE e.doc_id = ? ORDER BY e.id", [$docId]);
     }
 
     public function show(string $id): void
@@ -237,15 +235,15 @@ final class TransferController extends StockDocController
     private function refreshStatus(array $doc): string
     {
         $r = DB::one('SELECT COALESCE(SUM(qty),0) AS sent, COALESCE(SUM(qty_received),0) AS rec, COALESCE(SUM(qty_lost + qty_returned),0) AS gone
-                      FROM stock_doc_lines WHERE tenant_id = ? AND doc_id = ?', [$this->tid(), $doc['id']]);
+                      FROM stock_doc_lines WHERE doc_id = ?', [$doc['id']]);
         $pending = (float)$r['sent'] - (float)$r['rec'] - (float)$r['gone'];
         if ($pending <= 0.0005) {
             $status = (float)$r['gone'] > 0.0005 ? 'received_short' : 'received';
-            DB::run('UPDATE stock_docs SET status = ?, received_at = NOW(), received_by = ? WHERE tenant_id = ? AND id = ?', [$status, Auth::user()['id'], $this->tid(), $doc['id']]);
+            DB::run('UPDATE stock_docs SET status = ?, received_at = NOW(), received_by = ? WHERE id = ?', [$status, Auth::user()['id'], $doc['id']]);
             return $status;
         }
         $status = ((float)$r['rec'] + (float)$r['gone']) > 0.0005 ? 'partial' : 'in_transit';
-        DB::run('UPDATE stock_docs SET status = ? WHERE tenant_id = ? AND id = ?', [$status, $this->tid(), $doc['id']]);
+        DB::run('UPDATE stock_docs SET status = ? WHERE id = ?', [$status, $doc['id']]);
         return $status;
     }
 
@@ -258,11 +256,10 @@ final class TransferController extends StockDocController
         $note = $this->optionalText($d['note'] ?? '', 255, 'Note', $back);
         $in = (array)($d['lines'] ?? []);
         $to = Stock::warehouse((int)$doc['to_warehouse_id']) ?? $this->notFound();
-        $hasRacks = (bool)DB::val('SELECT 1 FROM locations WHERE tenant_id = ? AND warehouse_id = ? AND is_active = 1 LIMIT 1', [$this->tid(), $to['id']]);
+        $hasRacks = (bool)DB::val('SELECT 1 FROM locations WHERE warehouse_id = ? AND is_active = 1 LIMIT 1', [$to['id']]);
 
         try {
             $count = DB::transaction(function () use ($doc, $in, $note, $to, $hasRacks) {
-                $t = $this->tid();
                 $count = 0;
                 foreach ($this->tracked((int)$doc['id']) as $l) {
                     $row = $in[$l['id']] ?? null;
@@ -278,8 +275,8 @@ final class TransferController extends StockDocController
                     $lineNote = $this->optionalText($row['note'] ?? '', 255, 'Line note', "stock/transfers/{$doc['id']}");
                     Stock::move((int)$l['variant_id'], (int)$to['id'], (int)$l['batch_id'], $qty, 'transfer_in', 'stock_doc', (int)$doc['id'], null,
                         'Received from transfer ' . $doc['doc_no'] . ($lineNote ? ' — ' . $lineNote : ''), $rack);
-                    DB::run('UPDATE stock_doc_lines SET qty_received = qty_received + ? WHERE tenant_id = ? AND id = ?', [$qty, $t, $l['id']]);
-                    DB::insert('stock_transfer_events', ['tenant_id' => $t, 'doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'receive', 'qty' => $qty,
+                    DB::run('UPDATE stock_doc_lines SET qty_received = qty_received + ? WHERE id = ?', [$qty, $l['id']]);
+                    DB::insert('stock_transfer_events', ['doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'receive', 'qty' => $qty,
                         'location_id' => $rack, 'note' => $lineNote ?? $note, 'user_id' => Auth::user()['id']]);
                     $count++;
                 }
@@ -308,7 +305,6 @@ final class TransferController extends StockDocController
         $in = (array)($d['lines'] ?? []);
         try {
             $count = DB::transaction(function () use ($doc, $in) {
-                $t = $this->tid();
                 $count = 0;
                 foreach ($this->tracked((int)$doc['id']) as $l) {
                     $row = $in[$l['id']] ?? null;
@@ -321,15 +317,15 @@ final class TransferController extends StockDocController
                     $action = (string)($row['action'] ?? '');
                     $note = $this->optionalText($row['note'] ?? '', 255, 'Note', "stock/transfers/{$doc['id']}");
                     if ($action === 'lost') {
-                        DB::run('UPDATE stock_doc_lines SET qty_lost = qty_lost + ? WHERE tenant_id = ? AND id = ?', [$qty, $t, $l['id']]);
-                        DB::insert('stock_transfer_events', ['tenant_id' => $t, 'doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'lost', 'qty' => $qty,
+                        DB::run('UPDATE stock_doc_lines SET qty_lost = qty_lost + ? WHERE id = ?', [$qty, $l['id']]);
+                        DB::insert('stock_transfer_events', ['doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'lost', 'qty' => $qty,
                             'note' => $note ?? 'Lost / damaged in transit', 'user_id' => Auth::user()['id']]);
                     } elseif ($action === 'return') {
                         $rack = (int)($row['location_id'] ?? 0);
                         Stock::move((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id'], $qty, 'transfer_return', 'stock_doc', (int)$doc['id'], null,
                             'Sent back to the sender — transfer ' . $doc['doc_no'] . ($note ? ' — ' . $note : ''), $rack);
-                        DB::run('UPDATE stock_doc_lines SET qty_returned = qty_returned + ? WHERE tenant_id = ? AND id = ?', [$qty, $t, $l['id']]);
-                        DB::insert('stock_transfer_events', ['tenant_id' => $t, 'doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'returned', 'qty' => $qty,
+                        DB::run('UPDATE stock_doc_lines SET qty_returned = qty_returned + ? WHERE id = ?', [$qty, $l['id']]);
+                        DB::insert('stock_transfer_events', ['doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'returned', 'qty' => $qty,
                             'location_id' => $rack, 'note' => $note, 'user_id' => Auth::user()['id']]);
                     } else {
                         throw new StockException($l['item_name'] . ': choose "lost" or "send back".');
@@ -353,22 +349,21 @@ final class TransferController extends StockDocController
     {
         $doc = $this->openDoc($id, 'from');
         $back = "stock/transfers/{$doc['id']}";
-        $touched = (float)DB::val('SELECT COALESCE(SUM(qty_received + qty_lost + qty_returned),0) FROM stock_doc_lines WHERE tenant_id = ? AND doc_id = ?', [$this->tid(), $doc['id']]);
+        $touched = (float)DB::val('SELECT COALESCE(SUM(qty_received + qty_lost + qty_returned),0) FROM stock_doc_lines WHERE doc_id = ?', [$doc['id']]);
         if ($touched > 0.0005 || $doc['status'] !== 'in_transit') $this->bounce('Part of this transfer was already received or settled, so it cannot be cancelled.', $back);
         try {
             DB::transaction(function () use ($doc) {
-                $t = $this->tid();
                 foreach ($this->tracked((int)$doc['id']) as $l) {
                     $rackId = (int)$l['location_id'];
                     $rack = $rackId > 0 ? Stock::location($rackId) : null;
                     if ($rackId > 0 && (!$rack || !$rack['is_active'])) $rackId = 0;   // the old rack is switched off: it goes back with no rack
                     Stock::move((int)$l['variant_id'], (int)$doc['warehouse_id'], (int)$l['batch_id'], (float)$l['qty'], 'transfer_return', 'stock_doc', (int)$doc['id'], null,
                         'Dispatch cancelled — transfer ' . $doc['doc_no'], $rackId);
-                    DB::run('UPDATE stock_doc_lines SET qty_returned = qty WHERE tenant_id = ? AND id = ?', [$t, $l['id']]);
-                    DB::insert('stock_transfer_events', ['tenant_id' => $t, 'doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'cancel', 'qty' => $l['qty'],
+                    DB::run('UPDATE stock_doc_lines SET qty_returned = qty WHERE id = ?', [$l['id']]);
+                    DB::insert('stock_transfer_events', ['doc_id' => $doc['id'], 'line_id' => $l['id'], 'event' => 'cancel', 'qty' => $l['qty'],
                         'location_id' => $rackId, 'user_id' => Auth::user()['id']]);
                 }
-                DB::run("UPDATE stock_docs SET status = 'cancelled' WHERE tenant_id = ? AND id = ?", [$t, $doc['id']]);
+                DB::run("UPDATE stock_docs SET status = 'cancelled' WHERE id = ?", [$doc['id']]);
             });
         } catch (StockException $e) {
             $this->bounce($e->getMessage(), $back);
@@ -382,7 +377,7 @@ final class TransferController extends StockDocController
     public function challan(string $id): void
     {
         $doc = $this->loadDoc($id, 'transfer');
-        $w = fn(int $wid) => DB::one('SELECT name, address FROM warehouses WHERE tenant_id = ? AND id = ?', [$this->tid(), $wid]) ?? ['name' => '', 'address' => ''];
+        $w = fn(int $wid) => DB::one('SELECT name, address FROM warehouses WHERE id = ?', [$wid]) ?? ['name' => '', 'address' => ''];
         $this->view('app/print/transfer_challan', [
             'title' => $doc['doc_no'] . ' challan', 'doc' => $doc, 'lines' => $this->tracked((int)$doc['id']),
             'from' => $w((int)$doc['warehouse_id']), 'to' => $w((int)$doc['to_warehouse_id']),
